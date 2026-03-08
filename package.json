@@ -24,6 +24,7 @@
         "@heroicons/vue": "^2.2.0",
         "pdf-lib": "^1.17.1",
         "qrcode-generator": "^2.0.4",
+        "qrcode.vue": "^3.8.0",
         "sweetalert2": "^11.26.20"
     }
 }

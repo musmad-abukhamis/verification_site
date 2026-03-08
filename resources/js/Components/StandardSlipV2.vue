@@ -37,7 +37,7 @@ const loading = ref(false);
 
 // Generate QR Code as data URL
 const generateQRCode = (value, size = 200) => {
-    const qr = qrcode(0, 'M');
+    const qr = qrcode(0, 'Q');
     qr.addData(value);
     qr.make();
     const canvas = document.createElement('canvas');

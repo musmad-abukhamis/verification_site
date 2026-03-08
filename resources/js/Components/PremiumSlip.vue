@@ -1,15 +1,20 @@
 <template>
     <div>
-        <!-- Hidden QR Code canvas -->
-        <div ref="qrCanvasRef" class="hidden">
-            <canvas ref="qrCanvas"></canvas>
+        <!-- Hidden QR canvas rendered by qrcode.vue -->
+        <div ref="qrWrapperRef" class="absolute opacity-0 pointer-events-none" style="left:-9999px;top:-9999px;">
+            <QrcodeCanvas
+                :value="qrValue"
+                :size="qrRenderSize"
+                level="Q"
+                :image-settings="qrImageSettings"
+            />
         </div>
 
         <!-- Download Button -->
         <button
             @click="handleDownload"
             :disabled="loading"
-            class="w-full flex items-center justify-center gap-2 px-6 py-3 bg-lime-500 hover:bg-lime-600 text-white rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="w-full flex items-center justify-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
             <svg v-if="loading" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -18,15 +23,15 @@
             <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
             </svg>
-            {{ loading ? 'Processing...' : 'Download NIN Slip' }}
+            {{ loading ? 'Processing...' : 'Download Premium Slip' }}
         </button>
     </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib';
-import qrcode from 'qrcode-generator';
+import { QrcodeCanvas } from 'qrcode.vue';
 
 const props = defineProps({
     surname: { type: String, required: true },
@@ -38,48 +43,19 @@ const props = defineProps({
     issuedDate: { type: String, default: '' },
     qrValue: { type: String, required: true },
     trackingId: { type: String, default: '' },
+    dateIssue: { type: String, default: '' },
 });
 
-const qrCanvasRef = ref(null);
-const qrCanvas = ref(null);
+const qrWrapperRef = ref(null);
 const loading = ref(false);
+const qrRenderSize = 240;
 
-// Helper function to convert hex to RGB
-const hexToRgbNormalized = (hex) => {
-    const bigint = parseInt(hex.replace('#', ''), 16);
-    return {
-        r: ((bigint >> 16) & 255) / 255,
-        g: ((bigint >> 8) & 255) / 255,
-        b: (bigint & 255) / 255,
-    };
-};
-
-// Generate QR Code as data URL
-const generateQRCode = (value, size = 200) => {
-    const qr = qrcode(0, 'Q');
-    qr.addData(value);
-    qr.make();
-    
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const cellSize = size / qr.getModuleCount();
-    
-    canvas.width = size;
-    canvas.height = size;
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-    
-    ctx.fillStyle = '#000000';
-    for (let row = 0; row < qr.getModuleCount(); row++) {
-        for (let col = 0; col < qr.getModuleCount(); col++) {
-            if (qr.isDark(row, col)) {
-                ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-            }
-        }
-    }
-    
-    return canvas.toDataURL('image/png');
+// imageSettings: embed qr.jpeg logo in center of QR code
+const qrImageSettings = {
+    src: '/images/qr.jpeg',
+    width: qrRenderSize * 0.22,
+    height: qrRenderSize * 0.22,
+    excavate: true,
 };
 
 // Fetch image as array buffer
@@ -88,10 +64,44 @@ const fetchImageAsBytes = async (url) => {
     return response.arrayBuffer();
 };
 
+// Get QR code data URL from the qrcode.vue canvas component
+const getQRDataURL = () => {
+    return new Promise((resolve) => {
+        // Wait a tick for Vue to finish rendering, then wait a bit for qrcode.vue logo image load
+        nextTick(() => {
+            setTimeout(() => {
+                try {
+                    const wrapper = qrWrapperRef.value;
+                    const canvas = wrapper?.querySelector('canvas');
+                    if (canvas && canvas.tagName === 'CANVAS') {
+                        resolve(canvas.toDataURL('image/png'));
+                    } else {
+                        console.warn('QR canvas not found in wrapper:', wrapper);
+                        resolve(null);
+                    }
+                } catch (e) {
+                    console.warn('Could not get QR canvas:', e);
+                    resolve(null);
+                }
+            }, 300); // small delay allows qrcode.vue to finish drawing logo image
+        });
+    });
+};
+
 // Generate PDF
 const generatePDF = async () => {
-    const qrDataURL = generateQRCode(props.qrValue || props.nin, 200);
-    const qrImageBytes = await fetch(qrDataURL).then(res => res.arrayBuffer());
+    // Get QR data URL directly from qrcode.vue canvas (base64, not blob)
+    const qrDataURL = await getQRDataURL();
+    if (!qrDataURL) {
+        throw new Error('Could not render QR code. Please try again.');
+    }
+    // Convert base64 data URL to ArrayBuffer without fetch (avoids blob URL issues)
+    const base64 = qrDataURL.split(',')[1];
+    const binaryStr = atob(base64);
+    const qrImageBytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        qrImageBytes[i] = binaryStr.charCodeAt(i);
+    }
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595.28, 841.89]);
@@ -135,7 +145,6 @@ const generatePDF = async () => {
 
     // Colors
     const lightSlateColor = rgb(120 / 255, 135 / 255, 153 / 255);
-    const limeColor = rgb(0 / 255, 192 / 255, 0 / 255);
 
     // Card dimensions
     const idCardWidth = 243;
@@ -143,41 +152,41 @@ const generatePDF = async () => {
     const centerX = (page.getWidth() - idCardWidth) / 2;
     const centerY = (page.getHeight() - idCardHeight) / 2;
 
-    // ===== FRONT SIDE =====
+    // ===== FRONT SIDE - Premium background =====
     try {
-        const bgImageBytes = await fetch('/images/standardslipfront.jpg').then(res => res.arrayBuffer());
+        const bgImageBytes = await fetch('/images/premiumNinSlipFront.jpg').then(res => res.arrayBuffer());
         const bgImage = await pdfDoc.embedJpg(bgImageBytes);
         const bgImageScaled = bgImage.scaleToFit(idCardWidth, idCardHeight);
-        
+
         page.drawImage(bgImage, {
             x: centerX,
             y: centerY,
-            width: bgImageScaled.width,
+            width: bgImageScaled.width + 8,
             height: bgImageScaled.height,
         });
     } catch (e) {
-        console.warn('Could not load front background:', e);
+        console.warn('Could not load premium front background:', e);
         page.drawRectangle({
             x: centerX, y: centerY, width: idCardWidth, height: idCardHeight,
             color: rgb(0.95, 0.95, 0.95), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 1,
         });
     }
 
-    // ===== BACK SIDE =====
+    // ===== BACK SIDE - Premium background =====
     const backCenterY = centerY - idCardHeight - 20;
     try {
-        const bgImageBytes2 = await fetch('/images/ninSlipback.jpg').then(res => res.arrayBuffer());
+        const bgImageBytes2 = await fetch('/images/premiumNinSlipback.jpg').then(res => res.arrayBuffer());
         const bgImage2 = await pdfDoc.embedJpg(bgImageBytes2);
         const bgImageScaled2 = bgImage2.scaleToFit(idCardWidth, idCardHeight);
-        
+
         page.drawImage(bgImage2, {
             x: centerX - 1,
             y: backCenterY,
-            width: bgImageScaled2.width +10,
+            width: bgImageScaled2.width + 10,
             height: bgImageScaled2.height,
         });
     } catch (e) {
-        console.warn('Could not load back background:', e);
+        console.warn('Could not load premium back background:', e);
         page.drawRectangle({
             x: centerX, y: backCenterY, width: idCardWidth, height: idCardHeight,
             color: rgb(0.95, 0.95, 0.95), borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 1,
@@ -188,17 +197,17 @@ const generatePDF = async () => {
     try {
         const photoBytes = await fetchImageAsBytes(props.photo);
         let photoImage;
-        
+
         if (props.photo.includes('data:image/jpeg') || props.photo.includes('data:image/jpg') || props.photo.endsWith('.jpg') || props.photo.endsWith('.jpeg')) {
             photoImage = await pdfDoc.embedJpg(photoBytes);
         } else {
             photoImage = await pdfDoc.embedPng(photoBytes);
         }
-        
-        const photoWidth = 55;
+
+        const photoWidth = 60;
         const photoHeight = 70;
-        const photoX = centerX - photoWidth / 2 + 36;
-        const photoY = centerY + idCardHeight / 2 - photoHeight + 43;
+        const photoX = centerX - photoWidth / 2 + 34;
+        const photoY = centerY + idCardHeight / 2 - photoHeight + 39;
 
         page.drawImage(photoImage, { x: photoX, y: photoY, width: photoWidth, height: photoHeight });
     } catch (e) {
@@ -211,64 +220,55 @@ const generatePDF = async () => {
     }
 
     // ===== TEXT FIELDS =====
-    // Surname position
-    const SurX = centerX + idCardWidth / 2 - 53;
-    const SurY = centerY + idCardHeight / 2 + 20;
-    page.drawText(props.surname || '-', { x: SurX, y: SurY, size: 7, font });
+    const wg = 45;
+    const hg = 17;
+    const textSize = 8;
+    const SurX = centerX + idCardWidth / 2 - wg;
+    const SurY = centerY + idCardHeight / 2 + hg;
+    page.drawText(props.surname || '-', { x: SurX, y: SurY, size: textSize, font });
 
-    // Other names position
-    const othX = centerX + idCardWidth / 2 - 53;
-    const othY = centerY + idCardHeight / 2;
-    page.drawText(props.othernames || '-', { x: othX, y: othY, size: 7, font });
+    const othX = centerX + idCardWidth / 2 - wg;
+    const othY = centerY + idCardHeight / 2 -2;
+    page.drawText(props.othernames || '-', { x: othX, y: othY, size: textSize, font });
 
-    // DOB position
-    const dobX = centerX + idCardWidth / 2 - 53;
-    const dobY = centerY + idCardHeight / 2 - 20;
-    page.drawText(props.dob || '-', { x: dobX, y: dobY, size: 7, font });
+    const dobX = centerX + idCardWidth / 2 - wg;
+    const dobY = centerY + idCardHeight / 2 - 23;
+    page.drawText(props.dob || '-', { x: dobX, y: dobY, size: textSize, font });
 
-    // Gender position
-    const genX = centerX + idCardWidth / 2 + 14;
-    const genY = centerY + idCardHeight / 2 - 20;
-    page.drawText(props.gender || '-', { x: genX, y: genY, size: 7, font });
+    const genX = centerX + idCardWidth / 2 + 19;
+    const genY = centerY + idCardHeight / 2 - 23;
+    page.drawText(props.gender || '-', { x: genX, y: genY, size: textSize, font });
 
-    // NIN position (large)
+    const dateIssueX = centerX + idCardWidth / 2 + 68;
+    const dateIssueY = centerY + idCardHeight / 2 - 31;
+    page.drawText(props.dateIssue || '-', { x: dateIssueX, y: dateIssueY, size: textSize, font });
+   
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const ninX = centerX + idCardWidth / 2 - 68;
-    const ninY = centerY + idCardHeight / 2 - 60;
-    const formattedNin = props.nin.replace(/(\d{4})(\d{4})(\d{3})/, '$1 $2 $3');
-    page.drawText(formattedNin, { x: ninX, y: ninY, size: 20, font: fontBold });
+    const ninY = centerY + idCardHeight / 2 - 70;
+    const formattedNin = props.nin.replace(/(\d{4})(\d{3})(\d{4})/, '$1 $2 $3');
+    page.drawText(formattedNin, { x: ninX, y: ninY, size: 20, font:fontRegular  });
 
     // ===== WATERMARKS =====
     page.drawText(props.trackingId || 'VERIFIED', {
-        x: ninX - 30,
-        y: ninY + 2,
-        size: 8,
-        font,
-        color: lightSlateColor,
-        rotate: degrees(45),
+        x: ninX - 30, y: ninY + 2, size: 8, font, color: lightSlateColor, rotate: degrees(45),
     });
     page.drawText(props.trackingId || 'VERIFIED', {
-        x: ninX + 180,
-        y: ninY - 8,
-        size: 8,
-        font,
-        color: lightSlateColor,
-        rotate: degrees(135),
+        x: ninX + 180, y: ninY , size: 8, font, color: lightSlateColor, rotate: degrees(135),
     });
 
-    // ===== QR CODE (Front) =====
+    // ===== QR CODE (Front) - rendered by qrcode.vue with logo =====
+    const qrWidth = 60;
+    const qrHeight = 60;
+    const qrX = centerX + idCardWidth / 2 - qrWidth + 119;
+    const qrY = centerY - idCardHeight / 2 + 161;
+
     try {
         const qrImage = await pdfDoc.embedPng(qrImageBytes);
-        const qrWidth = 60;
-        const qrHeight = 60;
-        const qrX = centerX + idCardWidth / 2 - qrWidth + 115;
-        const qrY = centerY - idCardHeight / 2 + 120;
-
         page.drawImage(qrImage, { x: qrX, y: qrY, width: qrWidth, height: qrHeight });
     } catch (e) {
         console.warn('Could not embed QR code:', e);
     }
-
-   
 
     // Save and return PDF as Blob
     const pdfBytes = await pdfDoc.save();
@@ -284,7 +284,7 @@ const handleDownload = async () => {
             const pdfURL = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
             link.href = pdfURL;
-            link.download = `${props.surname}_${props.nin}_slip.pdf`;
+            link.download = `${props.surname}_${props.nin}_premium_slip.pdf`;
             link.click();
             URL.revokeObjectURL(pdfURL);
         }

@@ -4,6 +4,7 @@ import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import StandardSlip from '@/Components/StandardSlip.vue';
 import StandardSlipV2 from '@/Components/StandardSlipV2.vue';
+import PremiumSlip from '@/Components/PremiumSlip.vue';
 
 const props = defineProps({
     wallet: Object,
@@ -19,7 +20,7 @@ const activeTab = ref('verify');
 const verificationResult = ref(null);
 const showDetailsModal = ref(false);
 const detailsRecord = ref(null);
-const slipVersion = ref('v2'); // v1 = with background, v2 = clean design
+const slipVersion = ref('v2'); // v1 = standard, v2 = clean design, premium = premium
 
 // Table state
 const sortField = ref('created_at');
@@ -83,9 +84,11 @@ const parsedResult = computed(() => {
     try { return JSON.parse(detailsRecord.value.result); } catch { return detailsRecord.value.result; }
 });
 
+const now = new Date();
+
 const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleString('en-NG', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const formatNIN = (nin) => {
@@ -93,6 +96,10 @@ const formatNIN = (nin) => {
     const cleaned = String(nin).replace(/\D/g, '');
     return cleaned.length === 11 ? cleaned.replace(/(\d{4})(\d{4})(\d{3})/, '$1 $2 $3') : nin;
 };
+
+const qrValue = computed(() => {
+    return "NIN:" + (verificationResult.value?.nin || verificationResult.value?.idValue) +" " + "Name:" + verificationResult.value?.surname + " " + verificationResult.value?.othernames +" " + "DOB:" + formatDob(verificationResult.value?.dob || verificationResult.value?.birthdate);
+});
 
 const formatDob = (dob) => {
     if (!dob) return '-';
@@ -105,13 +112,13 @@ const formatDob = (dob) => {
             const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
             const d = new Date(isoDate);
             if (!isNaN(d.getTime())) {
-                return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' });
+                return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
             }
         }
         // Try direct parsing for ISO or other formats
         const d = new Date(dob);
         if (!isNaN(d.getTime())) {
-            return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' });
+            return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
         }
         return dob;
     } catch { return dob; }
@@ -120,8 +127,8 @@ const formatDob = (dob) => {
 const getGender = (gender) => {
     if (!gender) return '-';
     const g = String(gender).toLowerCase();
-    if (g === 'm' || g === 'male') return 'Male';
-    if (g === 'f' || g === 'female') return 'Female';
+    if (g === 'm' || g === 'Male' || g === 'male') return 'Male';
+    if (g === 'f' || g === 'Female'  || g === 'female') return 'Female';
     return gender;
 };
 
@@ -375,24 +382,31 @@ const pagination = computed(() => ({
                     <!-- Download NIN Slip -->
                     <div class="mb-6">
                         <!-- Version Selector -->
-                        <div class="flex gap-2 mb-4">
-                            <button 
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <button
                                 @click="slipVersion = 'v1'"
                                 :class="slipVersion === 'v1' ? 'bg-lime-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
                                 class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                             >
-                                Slip v1 (With Background)
+                                Slip v1
                             </button>
-                            <button 
+                            <button
                                 @click="slipVersion = 'v2'"
                                 :class="slipVersion === 'v2' ? 'bg-lime-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
                                 class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                             >
-                                Slip v2 (Clean Design)
+                                Slip v2
+                            </button>
+                            <button
+                                @click="slipVersion = 'premium'"
+                                :class="slipVersion === 'premium' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            >
+                                ✦ Premium
                             </button>
                         </div>
 
-                        <!-- v1 Slip (with background image) -->
+                        <!-- v1 Slip (standard background) -->
                         <StandardSlip v-if="slipVersion === 'v1'"
                             :surname="verificationResult?.surname || ''"
                             :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
@@ -405,7 +419,7 @@ const pagination = computed(() => ({
                         />
 
                         <!-- v2 Slip (clean design, no background) -->
-                        <StandardSlipV2 v-else
+                        <StandardSlipV2 v-else-if="slipVersion === 'v2'"
                             :surname="verificationResult?.surname || ''"
                             :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
                             :dob="verificationResult?.dob || verificationResult?.birthdate || ''"
@@ -413,6 +427,19 @@ const pagination = computed(() => ({
                             :nin="verificationResult?.nin || verificationResult?.idValue || ''"
                             :photo="verificationResult?.photo || '/default-avatar.png'"
                             :qr-value="verificationResult?.nin || verificationResult?.idValue || ''"
+                        />
+
+                        <!-- Premium Slip (premium background + QR logo) -->
+                        <PremiumSlip v-else
+                            :surname="verificationResult?.surname || ''"
+                            :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
+                            :dob="formatDob(verificationResult?.dob || verificationResult?.birthdate) || ''"
+                            :gender="getGender(verificationResult?.gender) || ''"
+                            :nin="verificationResult?.nin || verificationResult?.idValue || ''"
+                            :photo="verificationResult?.photo || '/default-avatar.png'"
+                            :qr-value="qrValue || ''"
+                            :tracking-id="verificationResult?.nin || ''"
+                            :dateIssue="formatDate(now)"
                         />
                     </div>
 
