@@ -10,6 +10,25 @@ class Transaction extends Model
 {
     use HasFactory;
 
+    // Transaction type constants
+    public const TYPE_AIRTIME = 'airtime';
+    public const TYPE_DATA = 'data';
+    public const TYPE_NIN_VERIFICATION = 'nin_verification';
+    public const TYPE_BVN_VERIFICATION = 'bvn_verification';
+    public const TYPE_WALLET_FUNDING = 'wallet_funding';
+    public const TYPE_REFUND = 'refund';
+    public const TYPE_NIN_SLIP_DOWNLOAD = 'nin_slip_download';
+
+    public const TYPES = [
+        self::TYPE_AIRTIME,
+        self::TYPE_DATA,
+        self::TYPE_NIN_VERIFICATION,
+        self::TYPE_BVN_VERIFICATION,
+        self::TYPE_WALLET_FUNDING,
+        self::TYPE_REFUND,
+        self::TYPE_NIN_SLIP_DOWNLOAD,
+    ];
+
     protected $fillable = [
         'user_id',
         'reference',
@@ -60,5 +79,41 @@ class Transaction extends Model
     public static function generateReference(): string
     {
         return 'TXN_' . strtoupper(uniqid()) . rand(1000, 9999);
+    }
+
+    /**
+     * Create a slip download transaction
+     */
+    public static function createSlipDownload(int $userId, float $amount, array $details): self
+    {
+        return self::create([
+            'user_id' => $userId,
+            'reference' => self::generateReference(),
+            'type' => self::TYPE_NIN_SLIP_DOWNLOAD,
+            'status' => 'success',
+            'amount' => $amount,
+            'fee' => 0,
+            'total_amount' => $amount,
+            'details' => $details,
+            'completed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Create a verification transaction
+     */
+    public static function createVerification(int $userId, float $amount, string $type, array $details): self
+    {
+        return self::create([
+            'user_id' => $userId,
+            'reference' => self::generateReference(),
+            'type' => $type,
+            'status' => 'success',
+            'amount' => $amount,
+            'fee' => 0,
+            'total_amount' => $amount,
+            'details' => $details,
+            'completed_at' => now(),
+        ]);
     }
 }

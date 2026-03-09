@@ -1,15 +1,18 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, usePage, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
 import StandardSlip from '@/Components/StandardSlip.vue';
 import StandardSlipV2 from '@/Components/StandardSlipV2.vue';
 import PremiumSlip from '@/Components/PremiumSlip.vue';
+import axios from 'axios';
 
 const props = defineProps({
     wallet: Object,
-    prices: Object,
+    verificationPrice: { type: Number, default: 50 },
+    slipTypes: { type: Array, default: () => [] },
     transactions: Object,
+    slipDownloads: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -18,9 +21,13 @@ const page = usePage();
 const provider = ref('v1');
 const activeTab = ref('verify');
 const verificationResult = ref(null);
+const validationId = ref(null);
 const showDetailsModal = ref(false);
 const detailsRecord = ref(null);
-const slipVersion = ref('v2'); // v1 = standard, v2 = clean design, premium = premium
+const slipVersion = ref(null);
+const downloadingSlip = ref(null);
+const slipDownloadError = ref(null);
+const slipTypesData = ref(props.slipTypes || []);
 
 // Table state
 const sortField = ref('created_at');
@@ -29,15 +36,32 @@ const sortDirection = ref('desc');
 const form = useForm({
     idType: 'nin',
     idValue: '',
-    slipType: 'standard',
-});
-
-const currentPrice = computed(() => {
-    return props.prices?.[form.slipType] ?? props.prices?.standard ?? 100;
 });
 
 const canSubmit = computed(() => {
     return form.idValue.length >= 10 && !form.processing;
+});
+
+// Fetch slip types from API on mount and restore validation state
+onMounted(async () => {
+    // Restore validation state from flash data if available
+    if (page.props.flash?.verification_data) {
+        verificationResult.value = page.props.flash.verification_data;
+        // Use validation_id from flash or from within verification_data
+        validationId.value = page.props.flash?.validation_id || page.props.flash?.verification_data?.validation_id;
+        activeTab.value = 'results';
+    }
+    
+    if (slipTypesData.value.length === 0) {
+        try {
+            const response = await axios.get(route('nin.slip.types'));
+            if (response.data.success) {
+                slipTypesData.value = response.data.data;
+            }
+        } catch (e) {
+            console.error('Failed to fetch slip types:', e);
+        }
+    }
 });
 
 const submit = () => {
@@ -47,6 +71,8 @@ const submit = () => {
         onSuccess: () => {
             if (page.props.flash?.verification_data) {
                 verificationResult.value = page.props.flash.verification_data;
+                // Use validation_id from flash or from within verification_data
+                validationId.value = page.props.flash?.validation_id || page.props.flash?.verification_data?.validation_id;
                 activeTab.value = 'results';
                 form.reset('idValue');
             }
@@ -57,6 +83,45 @@ const submit = () => {
 const backToVerify = () => {
     activeTab.value = 'verify';
     verificationResult.value = null;
+    validationId.value = null;
+    slipDownloadError.value = null;
+};
+
+const downloadSlip = async (slipCode) => {
+    // Try to get validation_id from ref or from verification result
+    const currentValidationId = validationId.value || verificationResult.value?.validation_id;
+    
+    if (!currentValidationId) {
+        slipDownloadError.value = 'No verification record found. Please verify again.';
+        return;
+    }
+
+    downloadingSlip.value = slipCode;
+    slipDownloadError.value = null;
+
+    try {
+        console.log('Downloading slip:', { validation_id: currentValidationId, slip_type: slipCode });
+        const response = await axios.post(route('nin.slip.download'), {
+            validation_id: currentValidationId,
+            slip_type: slipCode,
+        });
+
+        if (response.data.success) {
+            // Set the slip version to show the preview
+            slipVersion.value = slipCode;
+            
+            // Refresh wallet data
+            router.reload({ only: ['wallet'] });
+        } else {
+            slipDownloadError.value = response.data.message || 'Failed to process slip download.';
+        }
+    } catch (error) {
+        console.error('Slip download error:', error.response?.data || error);
+        const msg = error.response?.data?.message || error.message || 'An error occurred.';
+        slipDownloadError.value = msg;
+    } finally {
+        downloadingSlip.value = null;
+    }
 };
 
 const handleSort = (field) => {
@@ -198,7 +263,7 @@ const pagination = computed(() => ({
                             @click="activeTab = 'verify'; verificationResult = null"
                             :class="['py-3 text-center text-sm font-semibold transition-colors', activeTab === 'verify' ? 'bg-lime-50 dark:bg-lime-900/20 text-lime-700 dark:text-lime-400 border-b-2 border-lime-500' : 'bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600']"
                         >
-                            Verify ID @ ₦{{ currentPrice.toLocaleString() }}
+                            Verify ID @ ₦{{ verificationPrice.toLocaleString() }}
                         </button>
                         <button
                             @click="verificationResult && (activeTab = 'results')"
@@ -268,18 +333,13 @@ const pagination = computed(() => ({
                             <p v-if="form.errors.idValue" class="mt-1 text-xs text-red-500">{{ form.errors.idValue }}</p>
                         </div>
 
-                        <!-- Slip Type -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Price</label>
-                            <div class="grid grid-cols-3 gap-3">
-                                <label v-for="s in [{value:'regular', label:'Regular', key:'regular'}, {value:'standard', label:'Standard', key:'standard'}, {value:'premium', label:'Premium', key:'premium'}]"
-                                    :key="s.value"
-                                    :class="['flex flex-col items-center p-3 rounded-lg border-2 cursor-pointer transition-colors', form.slipType === s.value ? 'border-lime-500 bg-lime-50 dark:bg-lime-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300']">
-                                    <input type="radio" :value="s.value" v-model="form.slipType" class="hidden" />
-                                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ s.label }}</span>
-                                    <span class="text-xs text-lime-600 dark:text-lime-400 font-medium mt-0.5">₦{{ prices?.[s.key]?.toLocaleString() }}</span>
-                                </label>
+                        <!-- Verification Price Info -->
+                        <div class="bg-lime-50 dark:bg-lime-900/20 rounded-lg p-4 border border-lime-200 dark:border-lime-800">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600 dark:text-gray-300">Verification Fee</span>
+                                <span class="text-lg font-bold text-lime-600 dark:text-lime-400">₦{{ verificationPrice.toLocaleString() }}</span>
                             </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Slip download is charged separately after verification.</p>
                         </div>
 
                         <!-- Submit -->
@@ -381,66 +441,77 @@ const pagination = computed(() => ({
 
                     <!-- Download NIN Slip -->
                     <div class="mb-6">
-                        <!-- Version Selector -->
-                        <div class="flex flex-wrap gap-2 mb-4">
-                            <button
-                                @click="slipVersion = 'v1'"
-                                :class="slipVersion === 'v1' ? 'bg-lime-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
-                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                            >
-                                Slip v1
-                            </button>
-                            <button
-                                @click="slipVersion = 'v2'"
-                                :class="slipVersion === 'v2' ? 'bg-lime-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
-                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                            >
-                                Slip v2
-                            </button>
-                            <button
-                                @click="slipVersion = 'premium'"
-                                :class="slipVersion === 'premium' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
-                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                            >
-                                ✦ Premium
-                            </button>
+                        <!-- Slip Download Error -->
+                        <div v-if="slipDownloadError" class="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">
+                            {{ slipDownloadError }}
                         </div>
 
-                        <!-- v1 Slip (standard background) -->
-                        <StandardSlip v-if="slipVersion === 'v1'"
-                            :surname="verificationResult?.surname || ''"
-                            :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
-                            :dob="verificationResult?.dob || verificationResult?.birthdate || ''"
-                            :gender="verificationResult?.gender || ''"
-                            :nin="verificationResult?.nin || verificationResult?.idValue || ''"
-                            :photo="verificationResult?.photo || '/default-avatar.png'"
-                            :qr-value="verificationResult?.nin || verificationResult?.idValue || ''"
-                            :tracking-id="verificationResult?.nin || ''"
-                        />
+                        <!-- Slip Type Selection with Pricing -->
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Download NIN Slip</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                            <button
+                                v-for="slip in slipTypesData"
+                                :key="slip.code"
+                                @click="downloadSlip(slip.code)"
+                                :disabled="downloadingSlip === slip.code"
+                                :class="[
+                                    'relative flex flex-col items-center p-4 rounded-lg border-2 transition-colors',
+                                    slipVersion === slip.code
+                                        ? 'border-lime-500 bg-lime-50 dark:bg-lime-900/20'
+                                        : 'border-gray-200 dark:border-gray-600 hover:border-lime-300 dark:hover:border-lime-700',
+                                    downloadingSlip === slip.code ? 'opacity-75 cursor-wait' : 'cursor-pointer'
+                                ]"
+                            >
+                                <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ slip.name }}</span>
+                                <span class="text-xs text-lime-600 dark:text-lime-400 font-medium mt-1">₦{{ slip.price.toLocaleString() }}</span>
+                                <span v-if="downloadingSlip === slip.code" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <svg class="w-5 h-5 animate-spin text-lime-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Click a slip type to purchase and download. Each slip type is charged separately.</p>
 
-                        <!-- v2 Slip (clean design, no background) -->
-                        <StandardSlipV2 v-else-if="slipVersion === 'v2'"
-                            :surname="verificationResult?.surname || ''"
-                            :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
-                            :dob="verificationResult?.dob || verificationResult?.birthdate || ''"
-                            :gender="verificationResult?.gender || ''"
-                            :nin="verificationResult?.nin || verificationResult?.idValue || ''"
-                            :photo="verificationResult?.photo || '/default-avatar.png'"
-                            :qr-value="verificationResult?.nin || verificationResult?.idValue || ''"
-                        />
+                        <!-- Slip Preview (after purchase) -->
+                        <div v-if="slipVersion">
+                            <!-- v1 Slip (standard background) -->
+                            <StandardSlip v-if="slipVersion === 'standard' || slipVersion === 'v1'"
+                                :surname="verificationResult?.surname || ''"
+                                :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
+                                :dob="verificationResult?.dob || verificationResult?.birthdate || ''"
+                                :gender="verificationResult?.gender || ''"
+                                :nin="verificationResult?.nin || verificationResult?.idValue || ''"
+                                :photo="verificationResult?.photo || '/default-avatar.png'"
+                                :qr-value="verificationResult?.nin || verificationResult?.idValue || ''"
+                                :tracking-id="verificationResult?.nin || ''"
+                            />
 
-                        <!-- Premium Slip (premium background + QR logo) -->
-                        <PremiumSlip v-else
-                            :surname="verificationResult?.surname || ''"
-                            :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
-                            :dob="formatDob(verificationResult?.dob || verificationResult?.birthdate) || ''"
-                            :gender="getGender(verificationResult?.gender) || ''"
-                            :nin="verificationResult?.nin || verificationResult?.idValue || ''"
-                            :photo="verificationResult?.photo || '/default-avatar.png'"
-                            :qr-value="qrValue || ''"
-                            :tracking-id="verificationResult?.nin || ''"
-                            :dateIssue="formatDate(now)"
-                        />
+                            <!-- v2 Slip (clean design, no background) -->
+                            <StandardSlipV2 v-else-if="slipVersion === 'v2'"
+                                :surname="verificationResult?.surname || ''"
+                                :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
+                                :dob="verificationResult?.dob || verificationResult?.birthdate || ''"
+                                :gender="verificationResult?.gender || ''"
+                                :nin="verificationResult?.nin || verificationResult?.idValue || ''"
+                                :photo="verificationResult?.photo || '/default-avatar.png'"
+                                :qr-value="verificationResult?.nin || verificationResult?.idValue || ''"
+                            />
+
+                            <!-- Premium Slip (premium background + QR logo) -->
+                            <PremiumSlip v-else-if="slipVersion === 'premium'"
+                                :surname="verificationResult?.surname || ''"
+                                :othernames="(verificationResult?.firstname || '') + ' ' + (verificationResult?.middlename || '')"
+                                :dob="formatDob(verificationResult?.dob || verificationResult?.birthdate) || ''"
+                                :gender="getGender(verificationResult?.gender) || ''"
+                                :nin="verificationResult?.nin || verificationResult?.idValue || ''"
+                                :photo="verificationResult?.photo || '/default-avatar.png'"
+                                :qr-value="qrValue || ''"
+                                :tracking-id="verificationResult?.nin || ''"
+                                :dateIssue="formatDate(now)"
+                            />
+                        </div>
                     </div>
 
                     <!-- Back Button -->
@@ -497,6 +568,39 @@ const pagination = computed(() => ({
                         <button @click="goToPage(pagination.prev_page_url)" :disabled="!pagination.prev_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50">Prev</button>
                         <button @click="goToPage(pagination.next_page_url)" :disabled="!pagination.next_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50">Next</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Slip Download History -->
+            <div v-if="props.slipDownloads?.length > 0" class="bg-white dark:bg-slate-800 rounded-xl shadow mt-6">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Slip Download History</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Reference</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Slip Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">NIN</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Amount</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr v-for="download in props.slipDownloads" :key="download.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{{ download.reference }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">{{ download.slip_name }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-300">{{ download.nin || '-' }}</td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">₦{{ Number(download.amount).toLocaleString() }}</td>
+                                <td class="px-4 py-3">
+                                    <span :class="['inline-flex px-2 py-0.5 text-xs rounded-full font-medium', getStatusClass(download.status)]">{{ download.status }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ download.date }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

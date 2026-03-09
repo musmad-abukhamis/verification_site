@@ -1,15 +1,32 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import DarkModeToggle from '@/Components/DarkModeToggle.vue';
 
 const showingSidebar = ref(false);
+const expandedMenus = ref(new Set());
 const page = usePage();
+
+const toggleMenu = (menuName) => {
+    if (expandedMenus.value.has(menuName)) {
+        expandedMenus.value.delete(menuName);
+    } else {
+        expandedMenus.value.add(menuName);
+    }
+};
 
 const menuItems = [
     { name: 'Dashboard', route: 'admin.dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     { name: 'Users', route: 'admin.users.index', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
     { name: 'Transactions', route: 'admin.transactions.index', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+    {
+        name: 'NIN Services',
+        icon: 'M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2',
+        children: [
+            { name: 'Validations', route: 'admin.nin-validations.index' },
+            { name: 'Service Prices', route: 'admin.service-prices.index' },
+        ]
+    },
     { name: 'Data Management', route: 'admin.data-management.index', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
     { name: 'Vendors', route: 'admin.vendors.index', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
     { name: 'Vendor API Config', route: 'admin.vendors.api', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
@@ -21,6 +38,17 @@ const menuItems = [
 
 const isActive = (routeName) => {
     return page.url.startsWith(route(routeName));
+};
+
+const isMenuActive = (item) => {
+    if (item.children) {
+        return item.children.some(child => isActive(child.route));
+    }
+    return isActive(item.route);
+};
+
+const isMenuExpanded = (menuName) => {
+    return expandedMenus.value.has(menuName) || isMenuActive({ children: menuItems.find(i => i.name === menuName)?.children });
 };
 </script>
 
@@ -46,8 +74,10 @@ const isActive = (routeName) => {
 
                 <!-- Navigation -->
                 <ul class="space-y-2">
-                    <li v-for="item in menuItems" :key="item.route">
+                    <li v-for="item in menuItems" :key="item.name">
+                        <!-- Regular menu item -->
                         <Link
+                            v-if="!item.children"
                             :href="route(item.route)"
                             :class="[
                                 'flex items-center p-3 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group transition-colors',
@@ -59,6 +89,54 @@ const isActive = (routeName) => {
                             </svg>
                             <span class="ml-3">{{ item.name }}</span>
                         </Link>
+
+                        <!-- Dropdown menu item -->
+                        <div v-else>
+                            <button
+                                @click="toggleMenu(item.name)"
+                                :class="[
+                                    'w-full flex items-center justify-between p-3 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group transition-colors',
+                                    isMenuActive(item) && 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400'
+                                ]"
+                            >
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 transition duration-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
+                                    </svg>
+                                    <span class="ml-3">{{ item.name }}</span>
+                                </div>
+                                <svg
+                                    :class="[
+                                        'w-4 h-4 transition-transform duration-200',
+                                        isMenuExpanded(item.name) ? 'rotate-180' : ''
+                                    ]"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                            <!-- Submenu -->
+                            <div
+                                v-show="isMenuExpanded(item.name)"
+                                class="ml-6 mt-1 space-y-1"
+                            >
+                                <Link
+                                    v-for="child in item.children"
+                                    :key="child.route"
+                                    :href="route(child.route)"
+                                    :class="[
+                                        'block px-3 py-2 text-sm rounded-lg transition-colors',
+                                        isActive(child.route)
+                                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400'
+                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                                    ]"
+                                >
+                                    {{ child.name }}
+                                </Link>
+                            </div>
+                        </div>
                     </li>
                 </ul>
 

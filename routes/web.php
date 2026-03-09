@@ -14,6 +14,7 @@ use App\Http\Controllers\NIN\PhoneVerifyController as NinPhoneVerifyController;
 use App\Http\Controllers\NIN\DemoVerifyController as NinDemoVerifyController;
 use App\Http\Controllers\NIN\IpeController as NinIpeController;
 use App\Http\Controllers\NIN\ValidationController as NinValidationController;
+use App\Http\Controllers\NIN\SlipDownloadController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -67,6 +68,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/nin/verify', [NinVerifyController::class, 'index'])->name('nin.verify.index');
     Route::post('/nin/verify/v1', [NinVerifyController::class, 'verifyV1'])->name('nin.verify.v1');
     Route::post('/nin/verify/v2', [NinVerifyController::class, 'verifyV2'])->name('nin.verify.v2');
+
+    // NIN Slip Download Routes — separate billing from verification
+    Route::get('/nin/slip/types', [SlipDownloadController::class, 'types'])->name('nin.slip.types');
+    Route::post('/nin/slip/download', [SlipDownloadController::class, 'download'])->name('nin.slip.download');
 
     // NIN Phone Verification Routes — v1 ArewaSmart
     Route::get('/nin/phone', [NinPhoneVerifyController::class, 'index'])->name('nin.phone.index');

@@ -1,0 +1,99 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        // For SQLite, we need to recreate the table to modify the enum
+        // First, get all existing data
+        $existingData = DB::table('transactions')->get();
+
+        // Drop the table
+        Schema::dropIfExists('transactions');
+
+        // Recreate with updated enum including nin_slip_download
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('reference')->unique();
+            $table->enum('type', ['airtime', 'data', 'nin_verification', 'bvn_verification', 'wallet_funding', 'refund', 'admin_credit', 'admin_debit', 'nin_slip_download']);
+            $table->enum('status', ['pending', 'success', 'failed', 'refunded'])->default('pending');
+            $table->decimal('amount', 12, 2);
+            $table->decimal('fee', 12, 2)->default(0.00);
+            $table->decimal('total_amount', 12, 2);
+            $table->json('details')->nullable();
+            $table->string('provider')->nullable();
+            $table->string('provider_reference')->nullable();
+            $table->text('response_message')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['user_id', 'type']);
+            $table->index('reference');
+            $table->index('status');
+        });
+
+        // Restore the data
+        foreach ($existingData as $row) {
+            $data = (array) $row;
+            // Encode details as JSON if it's an array/object
+            if (isset($data['details']) && (is_array($data['details']) || is_object($data['details']))) {
+                $data['details'] = json_encode($data['details']);
+            }
+            DB::table('transactions')->insert($data);
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        // Similar approach for rollback
+        $existingData = DB::table('transactions')->get();
+
+        Schema::dropIfExists('transactions');
+
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('reference')->unique();
+            $table->enum('type', ['airtime', 'data', 'nin_verification', 'bvn_verification', 'wallet_funding', 'refund', 'admin_credit', 'admin_debit']);
+            $table->enum('status', ['pending', 'success', 'failed', 'refunded'])->default('pending');
+            $table->decimal('amount', 12, 2);
+            $table->decimal('fee', 12, 2)->default(0.00);
+            $table->decimal('total_amount', 12, 2);
+            $table->json('details')->nullable();
+            $table->string('provider')->nullable();
+            $table->string('provider_reference')->nullable();
+            $table->text('response_message')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['user_id', 'type']);
+            $table->index('reference');
+            $table->index('status');
+        });
+
+        foreach ($existingData as $row) {
+            $data = (array) $row;
+            // Filter out new types that don't exist in old enum
+            if ($data['type'] === 'nin_slip_download') {
+                continue;
+            }
+            // Encode details as JSON if it's an array/object
+            if (isset($data['details']) && (is_array($data['details']) || is_object($data['details']))) {
+                $data['details'] = json_encode($data['details']);
+            }
+            DB::table('transactions')->insert($data);
+        }
+    }
+};

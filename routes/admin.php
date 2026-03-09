@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\VendorController;
 use App\Http\Controllers\Admin\DataPlanController;
 use App\Http\Controllers\Admin\VendorSelectionController;
 use App\Http\Controllers\Admin\VerificationLogController;
+use App\Http\Controllers\Admin\ServicePriceController;
+use App\Http\Controllers\Admin\NinValidationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -69,4 +71,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/networkid', [NetworkController::class, 'index'])->name('networkid.index');
     Route::get('/networkid/{network}/edit', [NetworkController::class, 'edit'])->name('networkid.edit');
     Route::post('/networks', [NetworkController::class, 'store'])->name('networks.store');
+    
+    // Service Prices & Slip Types Management
+    Route::get('/service-prices', [ServicePriceController::class, 'index'])->name('service-prices.index');
+    Route::put('/service-prices/{servicePrice}', [ServicePriceController::class, 'updateServicePrice'])->name('service-prices.update');
+    Route::post('/slip-types', [ServicePriceController::class, 'storeSlipType'])->name('slip-types.store');
+    Route::put('/slip-types/{slipType}', [ServicePriceController::class, 'updateSlipType'])->name('slip-types.update');
+    Route::delete('/slip-types/{slipType}', [ServicePriceController::class, 'destroySlipType'])->name('slip-types.destroy');
+    
+    // NIN Validation Management
+    Route::get('/nin-validations', [NinValidationController::class, 'index'])->name('nin-validations.index');
+    Route::get('/nin-validations/{validation}', [NinValidationController::class, 'show'])->name('nin-validations.show');
+    Route::get('/nin-validations-stats', [NinValidationController::class, 'stats'])->name('nin-validations.stats');
 });

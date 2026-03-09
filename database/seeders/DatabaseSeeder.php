@@ -22,6 +22,8 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             DataPlanSeeder::class,
+            ServicePriceSeeder::class,
+            SlipTypeSeeder::class,
         ]);
     }
 }

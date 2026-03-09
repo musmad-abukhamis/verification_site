@@ -25,6 +25,7 @@ const getTypeLabel = (type) => {
         bvn_verification: 'BVN Verification',
         wallet_funding: 'Wallet Funding',
         refund: 'Refund',
+        nin_slip_download: 'NIN Slip Download',
     };
     return labels[type] || type;
 };
@@ -36,6 +37,7 @@ const transactionTypes = [
     { value: 'nin_verification', label: 'NIN Verification' },
     { value: 'bvn_verification', label: 'BVN Verification' },
     { value: 'wallet_funding', label: 'Wallet Funding' },
+    { value: 'nin_slip_download', label: 'NIN Slip Download' },
 ];
 
 const statuses = [

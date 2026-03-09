@@ -36,7 +36,7 @@ class PhoneVerifyController extends Controller
                 'bonus_balance' => (float) $wallet->bonus_balance,
                 'total_balance' => (float) $wallet->total_balance,
             ],
-            'price' => $this->getPremiumPrice(),
+            'price' => $this->getSlipPrice('premium'),
             'transactions' => NinValidation::where('user_id', $user->id)
                 ->where('comment', 'like', '%phone%')
                 ->orderBy('created_at', 'desc')
@@ -72,7 +72,7 @@ class PhoneVerifyController extends Controller
             ['user_id' => $user->id],
             ['balance' => 0, 'bonus_balance' => 0]
         );
-        $price = $this->getPremiumPrice();
+        $price = $this->getSlipPrice('premium');
 
         if ($wallet->total_balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);

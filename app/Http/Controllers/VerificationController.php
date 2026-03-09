@@ -29,7 +29,7 @@ class VerificationController extends Controller
             ['balance' => 0, 'bonus_balance' => 0]
         );
 
-        $ninPrice = config('services.verification.nin_price', 100);
+        $ninPrice = (float) config('services.verification.nin_price', 100);
 
         return Inertia::render('Verification/Nin', [
             'wallet' => [
@@ -58,7 +58,7 @@ class VerificationController extends Controller
             ['balance' => 0, 'bonus_balance' => 0]
         );
 
-        $bvnPrice = config('services.verification.bvn_price', 150);
+        $bvnPrice = (float) config('services.verification.bvn_price', 150);
 
         return Inertia::render('Verification/Bvn', [
             'wallet' => [
