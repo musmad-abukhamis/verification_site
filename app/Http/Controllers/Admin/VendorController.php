@@ -4,16 +4,53 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\VendorApiRequest;
-use App\Models\ActiveVendor;
 use App\Models\VendorApi;
-use App\Models\VendorNetwork;
-use App\Models\VendorPlan;
+use App\Models\VendorSelection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 
 class VendorController extends Controller
 {
+    /** Networks that carry a vendor selection row. */
+    private array $networks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+
+    /** The service-type columns on the vendorselection row. */
+    private array $types = ['SME', 'SME2', 'CORPORATE_GIFTING', 'CORPORATE_GIFTING2', 'DATASHARE'];
+
+    private function vendorList(): array
+    {
+        return [
+            ['id' => 1, 'name' => 'VTpass'],
+            ['id' => 2, 'name' => 'ClubKonnect'],
+            ['id' => 3, 'name' => 'Monnify'],
+            ['id' => 4, 'name' => 'Flutterwave'],
+            ['id' => 5, 'name' => 'Paystack'],
+        ];
+    }
+
+    /**
+     * Flatten the per-network vendorselection rows into {network,type,vendor_number}.
+     */
+    private function activeVendorMatrix(): array
+    {
+        $matrix = [];
+
+        foreach ($this->networks as $network) {
+            $selection = VendorSelection::firstOrCreate(['id' => $network]);
+
+            foreach ($this->types as $type) {
+                $matrix[] = [
+                    'network' => $network,
+                    'type' => $type,
+                    'vendor_number' => (int) ($selection->{$type} ?? 1),
+                ];
+            }
+        }
+
+        return $matrix;
+    }
+
     /**
      * Display a listing of vendors
      */
@@ -27,11 +64,9 @@ class VendorController extends Controller
             ['id' => 5, 'name' => 'Paystack', 'status' => 'inactive'],
         ];
 
-        $activeVendors = ActiveVendor::all();
-
         return Inertia::render('Admin/Vendors/Index', [
             'vendors' => $vendors,
-            'activeVendors' => $activeVendors
+            'activeVendors' => $this->activeVendorMatrix(),
         ]);
     }
 
@@ -41,9 +76,9 @@ class VendorController extends Controller
     public function apiConfig()
     {
         $vendorApi = VendorApi::first();
-        
+
         return Inertia::render('Admin/Vendors/ApiConfig', [
-            'vendorApi' => $vendorApi ?? new VendorApi()
+            'vendorApi' => $vendorApi ?? new VendorApi(),
         ]);
     }
 
@@ -52,17 +87,14 @@ class VendorController extends Controller
      */
     public function updateApiConfig(VendorApiRequest $request)
     {
-        $vendorApi = VendorApi::first();
-        if (!$vendorApi) {
-            $vendorApi = new VendorApi();
-        }
+        $vendorApi = VendorApi::first() ?? new VendorApi();
 
         $vendorApi->fill($request->validated());
         $vendorApi->save();
 
         return response()->json([
             'message' => 'Vendor API configuration updated successfully!',
-            'data' => $vendorApi
+            'data' => $vendorApi,
         ], 200);
     }
 
@@ -71,36 +103,11 @@ class VendorController extends Controller
      */
     public function activeVendors()
     {
-        $activeVendors = ActiveVendor::all();
-        $networks = ['mtn', 'glo', 'airtel', '9mobile'];
-        $types = ['sme', 'direct', 'corporate'];
-        $vendors = [
-            ['id' => 1, 'name' => 'VTpass'],
-            ['id' => 2, 'name' => 'ClubKonnect'],
-            ['id' => 3, 'name' => 'Monnify'],
-            ['id' => 4, 'name' => 'Flutterwave'],
-            ['id' => 5, 'name' => 'Paystack'],
-        ];
-
-        // Create default configurations if none exist
-        if ($activeVendors->isEmpty()) {
-            foreach ($networks as $network) {
-                foreach ($types as $type) {
-                    ActiveVendor::create([
-                        'network' => $network,
-                        'type' => $type,
-                        'vendor_number' => 1
-                    ]);
-                }
-            }
-            $activeVendors = ActiveVendor::all();
-        }
-
         return Inertia::render('Admin/Vendors/ActiveVendors', [
-            'activeVendors' => $activeVendors,
-            'networks' => $networks,
-            'types' => $types,
-            'vendors' => $vendors
+            'activeVendors' => $this->activeVendorMatrix(),
+            'networks' => $this->networks,
+            'types' => $this->types,
+            'vendors' => $this->vendorList(),
         ]);
     }
 
@@ -121,15 +128,14 @@ class VendorController extends Controller
         }
 
         foreach ($request->configurations as $config) {
-            ActiveVendor::updateOrCreate(
-                [
-                    'network' => $config['network'],
-                    'type' => $config['type']
-                ],
-                [
-                    'vendor_number' => $config['vendor_number']
-                ]
-            );
+            $type = strtoupper(str_replace(' ', '_', $config['type']));
+
+            if (! in_array($type, $this->types, true)) {
+                continue;
+            }
+
+            $selection = VendorSelection::firstOrCreate(['id' => strtoupper($config['network'])]);
+            $selection->update([$type => (string) $config['vendor_number']]);
         }
 
         return back()->with('success', 'Active vendors configuration updated successfully.');

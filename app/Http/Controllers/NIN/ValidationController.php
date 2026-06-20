@@ -3,8 +3,7 @@
 namespace App\Http\Controllers\NIN;
 
 use App\Http\Controllers\Controller;
-use App\Models\NinValidation;
-use App\Models\Wallet;
+use App\Models\Validation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -20,23 +19,40 @@ class ValidationController extends Controller
 {
     use NinWalletTrait;
 
+    private function walletPayload($user): array
+    {
+        $balance = (float) $user->balance;
+
+        return [
+            'balance' => $balance,
+            'bonus_balance' => 0.0,
+            'total_balance' => $balance,
+        ];
+    }
+
+    private function sortColumn(?string $sort): string
+    {
+        return match ($sort) {
+            'created_at', 'createdAt' => 'createdAt',
+            'updated_at', 'updatedAt' => 'updatedAt',
+            'id', 'nin', 'status' => $sort,
+            default => 'createdAt',
+        };
+    }
+
     /**
      * Show the NIN Validation page
      */
     public function index(Request $request)
     {
         $user = Auth::user();
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
 
-        $query = NinValidation::where('user_id', $user->id);
+        $query = Validation::where('userId', $user->id);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nin', 'like', "%{$search}%")
-                  ->orWhere('comment', 'like', "%{$search}%");
+                    ->orWhere('comment', 'like', "%{$search}%");
             });
         }
 
@@ -44,22 +60,15 @@ class ValidationController extends Controller
             $query->where('status', $status);
         }
 
-        $sortField = in_array($request->input('sort'), ['id', 'nin', 'status', 'created_at', 'updated_at'])
-            ? $request->input('sort', 'created_at')
-            : 'created_at';
-
         $transactions = $query
-            ->orderBy($sortField, $request->input('direction', 'desc'))
+            ->orderBy($this->sortColumn($request->input('sort')), $request->input('direction', 'desc'))
             ->paginate(10)
+            ->through(fn ($r) => $this->presentNinRecord($r))
             ->withQueryString();
 
         return Inertia::render('NIN/Validation/Index', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => (float) $wallet->total_balance,
-            ],
-            'price' => (float) config('services.nin.prices.standard', 100),
+            'wallet' => $this->walletPayload($user),
+            'price' => $this->getValidationPrice(),
             'transactions' => $transactions,
             'filters' => $request->only(['search', 'status', 'sort', 'direction']),
         ]);
@@ -84,18 +93,17 @@ class ValidationController extends Controller
     /**
      * Check status of a pending NIN validation
      */
-    public function checkStatus(Request $request, NinValidation $validation)
+    public function checkStatus(Request $request, Validation $validation)
     {
-        if ($validation->user_id !== Auth::id()) {
+        if ($validation->userId !== Auth::id()) {
             abort(403);
         }
 
         if ($validation->status === 'processing') {
             $validation->update([
-                'status'       => 'completed',
-                'result'       => 'NIN validated successfully',
-                'comment'      => 'Validation completed',
-                'validated_at' => now(),
+                'status' => 'completed',
+                'result' => 'NIN validated successfully',
+                'comment' => 'Validation completed',
             ]);
         }
 
@@ -108,35 +116,31 @@ class ValidationController extends Controller
             'nin' => 'required|string|size:11',
         ]);
 
-        $user   = Auth::user();
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-        $price = (float) config('services.nin.prices.standard', 100);
+        $user = Auth::user();
+        $price = $this->getValidationPrice();
 
-        if ($wallet->total_balance < $price) {
+        if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);
         }
 
-        $oldBalance = $wallet->total_balance;
-        $this->debitWallet($wallet, $price);
-        $reference = 'NIN_' . now()->timestamp . rand(1000, 9999);
+        $oldBalance = (float) $user->balance;
+        $this->debitWallet($user, $price, ['fundingtype' => 'nin_validation']);
+        $reference = 'NIN_'.now()->timestamp.random_int(1000, 9999);
 
         try {
             // Use verify_1 or verify_2 endpoint with idType=nin
             $endpoint = $version === 'v1'
-                ? config('services.nin.base_url') . '/api/v1/nin/verify_1'
-                : config('services.nin.base_url') . '/api/v1/nin/verify_2';
+                ? config('services.nin.base_url').'/api/v1/nin/verify_1'
+                : config('services.nin.base_url').'/api/v1/nin/verify_2';
 
             $response = Http::timeout(30)
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . config('services.nin.api_key'),
-                    'Content-Type'  => 'application/json',
+                    'Authorization' => 'Bearer '.config('services.nin.api_key'),
+                    'Content-Type' => 'application/json',
                 ])
                 ->post($endpoint, [
-                    'idType'   => 'nin',
-                    'idValue'  => $validated['nin'],
+                    'idType' => 'nin',
+                    'idValue' => $validated['nin'],
                     'slipType' => 'standard',
                 ]);
 
@@ -144,47 +148,45 @@ class ValidationController extends Controller
             $rawBody = $response->body();
             $httpStatus = $response->status();
 
-            if ($response->successful() && !isset($body['error'])) {
-                NinValidation::create([
-                    'user_id'      => $user->id,
-                    'nin'          => $validated['nin'],
-                    'status'       => 'completed',
-                    'result'       => json_encode($body),
-                    'comment'      => "NIN validation {$version}",
-                    'old_balance'  => $oldBalance,
-                    'new_balance'  => $wallet->fresh()->total_balance,
-                    'reference'    => $reference,
-                    'validated_at' => now(),
+            if ($response->successful() && ! isset($body['error'])) {
+                Validation::create([
+                    'nin' => $validated['nin'],
+                    'status' => 'completed',
+                    'result' => json_encode($body),
+                    'comment' => "NIN validation {$version}",
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'userId' => $user->id,
                 ]);
 
                 return back()->with('success', "NIN validated successfully. Reference: {$reference}");
             }
 
             // Refund on failure
-            $this->creditWallet($wallet, $price);
+            $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
 
             $errorMessage = $body['message'] ?? $body['error'] ?? $body['msg'] ?? 'Validation failed';
             $resultPayload = $body ? json_encode($body) : json_encode([
-                'http_status'  => $httpStatus,
+                'http_status' => $httpStatus,
                 'raw_response' => substr($rawBody, 0, 2000),
             ]);
 
-            NinValidation::create([
-                'user_id'     => $user->id,
-                'nin'         => $validated['nin'],
-                'status'      => 'failed',
-                'result'      => $resultPayload,
-                'comment'     => "[HTTP {$httpStatus}] {$errorMessage}",
-                'old_balance' => $oldBalance,
-                'new_balance' => $wallet->fresh()->total_balance,
-                'reference'   => $reference,
+            Validation::create([
+                'nin' => $validated['nin'],
+                'status' => 'failed',
+                'result' => $resultPayload,
+                'comment' => "[HTTP {$httpStatus}] {$errorMessage}",
+                'oldBal' => $oldBalance,
+                'newBal' => (float) $user->balance,
+                'userId' => $user->id,
             ]);
 
             return back()->withErrors(['message' => "[HTTP {$httpStatus}] {$errorMessage}"]);
         } catch (\Exception $e) {
-            $this->creditWallet($wallet, $price);
-            Log::error("NIN Validation {$version} error: " . $e->getMessage());
-            return back()->withErrors(['message' => 'Network error: ' . $e->getMessage()]);
+            $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
+            Log::error("NIN Validation {$version} error: ".$e->getMessage());
+
+            return back()->withErrors(['message' => 'Network error: '.$e->getMessage()]);
         }
     }
 }

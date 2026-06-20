@@ -45,7 +45,19 @@ const showingNavigationDrawer = ref(false);
                             <NavLink :href="route('verification.bvn')" :active="route().current('verification.bvn*')">
                                 BVN
                             </NavLink>
-                            <NavLink 
+                            <NavLink :href="route('bvn-modification.index')" :active="route().current('bvn-modification.*')">
+                                BVN Mod
+                            </NavLink>
+                            <NavLink :href="route('bvn-sdk-form.index')" :active="route().current('bvn-sdk-form.*')">
+                                BVN Onboarding
+                            </NavLink>
+                            <NavLink :href="route('bvn-retrieval.index')" :active="route().current('bvn-retrieval.*')">
+                                BVN Retrieval
+                            </NavLink>
+                            <NavLink :href="route('bvn-search.index')" :active="route().current('bvn-search.*')">
+                                BVN Search
+                            </NavLink>
+                            <NavLink
                                 v-if="$page.props.auth.user.is_admin"
                                 :href="route('admin.dashboard')" 
                                 :active="route().current('admin.*')"
@@ -175,6 +187,34 @@ const showingNavigationDrawer = ref(false);
                             @click="showingNavigationDrawer = false"
                         >
                             BVN
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('bvn-modification.index')"
+                            :active="route().current('bvn-modification.*')"
+                            @click="showingNavigationDrawer = false"
+                        >
+                            BVN Modification
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('bvn-sdk-form.index')"
+                            :active="route().current('bvn-sdk-form.*')"
+                            @click="showingNavigationDrawer = false"
+                        >
+                            BVN Onboarding
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('bvn-retrieval.index')"
+                            :active="route().current('bvn-retrieval.*')"
+                            @click="showingNavigationDrawer = false"
+                        >
+                            BVN Retrieval
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('bvn-search.index')"
+                            :active="route().current('bvn-search.*')"
+                            @click="showingNavigationDrawer = false"
+                        >
+                            BVN Search
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
                             v-if="$page.props.auth.user.is_admin"

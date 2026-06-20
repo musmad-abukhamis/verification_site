@@ -2,77 +2,166 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserRole;
+use App\Models\Concerns\HasPrismaId;
+use App\Models\Concerns\ManagesWallet;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 /**
+ * Prisma model: User (table "users").
+ *
  * @method bool isAdmin()
  */
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmailContract
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasPrismaId, ManagesWallet, MustVerifyEmailTrait, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    protected $table = 'users';
+
+    const CREATED_AT = 'createdAt';
+
+    const UPDATED_AT = 'updatedAt';
+
     protected $fillable = [
         'name',
         'email',
         'phone',
+        'balance',
+        'username',
         'password',
-        'is_admin',
+        'role',
+        'image',
+        'apitoken',
+        'isTwoFactorEnabled',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
+            'email_verified' => 'datetime',
             'password' => 'hashed',
-            'is_admin' => 'boolean',
+            'balance' => 'float',
+            'isTwoFactorEnabled' => 'boolean',
+            'role' => UserRole::class,
         ];
     }
 
-    /**
-     * Check if user is an admin
-     */
     public function isAdmin(): bool
     {
-        return $this->is_admin;
+        return $this->role === UserRole::ADMIN;
     }
 
     /**
-     * Get the user's wallet
+     * The Prisma schema stores the verification timestamp in `email_verified`
+     * (not Laravel's default `email_verified_at`), so override the two
+     * MustVerifyEmail methods that touch the column.
      */
-    public function wallet()
+    public function hasVerifiedEmail(): bool
     {
-        return $this->hasOne(Wallet::class);
+        return ! is_null($this->email_verified);
     }
 
-    /**
-     * Get the user's transactions
-     */
-    public function transactions()
+    public function markEmailAsVerified(): bool
     {
-        return $this->hasMany(Transaction::class);
+        return $this->forceFill([
+            'email_verified' => $this->freshTimestamp(),
+        ])->save();
+    }
+
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class, 'user_id');
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'userId');
+    }
+
+    public function ninDetails(): HasMany
+    {
+        return $this->hasMany(NinDetail::class, 'userId');
+    }
+
+    public function walletHistory(): HasMany
+    {
+        return $this->hasMany(WalletHistory::class, 'userId');
+    }
+
+    public function kyc(): HasMany
+    {
+        return $this->hasMany(AccountKyc::class, 'userId');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class, 'userId');
+    }
+
+    public function notificationUsers(): HasMany
+    {
+        return $this->hasMany(NotificationUser::class, 'userId');
+    }
+
+    public function ipe(): HasMany
+    {
+        return $this->hasMany(Ipe::class, 'userId');
+    }
+
+    public function validations(): HasMany
+    {
+        return $this->hasMany(Validation::class, 'userId');
+    }
+
+    public function personalisations(): HasMany
+    {
+        return $this->hasMany(Personalisation::class, 'userId');
+    }
+
+    public function bvnModifications(): HasMany
+    {
+        return $this->hasMany(BvnModification::class, 'userId');
+    }
+
+    public function bvnSdkForms(): HasMany
+    {
+        return $this->hasMany(BvnSdkForm::class, 'userId');
+    }
+
+    public function bvnRetrievals(): HasMany
+    {
+        return $this->hasMany(BvnRetrieval::class, 'userId');
+    }
+
+    public function idCardRequests(): HasMany
+    {
+        return $this->hasMany(IdCard::class, 'userId');
+    }
+
+    public function otp(): HasOne
+    {
+        return $this->hasOne(Otp::class, 'userId');
+    }
+
+    public function pin(): HasOne
+    {
+        return $this->hasOne(Pin::class, 'userId');
+    }
+
+    public function twoFactorConfirmation(): HasOne
+    {
+        return $this->hasOne(TwoFactorConfirmation::class, 'userId');
     }
 }

@@ -2,118 +2,133 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Concerns\HasPrismaId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
+/**
+ * Prisma model: Transactions (table "Transactions").
+ *
+ * The id doubles as the human-facing reference, `price` is the amount and
+ * `response` stores the provider/gateway message (JSON for service records).
+ */
 class Transaction extends Model
 {
-    use HasFactory;
+    use HasPrismaId;
 
-    // Transaction type constants
-    public const TYPE_AIRTIME = 'airtime';
-    public const TYPE_DATA = 'data';
-    public const TYPE_NIN_VERIFICATION = 'nin_verification';
-    public const TYPE_BVN_VERIFICATION = 'bvn_verification';
-    public const TYPE_WALLET_FUNDING = 'wallet_funding';
-    public const TYPE_REFUND = 'refund';
-    public const TYPE_NIN_SLIP_DOWNLOAD = 'nin_slip_download';
+    protected $table = 'Transactions';
 
-    public const TYPES = [
-        self::TYPE_AIRTIME,
-        self::TYPE_DATA,
-        self::TYPE_NIN_VERIFICATION,
-        self::TYPE_BVN_VERIFICATION,
-        self::TYPE_WALLET_FUNDING,
-        self::TYPE_REFUND,
-        self::TYPE_NIN_SLIP_DOWNLOAD,
-    ];
+    const CREATED_AT = 'createdAt';
 
-    protected $fillable = [
-        'user_id',
-        'reference',
-        'type',
-        'status',
-        'amount',
-        'fee',
-        'total_amount',
-        'details',
-        'provider',
-        'provider_reference',
-        'response_message',
-        'completed_at',
-    ];
+    const UPDATED_AT = null;
 
-    protected $casts = [
-        'amount' => 'decimal:2',
-        'fee' => 'decimal:2',
-        'total_amount' => 'decimal:2',
-        'details' => 'array',
-        'completed_at' => 'datetime',
-    ];
+    // Transaction type constants (kept for call-site compatibility).
+    const TYPE_NIN_VERIFICATION = 'nin_verification';
+    const TYPE_NIN_SLIP_DOWNLOAD = 'nin_slip_download';
+    const TYPE_NIN_IPE = 'nin_ipe';
+    const TYPE_NIN_VALIDATION = 'nin_validation';
+
+    protected $guarded = [];
+
+    protected function casts(): array
+    {
+        return [
+            'price' => 'integer',
+            'oldbal' => 'float',
+            'newbal' => 'float',
+        ];
+    }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
-    }
-
-    public function markAsSuccess(?string $providerReference = null, ?string $message = null): void
-    {
-        $this->update([
-            'status' => 'success',
-            'provider_reference' => $providerReference,
-            'response_message' => $message,
-            'completed_at' => now(),
-        ]);
-    }
-
-    public function markAsFailed(?string $message = null): void
-    {
-        $this->update([
-            'status' => 'failed',
-            'response_message' => $message,
-            'completed_at' => now(),
-        ]);
-    }
-
-    public static function generateReference(): string
-    {
-        return 'TXN_' . strtoupper(uniqid()) . rand(1000, 9999);
+        return $this->belongsTo(User::class, 'userId');
     }
 
     /**
-     * Create a slip download transaction
+     * Generate a unique transaction reference (used as the primary key).
      */
-    public static function createSlipDownload(int $userId, float $amount, array $details): self
+    public static function generateReference(string $prefix = 'TXN'): string
     {
-        return self::create([
-            'user_id' => $userId,
-            'reference' => self::generateReference(),
-            'type' => self::TYPE_NIN_SLIP_DOWNLOAD,
-            'status' => 'success',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => $details,
-            'completed_at' => now(),
-        ]);
+        return $prefix.'_'.strtoupper(Str::random(10)).random_int(1000, 9999);
+    }
+
+    /* ----------------------------------------------------------------------
+     | Compatibility accessors — the old Transaction exposed reference/amount/
+     | details columns; these map onto the new id/price/response columns.
+     | ---------------------------------------------------------------------- */
+
+    public function getReferenceAttribute(): string
+    {
+        return (string) $this->id;
+    }
+
+    public function getAmountAttribute(): float
+    {
+        return (float) $this->price;
     }
 
     /**
-     * Create a verification transaction
+     * Decode the JSON stored in `response` back into the old `details` array.
      */
-    public static function createVerification(int $userId, float $amount, string $type, array $details): self
+    public function getDetailsAttribute(): array
     {
-        return self::create([
-            'user_id' => $userId,
-            'reference' => self::generateReference(),
+        $decoded = json_decode((string) $this->response, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /* ----------------------------------------------------------------------
+     | Factory helpers for service records.
+     | ---------------------------------------------------------------------- */
+
+    public static function createVerification(string $userId, float $amount, string $type, array $details = []): self
+    {
+        return static::createServiceRecord($userId, $amount, $type, $details, 'NIN');
+    }
+
+    public static function createSlipDownload(string $userId, float $amount, array $details = []): self
+    {
+        return static::createServiceRecord($userId, $amount, self::TYPE_NIN_SLIP_DOWNLOAD, $details, 'NIN');
+    }
+
+    protected static function createServiceRecord(string $userId, float $amount, string $type, array $details, string $network): self
+    {
+        $currentBalance = (float) (Auth::user()?->balance ?? 0);
+
+        return static::create([
+            'id' => $details['reference'] ?? static::generateReference(strtoupper(str_replace('nin_', '', $type))),
+            'network' => $network,
+            'name' => $details['slip_name'] ?? ucwords(str_replace('_', ' ', $type)),
+            'price' => (int) round($amount),
             'type' => $type,
-            'status' => 'success',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => $details,
-            'completed_at' => now(),
+            'phone' => (string) ($details['nin'] ?? $details['phone'] ?? ''),
+            'oldbal' => (float) ($details['old_balance'] ?? $currentBalance),
+            'newbal' => (float) ($details['new_balance'] ?? $currentBalance),
+            'status' => $details['status'] ?? 'success',
+            'userId' => $userId,
+            'response' => json_encode($details),
         ]);
+    }
+
+    public function markAsSuccess(?string $providerReference = null, ?string $message = null): self
+    {
+        $this->forceFill([
+            'status' => 'success',
+            'response' => $message ?? $providerReference ?? $this->response ?? 'success',
+        ])->save();
+
+        return $this;
+    }
+
+    public function markAsFailed(?string $message = null): self
+    {
+        $this->forceFill([
+            'status' => 'failed',
+            'response' => $message ?? $this->response ?? 'failed',
+        ])->save();
+
+        return $this;
     }
 }

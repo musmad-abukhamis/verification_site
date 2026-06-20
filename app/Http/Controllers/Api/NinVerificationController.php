@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\NinVerificationRequest;
 use App\Http\Requests\Api\NinDemoVerificationRequest;
-use App\Http\Requests\Api\NinPhoneVerificationRequest;
 use App\Http\Requests\Api\NinIpeSubmissionRequest;
-use App\Models\NinValidation;
-use App\Models\NinIpeClearance;
-use App\Models\Wallet;
+use App\Http\Requests\Api\NinPhoneVerificationRequest;
+use App\Http\Requests\Api\NinVerificationRequest;
+use App\Models\Ipe;
+use App\Models\Validation;
 use App\Services\NinVerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,57 +45,49 @@ class NinVerificationController extends Controller
     public function verifyDemo(NinDemoVerificationRequest $request)
     {
         $user = Auth::user();
-        $wallet = $user->wallet;
-
-        if (!$wallet) {
-            return response()->json(['error' => 'Wallet not found'], 400);
-        }
-
-        // Get premium price for demo verification
         $price = $this->verificationService->getPrice('premium');
 
-        if ($wallet->balance < $price) {
+        if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
         }
 
         try {
             DB::beginTransaction();
 
-            $oldBalance = $wallet->balance;
-            $wallet->debit($price);
+            $oldBalance = (float) $user->balance;
+            $user->debit($price, false, ['fundingtype' => 'nin_demo']);
 
             $result = $this->verificationService->verifyDemo($request->validated());
 
             if ($result['success']) {
-                $validation = NinValidation::create([
-                    'user_id' => $user->id,
-                    'nin' => $result['data']['nin'] ?? null,
+                Validation::create([
+                    'nin' => $result['data']['nin'] ?? '',
                     'status' => 'completed',
                     'result' => json_encode($result['data']),
                     'comment' => 'Demo verification successful',
-                    'old_balance' => $oldBalance,
-                    'new_balance' => $wallet->balance,
-                    'reference' => 'Verify_' . now()->timestamp . rand(1000, 9999),
-                    'validated_at' => now(),
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'userId' => $user->id,
                 ]);
 
                 DB::commit();
 
                 return response()->json($result['data'], 200);
-            } else {
-                // Refund on failure
-                $wallet->credit($price);
-                DB::commit();
-
-                return response()->json([
-                    'status' => 'failed',
-                    'error' => 'NIN Verification Failed',
-                    'message' => $result['message'] ?? 'Verification failed'
-                ], 404);
             }
+
+            // Refund on failure
+            $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            DB::commit();
+
+            return response()->json([
+                'status' => 'failed',
+                'error' => 'NIN Verification Failed',
+                'message' => $result['message'] ?? 'Verification failed',
+            ], 404);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Network error: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Network error: '.$e->getMessage()], 500);
         }
     }
 
@@ -106,57 +97,49 @@ class NinVerificationController extends Controller
     public function verifyPhone(NinPhoneVerificationRequest $request)
     {
         $user = Auth::user();
-        $wallet = $user->wallet;
-
-        if (!$wallet) {
-            return response()->json(['error' => 'Wallet not found'], 400);
-        }
-
-        // Get premium price for phone verification
         $price = $this->verificationService->getPrice('premium');
 
-        if ($wallet->balance < $price) {
+        if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
         }
 
         try {
             DB::beginTransaction();
 
-            $oldBalance = $wallet->balance;
-            $wallet->debit($price);
+            $oldBalance = (float) $user->balance;
+            $user->debit($price, false, ['fundingtype' => 'nin_phone']);
 
             $result = $this->verificationService->verifyPhone($request->validated());
 
             if ($result['success']) {
-                $validation = NinValidation::create([
-                    'user_id' => $user->id,
-                    'nin' => $result['data']['nin'] ?? null,
+                Validation::create([
+                    'nin' => $result['data']['nin'] ?? '',
                     'status' => 'completed',
                     'result' => json_encode($result['data']),
                     'comment' => 'Phone verification successful',
-                    'old_balance' => $oldBalance,
-                    'new_balance' => $wallet->balance,
-                    'reference' => 'Verify_' . now()->timestamp . rand(1000, 9999),
-                    'validated_at' => now(),
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'userId' => $user->id,
                 ]);
 
                 DB::commit();
 
                 return response()->json($result['data'], 200);
-            } else {
-                // Refund on failure
-                $wallet->credit($price);
-                DB::commit();
-
-                return response()->json([
-                    'status' => 'failed',
-                    'error' => 'NIN Verification Failed',
-                    'message' => $result['message'] ?? 'Verification failed'
-                ], 404);
             }
+
+            // Refund on failure
+            $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            DB::commit();
+
+            return response()->json([
+                'status' => 'failed',
+                'error' => 'NIN Verification Failed',
+                'message' => $result['message'] ?? 'Verification failed',
+            ], 404);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Network error: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Network error: '.$e->getMessage()], 500);
         }
     }
 
@@ -181,8 +164,8 @@ class NinVerificationController extends Controller
      */
     public function getAllIpeSubmissions()
     {
-        $submissions = NinIpeClearance::with('user')
-            ->orderBy('created_at', 'desc')
+        $submissions = Ipe::with('user')
+            ->orderByDesc('createdAt')
             ->get();
 
         return response()->json(['data' => $submissions], 200);
@@ -194,7 +177,7 @@ class NinVerificationController extends Controller
     public function checkIpeStatus(Request $request)
     {
         $request->validate([
-            'tracking_id' => 'required|string|size:15'
+            'tracking_id' => 'required|string|size:15',
         ]);
 
         $result = $this->verificationService->checkIpeStatus($request->tracking_id);
@@ -212,61 +195,50 @@ class NinVerificationController extends Controller
     protected function processVerification(NinVerificationRequest $request, string $provider)
     {
         $user = Auth::user();
-        $wallet = $user->wallet;
-
-        if (!$wallet) {
-            return response()->json(['error' => 'Wallet not found'], 400);
-        }
-
-        // Get price based on slip type
         $price = $this->verificationService->getPrice($request->slipType);
 
-        if ($wallet->balance < $price) {
+        if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
         }
 
         try {
             DB::beginTransaction();
 
-            $oldBalance = $wallet->balance;
-            $wallet->debit($price);
+            $oldBalance = (float) $user->balance;
+            $user->debit($price, false, ['fundingtype' => 'nin_verification']);
 
-            $result = $this->verificationService->verifyNin(
-                $request->validated(),
-                $provider
-            );
+            $result = $this->verificationService->verifyNin($request->validated(), $provider);
 
             if ($result['success']) {
-                $validation = NinValidation::create([
-                    'user_id' => $user->id,
+                Validation::create([
                     'nin' => $result['data']['nin'] ?? $request->idValue,
                     'status' => 'completed',
                     'result' => json_encode($result['data']),
                     'comment' => 'Verification successful',
-                    'old_balance' => $oldBalance,
-                    'new_balance' => $wallet->balance,
-                    'reference' => 'Verify_' . now()->timestamp . rand(1000, 9999),
-                    'validated_at' => now(),
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'userId' => $user->id,
                 ]);
 
                 DB::commit();
 
                 return response()->json($result['data'], 200);
-            } else {
-                // Refund on failure
-                $wallet->credit($price);
-                DB::commit();
-
-                return response()->json([
-                    'status' => 'failed',
-                    'reference' => $result['reference'] ?? null,
-                    'error' => 'NIN Verification Failed',
-                    'message' => $result['message'] ?? 'Verification failed'
-                ], 404);
             }
+
+            // Refund on failure
+            $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            DB::commit();
+
+            return response()->json([
+                'status' => 'failed',
+                'reference' => $result['reference'] ?? null,
+                'error' => 'NIN Verification Failed',
+                'message' => $result['message'] ?? 'Verification failed',
+            ], 404);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Network error: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Network error: '.$e->getMessage()], 500);
         }
     }
 
@@ -276,27 +248,20 @@ class NinVerificationController extends Controller
     protected function processIpeSubmission(NinIpeSubmissionRequest $request, string $provider)
     {
         $user = Auth::user();
-        $wallet = $user->wallet;
-
-        if (!$wallet) {
-            return response()->json(['error' => 'Wallet not found'], 400);
-        }
-
-        // Get IPE price
         $price = $this->verificationService->getIpePrice();
 
-        if ($wallet->balance < $price) {
+        if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
         }
 
         try {
             DB::beginTransaction();
 
-            $oldBalance = $wallet->balance;
-            $wallet->debit($price);
+            $oldBalance = (float) $user->balance;
+            $user->debit($price, false, ['fundingtype' => 'nin_ipe']);
 
-            $trackingId = $provider === 'provider1' 
-                ? $request->trkid 
+            $trackingId = $provider === 'provider1'
+                ? $request->trkid
                 : $request->tracking_id;
 
             $result = $this->verificationService->submitIpe(
@@ -306,16 +271,14 @@ class NinVerificationController extends Controller
             );
 
             if ($result['success']) {
-                $ipeClearance = NinIpeClearance::create([
-                    'user_id' => $user->id,
-                    'nin' => $trackingId,
+                $ipeClearance = Ipe::create([
+                    'trkid' => $trackingId,
                     'status' => 'processing',
                     'result' => 'Pending',
                     'comment' => $provider === 'provider1' ? 'New submission' : 'Submitted to ArewaSmart',
-                    'old_balance' => $oldBalance,
-                    'new_balance' => $wallet->balance,
-                    'reference' => 'IPE_' . now()->timestamp . rand(1000, 9999),
-                    'cleared_at' => null,
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'userId' => $user->id,
                 ]);
 
                 DB::commit();
@@ -330,23 +293,24 @@ class NinVerificationController extends Controller
                         'comment' => $ipeClearance->comment,
                         'user_id' => $user->id,
                         'oldBal' => $oldBalance,
-                        'newBal' => $wallet->balance,
-                        'created_at' => $ipeClearance->created_at,
-                        'updated_at' => $ipeClearance->updated_at,
-                    ]
+                        'newBal' => (float) $user->balance,
+                        'created_at' => $ipeClearance->createdAt,
+                        'updated_at' => $ipeClearance->updatedAt,
+                    ],
                 ], 201);
-            } else {
-                // Refund on failure
-                $wallet->credit($price);
-                DB::commit();
-
-                return response()->json([
-                    'error' => $result['message'] ?? 'IPE submission failed'
-                ], 400);
             }
+
+            // Refund on failure
+            $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            DB::commit();
+
+            return response()->json([
+                'error' => $result['message'] ?? 'IPE submission failed',
+            ], 400);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Network error: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Network error: '.$e->getMessage()], 500);
         }
     }
 }

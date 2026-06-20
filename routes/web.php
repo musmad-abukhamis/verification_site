@@ -15,6 +15,10 @@ use App\Http\Controllers\NIN\DemoVerifyController as NinDemoVerifyController;
 use App\Http\Controllers\NIN\IpeController as NinIpeController;
 use App\Http\Controllers\NIN\ValidationController as NinValidationController;
 use App\Http\Controllers\NIN\SlipDownloadController;
+use App\Http\Controllers\BvnModificationController;
+use App\Http\Controllers\BvnSdkFormController;
+use App\Http\Controllers\BvnRetrievalController;
+use App\Http\Controllers\BvnSearchController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -28,8 +32,11 @@ Route::get('/', function () {
     ]);
 });
 
+// Email verification is available (User implements MustVerifyEmail) but not
+// enforced — registration logs users straight in. Drop the `verified` gate so
+// the dashboard stays open; add it back here to require verified emails.
 Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth'])
     ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
@@ -62,6 +69,7 @@ Route::middleware('auth')->group(function () {
     // Wallet Routes
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
     Route::get('/wallet/fund', [WalletController::class, 'fund'])->name('wallet.fund');
+    Route::post('/wallet/virtual-account', [WalletController::class, 'createVirtualAccount'])->name('wallet.virtual-account.create');
     Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
 
     // NIN Verification Routes (by NIN number) — v1 Prembly, v2 ArewaSmart
@@ -73,15 +81,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/nin/slip/types', [SlipDownloadController::class, 'types'])->name('nin.slip.types');
     Route::post('/nin/slip/download', [SlipDownloadController::class, 'download'])->name('nin.slip.download');
 
-    // NIN Phone Verification Routes — v1 ArewaSmart
-    Route::get('/nin/phone', [NinPhoneVerifyController::class, 'index'])->name('nin.phone.index');
-    Route::post('/nin/phone/v1', [NinPhoneVerifyController::class, 'verifyV1'])->name('nin.phone.v1');
-    Route::post('/nin/phone/v2', [NinPhoneVerifyController::class, 'verifyV2'])->name('nin.phone.v2');
-
-    // NIN Demo Verification Routes — v1 ArewaSmart
-    Route::get('/nin/demo', [NinDemoVerifyController::class, 'index'])->name('nin.demo.index');
-    Route::post('/nin/demo/v1', [NinDemoVerifyController::class, 'verifyV1'])->name('nin.demo.v1');
-    Route::post('/nin/demo/v2', [NinDemoVerifyController::class, 'verifyV2'])->name('nin.demo.v2');
+    // Phone & Demographic verification are now consolidated into the single
+    // dynamic NIN Verification page (provider + method selector). The old
+    // standalone pages redirect there; verification itself goes through the
+    // modular /api/v1/nin/providers/* JSON endpoints.
+    Route::get('/nin/phone', fn () => redirect()->route('nin.verify.index'))->name('nin.phone.index');
+    Route::get('/nin/demo', fn () => redirect()->route('nin.verify.index'))->name('nin.demo.index');
 
     // NIN IPE Routes — v1 Nguru, v2 ArewaSmart
     Route::get('/nin/ipe', [NinIpeController::class, 'index'])->name('nin.ipe.index');
@@ -102,6 +107,28 @@ Route::middleware('auth')->group(function () {
     Route::get('/nin-ipe-clearance', [NinIpeController::class, 'index'])->name('nin-ipe-clearance.index');
     Route::post('/nin-ipe-clearance', [NinIpeController::class, 'submitV1'])->name('nin-ipe-clearance.store');
     Route::post('/nin-ipe-clearance/{clearance}/check', [NinIpeController::class, 'checkStatus'])->name('nin-ipe-clearance.check');
+
+    // BVN Modification Routes
+    Route::get('/bvn-modification', [BvnModificationController::class, 'index'])->name('bvn-modification.index');
+    Route::post('/bvn-modification', [BvnModificationController::class, 'store'])->name('bvn-modification.store');
+    Route::get('/bvn-modification/requests', [BvnModificationController::class, 'requests'])->name('bvn-modification.requests');
+    Route::get('/bvn-modification/requests/{modification}', [BvnModificationController::class, 'show'])->name('bvn-modification.show');
+    Route::get('/bvn-modification/requests/{modification}/slip', [BvnModificationController::class, 'slip'])->name('bvn-modification.slip');
+
+    // BVN SDK Onboarding Routes
+    Route::get('/bvn-sdk-form', [BvnSdkFormController::class, 'index'])->name('bvn-sdk-form.index');
+    Route::post('/bvn-sdk-form', [BvnSdkFormController::class, 'store'])->name('bvn-sdk-form.store');
+    Route::get('/bvn-sdk-form/submissions', [BvnSdkFormController::class, 'submissions'])->name('bvn-sdk-form.submissions');
+    Route::get('/bvn-sdk-form/submissions/{form}', [BvnSdkFormController::class, 'show'])->name('bvn-sdk-form.show');
+
+    // BVN Retrieval Routes
+    Route::get('/bvn-retrieval', [BvnRetrievalController::class, 'index'])->name('bvn-retrieval.index');
+    Route::post('/bvn-retrieval', [BvnRetrievalController::class, 'store'])->name('bvn-retrieval.store');
+
+    // BVN Search (verify + slip) Routes — v1 & v2 providers
+    Route::get('/bvn-search', [BvnSearchController::class, 'index'])->name('bvn-search.index');
+    Route::post('/bvn-search/v1', [BvnSearchController::class, 'searchV1'])->name('bvn-search.v1');
+    Route::post('/bvn-search/v2', [BvnSearchController::class, 'searchV2'])->name('bvn-search.v2');
 });
 
 // Admin routes moved to admin.php

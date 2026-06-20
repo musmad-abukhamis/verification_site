@@ -2,75 +2,60 @@
 
 namespace App\Services;
 
-use App\Models\NinValidation;
-use App\Models\SlipType;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Models\Wallet;
+use App\Models\Validation;
+use App\Models\VerifyApiConfig;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SlipDownloadService
 {
     /**
-     * Process slip download request
+     * Process slip download request.
      *
-     * @param int $validationId The NIN validation record ID
-     * @param string $slipTypeCode The slip type code (e.g., 'standard', 'premium')
-     * @param User $user The authenticated user
+     * @param  int  $validationId  The NIN validation record ID
+     * @param  string  $slipTypeCode  The slip type code (e.g., 'standard', 'premium')
+     * @param  User  $user  The authenticated user
      * @return array Result with success status and data or error message
      */
     public function download(int $validationId, string $slipTypeCode, User $user): array
     {
         // Validate the verification exists and belongs to user
         $validation = $this->validateVerification($validationId, $user);
-        if (!$validation) {
+        if (! $validation) {
             return [
                 'success' => false,
                 'message' => 'Verification record not found or not valid.',
             ];
         }
 
-        // Get the slip type
-        $slipType = SlipType::findByCode($slipTypeCode);
-        if (!$slipType) {
+        $price = $this->getSlipPrice($slipTypeCode);
+        if ($price <= 0) {
             return [
                 'success' => false,
                 'message' => 'Invalid slip type.',
             ];
         }
 
-        // Get the slip price
-        $price = (float) $slipType->price;
-
-        // Get user's wallet
-        $wallet = $user->wallet;
-        if (!$wallet) {
-            return [
-                'success' => false,
-                'message' => 'Wallet not found.',
-            ];
-        }
-
         // Check balance
-        if ($wallet->total_balance < $price) {
+        if ((float) $user->balance < $price) {
             return [
                 'success' => false,
                 'message' => 'Insufficient wallet balance.',
                 'required' => $price,
-                'available' => $wallet->total_balance,
+                'available' => (float) $user->balance,
             ];
         }
 
         try {
             DB::beginTransaction();
 
-            // Refresh wallet to get latest balance
-            $wallet->refresh();
-            $oldBalance = $wallet->total_balance;
+            $oldBalance = (float) $user->balance;
 
             // Deduct from wallet
-            $this->debitWallet($wallet, $price);
+            $user->debit($price, false, ['fundingtype' => 'nin_slip']);
 
             // Create transaction record
             $transaction = Transaction::createSlipDownload(
@@ -79,17 +64,14 @@ class SlipDownloadService
                 [
                     'validation_id' => $validationId,
                     'slip_type' => $slipTypeCode,
-                    'slip_name' => $slipType->name,
+                    'slip_name' => ucfirst($slipTypeCode).' Slip',
                     'nin' => $validation->nin,
                     'old_balance' => $oldBalance,
-                    'new_balance' => $wallet->fresh()->total_balance,
+                    'new_balance' => (float) $user->balance,
                 ]
             );
 
             DB::commit();
-
-            // Get the verification result data
-            $resultData = $validation->getParsedResult();
 
             return [
                 'success' => true,
@@ -97,15 +79,15 @@ class SlipDownloadService
                 'data' => [
                     'validation_id' => $validationId,
                     'slip_type' => $slipTypeCode,
-                    'component_name' => $slipType->component_name,
+                    'component_name' => ucfirst($slipTypeCode).'Slip',
                     'price' => $price,
                     'transaction_id' => $transaction->id,
-                    'verification_data' => $resultData,
+                    'verification_data' => $validation->getParsedResult(),
                 ],
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Slip download error: ' . $e->getMessage(), [
+            Log::error('Slip download error: '.$e->getMessage(), [
                 'user_id' => $user->id,
                 'validation_id' => $validationId,
                 'slip_type' => $slipTypeCode,
@@ -114,53 +96,68 @@ class SlipDownloadService
 
             return [
                 'success' => false,
-                'message' => 'An error occurred: ' . $e->getMessage(),
+                'message' => 'An error occurred: '.$e->getMessage(),
             ];
         }
     }
 
     /**
-     * Validate that a verification record exists and belongs to the user
+     * Validate that a verification record exists, belongs to the user and is completed.
      */
-    public function validateVerification(int $validationId, User $user): ?NinValidation
+    public function validateVerification(int $validationId, User $user): ?Validation
     {
-        return NinValidation::where('id', $validationId)
-            ->where('user_id', $user->id)
-            ->where('is_verified', true)
+        return Validation::where('id', $validationId)
+            ->where('userId', $user->id)
             ->where('status', 'completed')
             ->first();
     }
 
     /**
-     * Get the price for a slip type
+     * Single-row verifyapiconfiq pricing.
+     */
+    protected function verifyConfig(): VerifyApiConfig
+    {
+        return Cache::remember('verifyapiconfiq.API1', 300, function () {
+            return VerifyApiConfig::firstOrCreate(['id' => 'API1']);
+        });
+    }
+
+    protected function slipPriceColumn(string $slipType): string
+    {
+        return match (strtolower($slipType)) {
+            'regular', 'reg', 'regslip' => 'regslipprice',
+            'premium' => 'premiumslipprice',
+            'nvs' => 'nvsslipprice',
+            'advanced', 'adv' => 'advslipprice',
+            default => 'standardslipsprice',
+        };
+    }
+
+    /**
+     * Get the price for a slip type.
      */
     public function getSlipPrice(string $slipTypeCode): float
     {
-        return SlipType::getPrice($slipTypeCode, 100);
+        return (float) ($this->verifyConfig()->{$this->slipPriceColumn($slipTypeCode)} ?? 100);
     }
 
     /**
-     * Get all active slip types for frontend
+     * Get all active slip types for frontend.
      */
     public function getActiveSlipTypes(): array
     {
-        return SlipType::getForFrontend();
-    }
+        $types = [
+            ['code' => 'regular', 'name' => 'Regular Slip', 'component_name' => 'RegularSlip'],
+            ['code' => 'standard', 'name' => 'Standard Slip', 'component_name' => 'StandardSlip'],
+            ['code' => 'premium', 'name' => 'Premium Slip', 'component_name' => 'PremiumSlip'],
+            ['code' => 'nvs', 'name' => 'NVS Slip', 'component_name' => 'NvsSlip'],
+            ['code' => 'advanced', 'name' => 'Advanced Slip', 'component_name' => 'AdvancedSlip'],
+        ];
 
-    /**
-     * Debit wallet (bonus first, then main balance)
-     */
-    protected function debitWallet(Wallet $wallet, float $amount): void
-    {
-        if ($wallet->bonus_balance >= $amount) {
-            // Deduct entirely from bonus balance
-            $wallet->bonus_balance -= $amount;
-        } else {
-            // Use all bonus balance, then deduct remainder from main balance
-            $remaining = $amount - $wallet->bonus_balance;
-            $wallet->bonus_balance = 0;
-            $wallet->balance -= $remaining;
-        }
-        $wallet->save();
+        return array_values(array_filter(array_map(function (array $type) {
+            $price = (float) ($this->verifyConfig()->{$this->slipPriceColumn($type['code'])} ?? 0);
+
+            return $price > 0 ? [...$type, 'price' => $price] : null;
+        }, $types)));
     }
 }

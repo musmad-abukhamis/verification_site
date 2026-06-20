@@ -30,28 +30,16 @@ class ProfileController extends Controller
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-        
+
         // Normalize phone number
-        if (!empty($validated['phone'])) {
+        if (! empty($validated['phone'])) {
             $validated['phone'] = preg_replace('/\s+/', '', $validated['phone']);
         }
-        
-        // Ensure at least one of email or phone is provided
-        $user = $request->user();
-        $newEmail = $validated['email'] ?? null;
-        $newPhone = $validated['phone'] ?? null;
-        
-        if (empty($newEmail) && empty($newPhone) && empty($user->email) && empty($user->phone)) {
-            return Redirect::route('profile.edit')->withErrors([
-                'email' => 'Either email or phone is required.',
-                'phone' => 'Either email or phone is required.',
-            ]);
-        }
-        
+
         $request->user()->fill($validated);
 
         if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+            $request->user()->email_verified = null;
         }
 
         $request->user()->save();

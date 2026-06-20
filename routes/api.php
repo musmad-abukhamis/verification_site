@@ -1,6 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\BillstackWebhookController;
 use App\Http\Controllers\Api\NinVerificationController;
+use App\Http\Controllers\Api\Nin\PremblyController;
+use App\Http\Controllers\Api\Nin\ArewaSmartController;
+use App\Http\Controllers\Api\Nin\ProviderThreeController;
+use App\Http\Controllers\Api\Nin\ProviderFourController;
+use App\Http\Controllers\Api\Nin\ProviderFiveController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -48,7 +54,27 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     // Check IPE Status (ArewaSmart)
     Route::get('/nin/ipe/arewa/status', [NinVerificationController::class, 'checkIpeStatus'])
         ->name('api.nin.ipe.status');
+
+    /*
+    |------------------------------------------------------------------
+    | Modular multi-provider NIN verification
+    |------------------------------------------------------------------
+    | One dedicated endpoint per provider. The verification method
+    | (nin|phone|demographic) is supplied in the request body.
+    | Add a new provider by adding one line here + its controller.
+    */
+    Route::prefix('nin/providers')->name('api.nin.providers.')->group(function () {
+        Route::post('/prembly/verify',    [PremblyController::class, 'verify'])->name('prembly');
+        Route::post('/arewasmart/verify', [ArewaSmartController::class, 'verify'])->name('arewasmart');
+        Route::post('/provider3/verify',  [ProviderThreeController::class, 'verify'])->name('provider3');
+        Route::post('/provider4/verify',  [ProviderFourController::class, 'verify'])->name('provider4');
+        Route::post('/provider5/verify',  [ProviderFiveController::class, 'verify'])->name('provider5');
+    });
 });
+
+// Billstack reserved-account funding webhook (signed with x-wiaxy-signature).
+Route::post('/webhooks/billstack', [BillstackWebhookController::class, 'handle'])
+    ->name('api.webhooks.billstack');
 
 // Public health check endpoint
 Route::get('/health', function () {

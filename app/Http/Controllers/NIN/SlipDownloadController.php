@@ -33,7 +33,7 @@ class SlipDownloadController extends Controller
     public function download(Request $request)
     {
         $validated = $request->validate([
-            'validation_id' => 'required|integer|exists:nin_validations,id',
+            'validation_id' => 'required|integer|exists:validation,id',
             'slip_type'     => 'required|string',
         ]);
 

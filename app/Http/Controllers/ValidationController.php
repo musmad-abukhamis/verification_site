@@ -2,33 +2,34 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\NinValidation;
-use App\Models\Wallet;
+use App\Models\Validation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class ValidationController extends Controller
 {
+    private function sortColumn(?string $sort): string
+    {
+        return match ($sort) {
+            'created_at', 'createdAt' => 'createdAt',
+            'updated_at', 'updatedAt' => 'updatedAt',
+            'id', 'nin', 'status' => $sort,
+            default => 'createdAt',
+        };
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();
-        
-        // Get wallet
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-        
-        // Get NIN validation price from config
+        $balance = (float) $user->balance;
+
         $price = config('services.verification.nin_price', 100);
-        
-        // Build query
-        $query = NinValidation::query()
-            ->where('user_id', $user->id)
+
+        $query = Validation::query()
+            ->where('userId', $user->id)
             ->with('user');
-        
-        // Search
+
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nin', 'like', "%{$search}%")
@@ -38,31 +39,35 @@ class ValidationController extends Controller
                     });
             });
         }
-        
-        // Status filter
+
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
-        
-        // Sorting
-        $sortField = $request->input('sort', 'created_at');
-        $sortDirection = $request->input('direction', 'desc');
-        $allowedSorts = ['id', 'nin', 'status', 'created_at', 'updated_at'];
-        
-        if (in_array($sortField, $allowedSorts)) {
-            $query->orderBy($sortField, $sortDirection);
-        }
-        
-        $transactions = $query->paginate(10)->withQueryString();
-        
+
+        $transactions = $query
+            ->orderBy($this->sortColumn($request->input('sort')), $request->input('direction', 'desc'))
+            ->paginate(10)
+            ->through(fn ($v) => [
+                'id' => $v->id,
+                'reference' => $v->id,
+                'nin' => $v->nin,
+                'status' => $v->status,
+                'result' => $v->result,
+                'comment' => $v->comment,
+                'old_balance' => (float) $v->oldBal,
+                'new_balance' => (float) $v->newBal,
+                'created_at' => $v->createdAt,
+            ])
+            ->withQueryString();
+
         return Inertia::render('Validation/Index', [
             'price' => $price,
             'transactions' => $transactions,
             'filters' => $request->only(['search', 'status', 'sort', 'direction']),
             'wallet' => [
-                'balance' => $wallet->balance,
-                'bonus_balance' => $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
+                'balance' => $balance,
+                'bonus_balance' => 0.0,
+                'total_balance' => $balance,
             ],
         ]);
     }
@@ -72,67 +77,47 @@ class ValidationController extends Controller
         $request->validate([
             'nin' => 'required|string|size:11',
         ]);
-        
+
         $user = Auth::user();
-        $price = config('services.verification.nin_price', 100);
-        
-        // Check wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-        
-        if ($wallet->total_balance < $price) {
+        $price = (float) config('services.verification.nin_price', 100);
+
+        if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);
         }
-        
-        $oldBalance = $wallet->total_balance;
-        
-        // Deduct from wallet
-        if ($wallet->bonus_balance >= $price) {
-            $wallet->bonus_balance -= $price;
-        } else {
-            $remaining = $price - $wallet->bonus_balance;
-            $wallet->bonus_balance = 0;
-            $wallet->balance -= $remaining;
-        }
-        $wallet->save();
-        
-        // Create validation record
-        $validation = NinValidation::create([
-            'user_id' => $user->id,
+
+        $oldBalance = (float) $user->balance;
+        $user->debit($price, false, ['fundingtype' => 'nin_validation']);
+
+        $reference = Validation::generateReference();
+
+        Validation::create([
             'nin' => $request->nin,
             'status' => 'processing',
-            'old_balance' => $oldBalance,
-            'new_balance' => $wallet->total_balance,
-            'reference' => NinValidation::generateReference(),
+            'comment' => "Validation request {$reference}",
+            'oldBal' => $oldBalance,
+            'newBal' => (float) $user->balance,
+            'userId' => $user->id,
         ]);
-        
+
         // TODO: Call external NIN validation API here
-        // For now, simulate processing
-        
-        return back()->with('success', 'NIN validation submitted successfully. Reference: ' . $validation->reference);
+
+        return back()->with('success', 'NIN validation submitted successfully. Reference: '.$reference);
     }
 
-    public function checkStatus(Request $request, NinValidation $validation)
+    public function checkStatus(Request $request, Validation $validation)
     {
-        // Ensure user owns this validation
-        if ($validation->user_id !== Auth::id()) {
+        if ($validation->userId !== Auth::id()) {
             abort(403);
         }
-        
-        // TODO: Call external API to check status
-        // For now, simulate a successful validation
-        
+
         if ($validation->status === 'processing') {
             $validation->update([
                 'status' => 'completed',
                 'result' => 'NIN validated successfully',
                 'comment' => 'Validation completed via API',
-                'validated_at' => now(),
             ]);
         }
-        
+
         return back()->with('success', 'Status updated successfully');
     }
 }

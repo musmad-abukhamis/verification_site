@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transaction;
-use App\Models\Wallet;
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -25,67 +25,98 @@ class VtuService
      * Purchase airtime
      */
     public function purchaseAirtime(
-        int $userId,
+        string $userId,
         string $network,
         string $phoneNumber,
         float $amount,
         ?string $reference = null
     ): array {
-        $reference = $reference ?? Transaction::generateReference();
-
-        // Validate wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        if (!$wallet->debit($amount)) {
-            return [
-                'success' => false,
-                'message' => 'Insufficient wallet balance',
-            ];
-        }
-
-        // Create transaction record
-        $transaction = Transaction::create([
-            'user_id' => $userId,
+        return $this->purchase('airtime', $userId, $network, $phoneNumber, $amount, [
+            'name' => strtoupper($network).' Airtime',
             'reference' => $reference,
-            'type' => 'airtime',
-            'status' => 'pending',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => [
-                'network' => $network,
-                'phone_number' => $phoneNumber,
-                'amount' => $amount,
-            ],
-            'provider' => config('services.vtu.provider'),
-        ]);
-
-        try {
-            // Call VTU API (example using Vtpass format)
-            $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Basic ' . base64_encode($this->apiKey . ':' . $this->secretKey),
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/pay', [
-                'request_id' => $reference,
+            'payload' => [
                 'serviceID' => $this->getServiceId($network, 'airtime'),
                 'amount' => $amount,
                 'phone' => $phoneNumber,
-            ]);
+            ],
+        ]);
+    }
+
+    /**
+     * Purchase data bundle
+     */
+    public function purchaseData(
+        string $userId,
+        string $network,
+        string $phoneNumber,
+        string $planCode,
+        float $amount,
+        ?string $reference = null,
+        ?string $planName = null
+    ): array {
+        return $this->purchase('data', $userId, $network, $phoneNumber, $amount, [
+            'name' => $planName ?? (strtoupper($network).' Data'),
+            'reference' => $reference,
+            'payload' => [
+                'serviceID' => $this->getServiceId($network, 'data'),
+                'billersCode' => $phoneNumber,
+                'variation_code' => $planCode,
+                'phone' => $phoneNumber,
+            ],
+        ]);
+    }
+
+    /**
+     * Shared purchase flow: debit the user's wallet, record the transaction,
+     * call the provider, and refund on failure.
+     */
+    protected function purchase(string $type, string $userId, string $network, string $phoneNumber, float $amount, array $options): array
+    {
+        $reference = $options['reference'] ?? Transaction::generateReference(strtoupper($type));
+
+        $user = User::find($userId);
+
+        if (! $user) {
+            return ['success' => false, 'message' => 'User not found'];
+        }
+
+        $oldBalance = (float) $user->balance;
+
+        if (! $user->debit($amount, false, ['fundingtype' => $type])) {
+            return ['success' => false, 'message' => 'Insufficient wallet balance'];
+        }
+
+        $transaction = Transaction::create([
+            'id' => $reference,
+            'network' => $network,
+            'name' => $options['name'],
+            'price' => (int) round($amount),
+            'type' => $type,
+            'phone' => $phoneNumber,
+            'oldbal' => $oldBalance,
+            'newbal' => (float) $user->balance,
+            'status' => 'pending',
+            'userId' => $userId,
+            'response' => 'pending',
+        ]);
+
+        try {
+            $response = Http::timeout(10)->withHeaders([
+                'Authorization' => 'Basic '.base64_encode($this->apiKey.':'.$this->secretKey),
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl.'/pay', array_merge(['request_id' => $reference], $options['payload']));
 
             $data = $response->json();
 
             if ($response->successful() && ($data['code'] ?? '') === '000') {
                 $transaction->markAsSuccess(
                     $data['content']['transactions']['transactionId'] ?? null,
-                    $data['response_description'] ?? 'Airtime purchase successful'
+                    $data['response_description'] ?? ucfirst($type).' purchase successful'
                 );
 
                 return [
                     'success' => true,
-                    'message' => 'Airtime purchase successful',
+                    'message' => ucfirst($type).' purchase successful',
                     'data' => [
                         'reference' => $reference,
                         'amount' => $amount,
@@ -95,122 +126,21 @@ class VtuService
             }
 
             // Failed - refund wallet
-            $wallet->credit($amount);
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
             $transaction->markAsFailed($data['response_description'] ?? 'Transaction failed');
 
             return [
                 'success' => false,
                 'message' => $data['response_description'] ?? 'Transaction failed',
             ];
-
         } catch (\Exception $e) {
-            Log::error('Airtime purchase failed', [
+            Log::error(ucfirst($type).' purchase failed', [
                 'reference' => $reference,
                 'error' => $e->getMessage(),
             ]);
 
             // Refund on exception
-            $wallet->credit($amount);
-            $transaction->markAsFailed('Service temporarily unavailable');
-
-            return [
-                'success' => false,
-                'message' => 'Service temporarily unavailable. Please try again.',
-            ];
-        }
-    }
-
-    /**
-     * Purchase data bundle
-     */
-    public function purchaseData(
-        int $userId,
-        string $network,
-        string $phoneNumber,
-        string $planCode,
-        float $amount,
-        ?string $reference = null
-    ): array {
-        $reference = $reference ?? Transaction::generateReference();
-
-        // Validate wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        if (!$wallet->debit($amount)) {
-            return [
-                'success' => false,
-                'message' => 'Insufficient wallet balance',
-            ];
-        }
-
-        // Create transaction record
-        $transaction = Transaction::create([
-            'user_id' => $userId,
-            'reference' => $reference,
-            'type' => 'data',
-            'status' => 'pending',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => [
-                'network' => $network,
-                'phone_number' => $phoneNumber,
-                'plan_code' => $planCode,
-                'amount' => $amount,
-            ],
-            'provider' => config('services.vtu.provider'),
-        ]);
-
-        try {
-            $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Basic ' . base64_encode($this->apiKey . ':' . $this->secretKey),
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/pay', [
-                'request_id' => $reference,
-                'serviceID' => $this->getServiceId($network, 'data'),
-                'billersCode' => $phoneNumber,
-                'variation_code' => $planCode,
-                'phone' => $phoneNumber,
-            ]);
-
-            $data = $response->json();
-
-            if ($response->successful() && ($data['code'] ?? '') === '000') {
-                $transaction->markAsSuccess(
-                    $data['content']['transactions']['transactionId'] ?? null,
-                    $data['response_description'] ?? 'Data purchase successful'
-                );
-
-                return [
-                    'success' => true,
-                    'message' => 'Data purchase successful',
-                    'data' => [
-                        'reference' => $reference,
-                        'plan_code' => $planCode,
-                        'phone_number' => $phoneNumber,
-                    ],
-                ];
-            }
-
-            // Failed - refund wallet
-            $wallet->credit($amount);
-            $transaction->markAsFailed($data['response_description'] ?? 'Transaction failed');
-
-            return [
-                'success' => false,
-                'message' => $data['response_description'] ?? 'Transaction failed',
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('Data purchase failed', [
-                'reference' => $reference,
-                'error' => $e->getMessage(),
-            ]);
-
-            $wallet->credit($amount);
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
             $transaction->markAsFailed('Service temporarily unavailable');
 
             return [
@@ -227,8 +157,8 @@ class VtuService
     {
         try {
             $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Basic ' . base64_encode($this->apiKey . ':' . $this->secretKey),
-            ])->get($this->baseUrl . '/service-variations', [
+                'Authorization' => 'Basic '.base64_encode($this->apiKey.':'.$this->secretKey),
+            ])->get($this->baseUrl.'/service-variations', [
                 'serviceID' => $this->getServiceId($network, 'data'),
             ]);
 

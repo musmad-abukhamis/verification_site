@@ -33,8 +33,16 @@ class RegisteredUserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'username' => [
+                'required',
+                'string',
+                'min:3',
+                'max:50',
+                'regex:/^[A-Za-z0-9_.]+$/',
+                Rule::unique(User::class),
+            ],
             'email' => [
-                'nullable',
+                'required',
                 'string',
                 'lowercase',
                 'email',
@@ -42,7 +50,7 @@ class RegisteredUserController extends Controller
                 Rule::unique(User::class),
             ],
             'phone' => [
-                'nullable',
+                'required',
                 'string',
                 'max:20',
                 'regex:/^\+?[0-9]+$/',
@@ -51,19 +59,12 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Ensure at least one of email or phone is provided
-        if (empty($request->email) && empty($request->phone)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'email' => 'Either email or phone is required.',
-                'phone' => 'Either email or phone is required.',
-            ]);
-        }
-
         // Normalize phone number
-        $phone = $request->phone ? preg_replace('/\s+/', '', $request->phone) : null;
+        $phone = preg_replace('/\s+/', '', $request->phone);
 
         $user = User::create([
             'name' => $request->name,
+            'username' => $request->username,
             'email' => $request->email,
             'phone' => $phone,
             'password' => Hash::make($request->password),

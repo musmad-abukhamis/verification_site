@@ -6,6 +6,7 @@ import { Head, Link } from '@inertiajs/vue3';
 const props = defineProps({
     wallet: Object,
     recent_transactions: Array,
+    reserved_accounts: { type: Array, default: () => [] },
 });
 
 const getStatusColor = (status) => {
@@ -26,6 +27,8 @@ const getTypeLabel = (type) => {
         bvn_verification: 'BVN Verification',
         wallet_funding: 'Wallet Funding',
         refund: 'Refund',
+        credit: 'Credit',
+        debit: 'Debit',
     };
     return labels[type] || type;
 };

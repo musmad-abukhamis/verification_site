@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Console\Command;
 
@@ -43,12 +44,12 @@ class PromoteUserToAdmin extends Command
             }
         }
 
-        if ($user->is_admin) {
+        if ($user->role === UserRole::ADMIN) {
             $this->warn("User '{$user->name}' ({$user->email}) is already an admin.");
             return 0;
         }
 
-        $user->update(['is_admin' => true]);
+        $user->update(['role' => UserRole::ADMIN]);
 
         $this->info("✓ User '{$user->name}' ({$user->email}) has been promoted to admin.");
 

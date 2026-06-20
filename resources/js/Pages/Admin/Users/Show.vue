@@ -53,6 +53,38 @@ const submitDebit = () => {
     });
 };
 
+// Account management
+const showPasswordModal = ref(false);
+const passwordForm = useForm({ password: '', password_confirmation: '' });
+
+const submitPassword = () => {
+    passwordForm.patch(route('admin.users.password', props.user.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showPasswordModal.value = false;
+            passwordForm.reset();
+        },
+    });
+};
+
+const resetTwoFactor = () => {
+    if (confirm(`Reset two-factor authentication for ${props.user.name}?`)) {
+        router.post(route('admin.users.reset-2fa', props.user.id), {}, { preserveScroll: true });
+    }
+};
+
+const resetWallet = () => {
+    if (confirm(`Reset ${props.user.name}'s wallet balance to ₦0? This cannot be undone.`)) {
+        router.post(route('admin.users.wallet.reset', props.user.id), {}, { preserveScroll: true });
+    }
+};
+
+const deleteUser = () => {
+    if (confirm(`Permanently delete ${props.user.name} and ALL their records? This cannot be undone.`)) {
+        router.delete(route('admin.users.destroy', props.user.id));
+    }
+};
+
 const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
     success: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -65,6 +97,9 @@ const statusColors = {
 
     <AdminLayout>
         <div class="space-y-6">
+            <div v-if="$page.props.flash?.success" class="p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg text-sm">{{ $page.props.flash.success }}</div>
+            <div v-if="$page.props.errors?.message" class="p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ $page.props.errors.message }}</div>
+
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
@@ -164,6 +199,12 @@ const statusColors = {
                         >
                             - Debit Wallet
                         </button>
+                        <button
+                            @click="resetWallet"
+                            class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium"
+                        >
+                            Reset to ₦0
+                        </button>
                     </div>
                 </div>
                 <div class="grid grid-cols-3 gap-4">
@@ -179,6 +220,31 @@ const statusColors = {
                         <p class="text-sm text-gray-500 dark:text-gray-400">Total</p>
                         <p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">₦{{ user.wallet.total_balance.toLocaleString() }}</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Account Management -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Management</h3>
+                <div class="flex flex-wrap gap-3">
+                    <button
+                        @click="showPasswordModal = true"
+                        class="px-4 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-300 rounded-lg text-sm font-medium"
+                    >
+                        Change Password
+                    </button>
+                    <button
+                        @click="resetTwoFactor"
+                        class="px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 rounded-lg text-sm font-medium"
+                    >
+                        Reset 2FA
+                    </button>
+                    <button
+                        @click="deleteUser"
+                        class="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium ml-auto"
+                    >
+                        Delete User
+                    </button>
                 </div>
             </div>
 
@@ -312,6 +378,56 @@ const statusColors = {
                                 class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                             >
                                 {{ debitForm.processing ? 'Processing...' : 'Debit Wallet' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div v-if="showPasswordModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+                <div class="p-6">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Change Password</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Set a new password for {{ user.name }}.</p>
+                    <form @submit.prevent="submitPassword" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                            <input
+                                v-model="passwordForm.password"
+                                type="password"
+                                required
+                                minlength="8"
+                                placeholder="At least 8 characters"
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2"
+                            />
+                            <p v-if="passwordForm.errors.password" class="mt-1 text-xs text-red-500">{{ passwordForm.errors.password }}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
+                            <input
+                                v-model="passwordForm.password_confirmation"
+                                type="password"
+                                required
+                                placeholder="Re-enter the password"
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2"
+                            />
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                @click="showPasswordModal = false"
+                                class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="passwordForm.processing"
+                                class="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                            >
+                                {{ passwordForm.processing ? 'Saving...' : 'Update Password' }}
                             </button>
                         </div>
                     </form>

@@ -23,6 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        // Allow the first-party Inertia SPA to authenticate to /api routes
+        // using the session cookie (Sanctum stateful) + axios XSRF token.
+        $middleware->statefulApi();
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);

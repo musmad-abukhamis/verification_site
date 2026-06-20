@@ -12,6 +12,12 @@ use App\Http\Controllers\Admin\VendorSelectionController;
 use App\Http\Controllers\Admin\VerificationLogController;
 use App\Http\Controllers\Admin\ServicePriceController;
 use App\Http\Controllers\Admin\NinValidationController;
+use App\Http\Controllers\Admin\BvnModificationController;
+use App\Http\Controllers\Admin\BvnPriceController;
+use App\Http\Controllers\Admin\BvnSdkFormController;
+use App\Http\Controllers\Admin\BvnRetrievalController;
+use App\Http\Controllers\Admin\BvnSearchController;
+use App\Http\Controllers\Admin\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -24,7 +30,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::post('/users/{user}/wallet/credit', [UserController::class, 'creditWallet'])->name('users.wallet.credit');
     Route::post('/users/{user}/wallet/debit', [UserController::class, 'debitWallet'])->name('users.wallet.debit');
+    Route::post('/users/{user}/wallet/reset', [UserController::class, 'resetWallet'])->name('users.wallet.reset');
+    Route::patch('/users/{user}/password', [UserController::class, 'changePassword'])->name('users.password');
+    Route::post('/users/{user}/reset-2fa', [UserController::class, 'resetTwoFactor'])->name('users.reset-2fa');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     
+    // Wallet Management (central funding + history)
+    Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
+    Route::post('/wallet/fund', [WalletController::class, 'fund'])->name('wallet.fund');
+    Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
+
     // Transaction Management
     Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
     Route::get('/transactions/{transaction}', [TransactionController::class, 'show'])->name('transactions.show');
@@ -83,4 +98,28 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/nin-validations', [NinValidationController::class, 'index'])->name('nin-validations.index');
     Route::get('/nin-validations/{validation}', [NinValidationController::class, 'show'])->name('nin-validations.show');
     Route::get('/nin-validations-stats', [NinValidationController::class, 'stats'])->name('nin-validations.stats');
+
+    // BVN Service Prices
+    Route::get('/bvn-prices', [BvnPriceController::class, 'index'])->name('bvn-prices.index');
+    Route::put('/bvn-prices', [BvnPriceController::class, 'update'])->name('bvn-prices.update');
+
+    // BVN Modification Management
+    Route::get('/bvn-modifications', [BvnModificationController::class, 'index'])->name('bvn-modifications.index');
+    Route::get('/bvn-modifications/{modification}', [BvnModificationController::class, 'show'])->name('bvn-modifications.show');
+    Route::patch('/bvn-modifications/{modification}/status', [BvnModificationController::class, 'updateStatus'])->name('bvn-modifications.status');
+    Route::delete('/bvn-modifications/{modification}', [BvnModificationController::class, 'destroy'])->name('bvn-modifications.destroy');
+
+    // BVN SDK Onboarding Management
+    Route::get('/bvn-sdk-forms', [BvnSdkFormController::class, 'index'])->name('bvn-sdk-forms.index');
+    Route::get('/bvn-sdk-forms/{form}', [BvnSdkFormController::class, 'show'])->name('bvn-sdk-forms.show');
+    Route::patch('/bvn-sdk-forms/{form}/status', [BvnSdkFormController::class, 'updateStatus'])->name('bvn-sdk-forms.status');
+    Route::delete('/bvn-sdk-forms/{form}', [BvnSdkFormController::class, 'destroy'])->name('bvn-sdk-forms.destroy');
+
+    // BVN Retrieval Management
+    Route::get('/bvn-retrievals', [BvnRetrievalController::class, 'index'])->name('bvn-retrievals.index');
+    Route::patch('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'update'])->name('bvn-retrievals.update');
+    Route::delete('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'destroy'])->name('bvn-retrievals.destroy');
+
+    // BVN Search Logs (read-only)
+    Route::get('/bvn-searches', [BvnSearchController::class, 'index'])->name('bvn-searches.index');
 });

@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DataPlan;
-use App\Models\Wallet;
+use App\Models\Plan;
 use App\Services\VtuService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,24 +17,24 @@ class VtuController extends Controller
         $this->vtuService = $vtuService;
     }
 
+    private function walletPayload($user): array
+    {
+        $balance = (float) $user->balance;
+
+        return [
+            'balance' => $balance,
+            'bonus_balance' => 0.0,
+            'total_balance' => $balance,
+        ];
+    }
+
     /**
      * Show airtime purchase page
      */
     public function airtime()
     {
-        $userId = Auth::id();
-
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
         return Inertia::render('Vtu/Airtime', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
-            ],
+            'wallet' => $this->walletPayload(Auth::user()),
             'networks' => [
                 ['value' => 'mtn', 'label' => 'MTN', 'color' => 'yellow'],
                 ['value' => 'glo', 'label' => 'Glo', 'color' => 'green'],
@@ -58,7 +57,7 @@ class VtuController extends Controller
 
         // Verify phone number
         $phoneCheck = $this->vtuService->verifyPhoneNumber($validated['phone_number']);
-        if (!$phoneCheck['valid']) {
+        if (! $phoneCheck['valid']) {
             return back()->withErrors(['phone_number' => 'Invalid phone number']);
         }
 
@@ -81,25 +80,14 @@ class VtuController extends Controller
      */
     public function data()
     {
-        $userId = Auth::id();
-
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        $dataPlans = DataPlan::active()
+        $dataPlans = Plan::active()
             ->orderBy('network')
             ->orderBy('price')
             ->get()
             ->groupBy('network');
 
         return Inertia::render('Vtu/Data', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
-            ],
+            'wallet' => $this->walletPayload(Auth::user()),
             'networks' => [
                 ['value' => 'mtn', 'label' => 'MTN'],
                 ['value' => 'glo', 'label' => 'Glo'],
@@ -118,14 +106,14 @@ class VtuController extends Controller
         $validated = $request->validate([
             'network' => 'required|in:mtn,glo,airtel,9mobile',
             'phone_number' => 'required|string|min:10|max:11',
-            'plan_id' => 'required|exists:data_plans,id',
+            'plan_id' => 'required|exists:Plan,id',
         ]);
 
-        $plan = DataPlan::findOrFail($validated['plan_id']);
+        $plan = Plan::findOrFail($validated['plan_id']);
 
         // Verify phone number matches network
         $phoneCheck = $this->vtuService->verifyPhoneNumber($validated['phone_number']);
-        if (!$phoneCheck['valid']) {
+        if (! $phoneCheck['valid']) {
             return back()->withErrors(['phone_number' => 'Invalid phone number']);
         }
 
@@ -137,8 +125,10 @@ class VtuController extends Controller
             Auth::id(),
             $validated['network'],
             $validated['phone_number'],
-            $plan->id, // or plan code from your provider
-            (float) $plan->price
+            (string) $plan->id,
+            (float) $plan->priceForUser(Auth::user()),
+            null,
+            $plan->name
         );
 
         if ($result['success']) {
@@ -167,19 +157,8 @@ class VtuController extends Controller
      */
     public function buyData()
     {
-        $userId = Auth::id();
-
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
         return Inertia::render('BuyData/Index', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
-            ],
+            'wallet' => $this->walletPayload(Auth::user()),
             'networks' => [
                 ['value' => 'mtn', 'label' => 'MTN'],
                 ['value' => 'glo', 'label' => 'Glo'],
@@ -188,7 +167,7 @@ class VtuController extends Controller
             ],
             'user' => [
                 'id' => Auth::id(),
-                'role' => Auth::user()->role ?? 'USER',
+                'role' => Auth::user()->role?->value ?? 'USER',
             ],
         ]);
     }
@@ -201,17 +180,17 @@ class VtuController extends Controller
         $validated = $request->validate([
             'network' => 'required|in:mtn,glo,airtel,9mobile',
             'type' => 'required|string',
-            'planId' => 'required|exists:data_plans,id',
+            'planId' => 'required|exists:Plan,id',
             'planName' => 'required|string',
             'planPrice' => 'required|numeric|min:0',
             'phoneNumber' => 'required|string|min:10|max:11',
         ]);
 
-        $plan = DataPlan::findOrFail($validated['planId']);
+        $plan = Plan::findOrFail($validated['planId']);
 
         // Verify phone number
         $phoneCheck = $this->vtuService->verifyPhoneNumber($validated['phoneNumber']);
-        if (!$phoneCheck['valid']) {
+        if (! $phoneCheck['valid']) {
             return back()->withErrors(['phoneNumber' => 'Invalid phone number']);
         }
 
@@ -219,8 +198,10 @@ class VtuController extends Controller
             Auth::id(),
             $validated['network'],
             $validated['phoneNumber'],
-            $plan->id,
-            (float) $validated['planPrice']
+            (string) $plan->id,
+            (float) $plan->priceForUser(Auth::user()),
+            null,
+            $plan->name
         );
 
         if ($result['success']) {
@@ -235,17 +216,16 @@ class VtuController extends Controller
      */
     public function getDataTypes($network)
     {
-        // In a real implementation, this would fetch from your VTU provider
-        // For now, we'll return static data
-        $types = [
-            'mtn' => ['SME', 'GIFTING', 'CORPORATE'],
-            'glo' => ['NORMAL', 'GIFTING'],
-            'airtel' => ['NORMAL', 'GIFTING', 'CORPORATE'],
-            '9mobile' => ['NORMAL', 'GIFTING']
-        ];
+        $types = Plan::active()
+            ->byNetwork($network)
+            ->distinct()
+            ->orderBy('type')
+            ->pluck('type')
+            ->filter()
+            ->values();
 
         return response()->json([
-            'types' => $types[strtolower($network)] ?? []
+            'types' => $types,
         ]);
     }
 
@@ -254,33 +234,22 @@ class VtuController extends Controller
      */
     public function getDataPlans($network, $type)
     {
-        $plans = DataPlan::active()
+        $user = Auth::user();
+
+        $plans = Plan::active()
             ->byNetwork($network)
-            ->where('plan_type', $type)
+            ->byType($type)
             ->orderBy('price')
             ->get()
-            ->map(function ($plan) {
-                $user = Auth::user();
-                $price = $plan->price;
-                
-                // Role-based pricing
-                if ($user->role === 'AGENT') {
-                    $price = $plan->agent_price ?? $plan->price;
-                } elseif ($user->role === 'API') {
-                    $price = $plan->api_price ?? $plan->price;
-                }
-                
-                return [
-                    'id' => $plan->id,
-                    'name' => $plan->name,
-                    'price' => $price,
-                    'validity_days' => $plan->validity_days,
-                    'data_volume' => $plan->data_volume,
-                ];
-            });
+            ->map(fn (Plan $plan) => [
+                'id' => $plan->id,
+                'name' => $plan->name,
+                'price' => $plan->priceForUser($user),
+                'validity' => $plan->validity,
+            ]);
 
         return response()->json([
-            'plans' => $plans
+            'plans' => $plans,
         ]);
     }
 }

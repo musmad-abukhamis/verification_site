@@ -13,7 +13,7 @@ class TransactionController extends Controller
     {
         $query = Transaction::query()
             ->with('user')
-            ->latest();
+            ->latest('createdAt');
 
         // Filter by type
         if ($type = $request->input('type')) {
@@ -25,22 +25,22 @@ class TransactionController extends Controller
             $query->where('status', $status);
         }
 
-        // Search by reference
+        // Search by reference (id)
         if ($search = $request->input('search')) {
-            $query->where('reference', 'like', "%{$search}%");
+            $query->where('id', 'like', "%{$search}%");
         }
 
-        $transactions = $query->paginate(20)->through(fn ($t) => [
+        $transactions = $query->paginate(20)->through(fn (Transaction $t) => [
             'id' => $t->id,
             'reference' => $t->reference,
             'user' => $t->user?->name ?? 'Unknown',
             'type' => $t->type,
-            'amount' => $t->amount,
-            'fee' => $t->fee,
-            'total_amount' => $t->total_amount,
+            'amount' => (float) $t->price,
+            'fee' => 0,
+            'total_amount' => (float) $t->price,
             'status' => $t->status,
-            'provider' => $t->provider,
-            'created_at' => $t->created_at->format('Y-m-d H:i'),
+            'provider' => $t->network,
+            'created_at' => $t->createdAt?->format('Y-m-d H:i'),
         ]);
 
         return Inertia::render('Admin/Transactions/Index', [
@@ -64,16 +64,16 @@ class TransactionController extends Controller
                     'email' => $transaction->user->email,
                 ] : null,
                 'type' => $transaction->type,
-                'amount' => $transaction->amount,
-                'fee' => $transaction->fee,
-                'total_amount' => $transaction->total_amount,
+                'amount' => (float) $transaction->price,
+                'fee' => 0,
+                'total_amount' => (float) $transaction->price,
                 'status' => $transaction->status,
                 'details' => $transaction->details,
-                'provider' => $transaction->provider,
-                'provider_reference' => $transaction->provider_reference,
-                'response_message' => $transaction->response_message,
-                'created_at' => $transaction->created_at->format('Y-m-d H:i:s'),
-                'updated_at' => $transaction->updated_at->format('Y-m-d H:i:s'),
+                'provider' => $transaction->network,
+                'provider_reference' => null,
+                'response_message' => $transaction->response,
+                'created_at' => $transaction->createdAt?->format('Y-m-d H:i:s'),
+                'updated_at' => $transaction->createdAt?->format('Y-m-d H:i:s'),
             ],
         ]);
     }

@@ -38,8 +38,12 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user ? [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'username' => $user->username,
                     'email' => $user->email,
-                    'is_admin' => $user->is_admin,
+                    'phone' => $user->phone,
+                    'balance' => (float) $user->balance,
+                    'role' => $user->role?->value,
+                    'is_admin' => $user->isAdmin(),
                 ] : null,
             ],
             'ziggy' => fn () => [

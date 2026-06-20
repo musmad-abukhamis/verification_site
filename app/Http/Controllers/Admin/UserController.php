@@ -2,47 +2,52 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\PinVerificationLog;
+use App\Models\Transaction;
 use App\Models\User;
-use App\Models\Wallet;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::query()
-            ->with('wallet')
-            ->latest();
+        $query = User::query()->latest('createdAt');
 
         // Search
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
-        // Filter by status
+        // Filter by status (verified / unverified email)
         if ($status = $request->input('status')) {
             if ($status === 'active') {
-                $query->whereNotNull('email_verified_at');
+                $query->whereNotNull('email_verified');
             } elseif ($status === 'inactive') {
-                $query->whereNull('email_verified_at');
+                $query->whereNull('email_verified');
             }
         }
 
-        $users = $query->paginate(20)->through(fn ($user) => [
+        $users = $query->paginate(20)->through(fn (User $user) => [
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username,
             'email' => $user->email,
             'phone' => $user->phone,
-            'is_admin' => $user->is_admin,
-            'email_verified' => !is_null($user->email_verified_at),
-            'wallet_balance' => $user->wallet?->total_balance ?? 0,
-            'created_at' => $user->created_at->format('Y-m-d H:i'),
+            'role' => $user->role?->value,
+            'is_admin' => $user->isAdmin(),
+            'email_verified' => ! is_null($user->email_verified),
+            'wallet_balance' => (float) $user->balance,
+            'created_at' => $user->createdAt?->format('Y-m-d H:i'),
         ]);
 
         return Inertia::render('Admin/Users/Index', [
@@ -53,29 +58,31 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        $user->load(['wallet', 'transactions' => fn ($q) => $q->latest()->limit(10)]);
+        $user->load(['transactions' => fn ($q) => $q->latest('createdAt')->limit(10)]);
 
         return Inertia::render('Admin/Users/Show', [
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'username' => $user->username,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'is_admin' => $user->is_admin,
-                'email_verified_at' => $user->email_verified_at?->format('Y-m-d H:i'),
-                'created_at' => $user->created_at->format('Y-m-d H:i'),
-                'wallet' => $user->wallet ? [
-                    'balance' => $user->wallet->balance,
-                    'bonus_balance' => $user->wallet->bonus_balance,
-                    'total_balance' => $user->wallet->total_balance,
-                ] : null,
-                'transactions' => $user->transactions->map(fn ($t) => [
+                'role' => $user->role?->value,
+                'is_admin' => $user->isAdmin(),
+                'email_verified_at' => $user->email_verified?->format('Y-m-d H:i'),
+                'created_at' => $user->createdAt?->format('Y-m-d H:i'),
+                'wallet' => [
+                    'balance' => (float) $user->balance,
+                    'bonus_balance' => 0.0,
+                    'total_balance' => (float) $user->balance,
+                ],
+                'transactions' => $user->transactions->map(fn (Transaction $t) => [
                     'id' => $t->id,
                     'reference' => $t->reference,
                     'type' => $t->type,
-                    'amount' => $t->amount,
+                    'amount' => (float) $t->price,
                     'status' => $t->status,
-                    'created_at' => $t->created_at->format('Y-m-d H:i'),
+                    'created_at' => $t->createdAt?->format('Y-m-d H:i'),
                 ]),
             ],
         ]);
@@ -83,7 +90,9 @@ class UserController extends Controller
 
     public function toggleAdmin(User $user)
     {
-        $user->update(['is_admin' => !$user->is_admin]);
+        $user->update([
+            'role' => $user->isAdmin() ? \App\Enums\UserRole::USER : \App\Enums\UserRole::ADMIN,
+        ]);
 
         return back()->with('success', 'User admin status updated successfully.');
     }
@@ -91,11 +100,9 @@ class UserController extends Controller
     public function toggleStatus(User $user)
     {
         // Toggle email verification status as a simple way to disable/enable account
-        if ($user->email_verified_at) {
-            $user->update(['email_verified_at' => null]);
-        } else {
-            $user->update(['email_verified_at' => now()]);
-        }
+        $user->update([
+            'email_verified' => $user->email_verified ? null : now(),
+        ]);
 
         return back()->with('success', 'User status updated successfully.');
     }
@@ -107,33 +114,24 @@ class UserController extends Controller
             'description' => 'nullable|string|max:255',
         ]);
 
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
+        $oldBalance = (float) $user->balance;
+        $user->credit((float) $validated['amount'], false, ['fundingtype' => 'admin-credit']);
 
-        $oldBalance = $wallet->total_balance;
-        $wallet->balance += $validated['amount'];
-        $wallet->save();
-
-        // Create transaction record
-        \App\Models\Transaction::create([
-            'user_id' => $user->id,
-            'reference' => 'ADM_CREDIT_' . now()->timestamp . rand(1000, 9999),
+        Transaction::create([
+            'id' => 'ADM_CREDIT_'.now()->timestamp.random_int(1000, 9999),
+            'network' => 'WALLET',
+            'name' => $validated['description'] ?? 'Admin wallet credit',
+            'price' => (int) round($validated['amount']),
             'type' => 'admin_credit',
+            'phone' => $user->phone ?? '',
+            'oldbal' => $oldBalance,
+            'newbal' => (float) $user->balance,
             'status' => 'success',
-            'amount' => $validated['amount'],
-            'fee' => 0,
-            'total_amount' => $validated['amount'],
-            'details' => [
-                'description' => $validated['description'] ?? 'Admin wallet credit',
-                'old_balance' => $oldBalance,
-                'new_balance' => $wallet->total_balance,
-            ],
-            'provider' => 'admin',
+            'userId' => $user->id,
+            'response' => 'admin',
         ]);
 
-        return back()->with('success', '₦' . number_format($validated['amount']) . ' credited to ' . $user->name . '\'s wallet.');
+        return back()->with('success', '₦'.number_format($validated['amount']).' credited to '.$user->name."'s wallet.");
     }
 
     public function debitWallet(Request $request, User $user)
@@ -143,44 +141,121 @@ class UserController extends Controller
             'description' => 'nullable|string|max:255',
         ]);
 
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        if ($wallet->total_balance < $validated['amount']) {
-            return back()->withErrors(['amount' => 'Insufficient wallet balance. Current balance: ₦' . number_format($wallet->total_balance)]);
+        if ((float) $user->balance < $validated['amount']) {
+            return back()->withErrors(['amount' => 'Insufficient wallet balance. Current balance: ₦'.number_format((float) $user->balance)]);
         }
 
-        $oldBalance = $wallet->total_balance;
+        $oldBalance = (float) $user->balance;
+        $user->debit((float) $validated['amount'], false, ['fundingtype' => 'admin-debit']);
 
-        // Deduct from bonus first, then balance
-        if ($wallet->bonus_balance >= $validated['amount']) {
-            $wallet->bonus_balance -= $validated['amount'];
-        } else {
-            $remaining = $validated['amount'] - $wallet->bonus_balance;
-            $wallet->bonus_balance = 0;
-            $wallet->balance -= $remaining;
-        }
-        $wallet->save();
-
-        // Create transaction record
-        \App\Models\Transaction::create([
-            'user_id' => $user->id,
-            'reference' => 'ADM_DEBIT_' . now()->timestamp . rand(1000, 9999),
+        Transaction::create([
+            'id' => 'ADM_DEBIT_'.now()->timestamp.random_int(1000, 9999),
+            'network' => 'WALLET',
+            'name' => $validated['description'] ?? 'Admin wallet debit',
+            'price' => (int) round($validated['amount']),
             'type' => 'admin_debit',
+            'phone' => $user->phone ?? '',
+            'oldbal' => $oldBalance,
+            'newbal' => (float) $user->balance,
             'status' => 'success',
-            'amount' => $validated['amount'],
-            'fee' => 0,
-            'total_amount' => $validated['amount'],
-            'details' => [
-                'description' => $validated['description'] ?? 'Admin wallet debit',
-                'old_balance' => $oldBalance,
-                'new_balance' => $wallet->total_balance,
-            ],
-            'provider' => 'admin',
+            'userId' => $user->id,
+            'response' => 'admin',
         ]);
 
-        return back()->with('success', '₦' . number_format($validated['amount']) . ' debited from ' . $user->name . '\'s wallet.');
+        return back()->with('success', '₦'.number_format($validated['amount']).' debited from '.$user->name."'s wallet.");
+    }
+
+    /**
+     * Set a new password for the user (admin reset). The `hashed` cast on the
+     * model hashes it on save. Trimmed so stray whitespace can't lock them out.
+     */
+    public function changePassword(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user->update(['password' => trim($validated['password'])]);
+
+        return back()->with('success', "Password updated for {$user->name}.");
+    }
+
+    /**
+     * Reset the user's 2FA: disable it and remove any confirmation record.
+     */
+    public function resetTwoFactor(User $user)
+    {
+        $user->twoFactorConfirmation()->delete();
+        $user->update(['isTwoFactorEnabled' => false]);
+
+        return back()->with('success', "Two-factor authentication reset for {$user->name}.");
+    }
+
+    /**
+     * Reset the user's wallet balance to zero (logs the adjustment).
+     */
+    public function resetWallet(User $user)
+    {
+        $oldBalance = (float) $user->balance;
+
+        if ($oldBalance <= 0) {
+            return back()->with('success', "{$user->name}'s wallet is already at ₦0.");
+        }
+
+        $user->debit($oldBalance, false, ['fundingtype' => 'admin-reset']);
+
+        Transaction::create([
+            'id' => 'ADM_RESET_'.now()->timestamp.random_int(1000, 9999),
+            'network' => 'WALLET',
+            'name' => 'Admin wallet reset',
+            'price' => (int) round($oldBalance),
+            'type' => 'admin_debit',
+            'phone' => $user->phone ?? '',
+            'oldbal' => $oldBalance,
+            'newbal' => 0.0,
+            'status' => 'success',
+            'userId' => $user->id,
+            'response' => 'admin',
+        ]);
+
+        return back()->with('success', "{$user->name}'s wallet has been reset to ₦0.");
+    }
+
+    /**
+     * Delete a user. Several models reference the user without an ON DELETE
+     * CASCADE, so every dependent record is removed first, atomically. Admins
+     * cannot delete their own account.
+     */
+    public function destroy(User $user)
+    {
+        if ($user->id === Auth::id()) {
+            return back()->withErrors(['message' => 'You cannot delete your own account.']);
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->transactions()->delete();
+            $user->ninDetails()->delete();
+            $user->kyc()->delete();
+            $user->walletHistory()->delete();
+            $user->notificationUsers()->delete();
+            $user->notifications()->delete();
+            $user->ipe()->delete();
+            $user->validations()->delete();
+            $user->personalisations()->delete();
+            $user->bvnModifications()->delete();
+            $user->bvnSdkForms()->delete();
+            $user->bvnRetrievals()->delete();
+            $user->idCardRequests()->delete();
+            $user->pin()->delete();
+            $user->otp()->delete();
+            $user->twoFactorConfirmation()->delete();
+            $user->accounts()->delete();
+            PinVerificationLog::where('userId', $user->id)->delete();
+
+            $user->delete();
+        });
+
+        return redirect()->route('admin.users.index')
+            ->with('success', 'User deleted successfully.');
     }
 }

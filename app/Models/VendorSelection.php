@@ -2,22 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPrismaId;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Prisma model: vendorselection (table "vendorselection").
+ */
 class VendorSelection extends Model
 {
-    protected $fillable = [
-        'id',
-        'SME',
-        'SME2',
-        'CORPORATE_GIFTING',
-        'CORPORATE_GIFTING2',
-        'DATASHARE'
-    ];
+    use HasPrismaId;
 
-    protected $primaryKey = 'id';
-    public $incrementing = false;
-    protected $keyType = 'string';
-    
-    protected $table = 'vendorselections';
+    protected $table = 'vendorselection';
+
+    public $timestamps = false;
+
+    protected $guarded = [];
 }

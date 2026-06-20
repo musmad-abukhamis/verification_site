@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\Transaction;
-use App\Models\VerificationLog;
-use App\Models\Wallet;
+use App\Models\User;
+use App\Models\Validation;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -18,46 +17,47 @@ class DashboardController extends Controller
         $stats = [
             'total_users' => User::count(),
             'total_transactions' => Transaction::count(),
-            'total_revenue' => Transaction::where('status', 'success')->sum('amount'),
+            'total_revenue' => (float) Transaction::where('status', 'success')->sum('price'),
             'pending_transactions' => Transaction::where('status', 'pending')->count(),
-            'total_verifications' => VerificationLog::where('status', 'verified')->count(),
-            'total_wallet_balance' => Wallet::sum('balance'),
+            'total_verifications' => Validation::where('status', 'completed')->count(),
+            'total_wallet_balance' => (float) User::sum('balance'),
         ];
 
         // Recent transactions
         $recentTransactions = Transaction::with('user')
-            ->latest()
+            ->latest('createdAt')
             ->limit(10)
             ->get()
-            ->map(fn ($t) => [
+            ->map(fn (Transaction $t) => [
                 'id' => $t->id,
                 'reference' => $t->reference,
                 'user' => $t->user?->name ?? 'Unknown',
                 'type' => $t->type,
-                'amount' => $t->amount,
+                'amount' => (float) $t->price,
                 'status' => $t->status,
-                'created_at' => $t->created_at->format('Y-m-d H:i'),
+                'created_at' => $t->createdAt?->format('Y-m-d H:i'),
             ]);
 
         // Recent users
-        $recentUsers = User::latest()
+        $recentUsers = User::latest('createdAt')
             ->limit(10)
             ->get()
-            ->map(fn ($u) => [
+            ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
-                'is_admin' => $u->is_admin,
-                'created_at' => $u->created_at->format('Y-m-d H:i'),
+                'is_admin' => $u->isAdmin(),
+                'created_at' => $u->createdAt?->format('Y-m-d H:i'),
             ]);
 
-        // Transaction chart data (last 30 days)
+        // Transaction chart data (last 30 days). Column is camelCase, so it must
+        // be quoted for Postgres.
         $chartData = Transaction::select(
-            DB::raw('DATE(created_at) as date'),
+            DB::raw('DATE("createdAt") as date'),
             DB::raw('COUNT(*) as count'),
-            DB::raw('SUM(amount) as total')
+            DB::raw('SUM(price) as total')
         )
-            ->where('created_at', '>=', now()->subDays(30))
+            ->where('createdAt', '>=', now()->subDays(30))
             ->where('status', 'success')
             ->groupBy('date')
             ->orderBy('date')

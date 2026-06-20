@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActiveVendor;
-use App\Models\DataPlan;
+use App\Models\Network;
+use App\Models\Plan;
 use App\Models\Transaction;
-use App\Models\User;
 use App\Models\VendorApi;
-use App\Models\VendorNetwork;
-use App\Models\VendorPlan;
+use App\Models\VendorSelection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -18,7 +16,7 @@ use Inertia\Inertia;
 class DataPurchaseController extends Controller
 {
     /**
-     * Handle data bundle purchase
+     * Handle data bundle purchase with multi-vendor routing/failover.
      */
     public function buyData(Request $request)
     {
@@ -29,7 +27,7 @@ class DataPurchaseController extends Controller
             'planName' => 'required|string',
             'planPrice' => 'required|numeric',
             'planId' => 'required|integer',
-            'phoneNumber' => 'required|string'
+            'phoneNumber' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -40,46 +38,41 @@ class DataPurchaseController extends Controller
 
         // 2. Fetch vendor API configuration from database
         $vendorApi = VendorApi::first();
-        if (!$vendorApi) {
+        if (! $vendorApi) {
             return Inertia::render('BuyData/Index', ['error' => 'No vendor data found']);
         }
 
         // 3. Generate transaction reference
-        $reference = 'Data_' . time();
+        $reference = 'Data_'.time();
 
         // 4. Fetch vendor-specific plans and networks
         $planIds = $this->getVendorPlans($validatedData['planId']);
         $networkProviders = $this->getVendorNetwork($validatedData['network']);
 
-        // 5. Determine active vendor for this network and type
-        $activeVendor = $this->getActiveVendor($validatedData['network'], $validatedData['type']);
+        // 5. Determine active vendor (1-5) for this network + service type
+        $vendorNumber = $this->getActiveVendorNumber($validatedData['network'], $validatedData['type']);
 
         // 6. Get authenticated user and check balance
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return Inertia::render('BuyData/Index', ['error' => 'User not found']);
         }
 
-        $wallet = $user->wallet;
-        if (!$wallet) {
-            return Inertia::render('BuyData/Index', ['error' => 'Wallet not found']);
-        }
-
-        if ($wallet->balance < $validatedData['planPrice']) {
+        if ($user->balance < $validatedData['planPrice']) {
             return Inertia::render('BuyData/Index', ['error' => 'Insufficient Balance! Please fund your wallet to continue the transaction.']);
         }
 
         // 7. Prepare API configuration based on active vendor
-        $apiConfig = $this->prepareApiConfig($activeVendor, $vendorApi, $validatedData, $reference, $planIds, $networkProviders);
+        $apiConfig = $this->prepareApiConfig($vendorNumber, $vendorApi, $validatedData, $reference, $planIds, $networkProviders);
 
         // 8. Make API call to vendor
         $apiResult = $this->callVendorApi($apiConfig['url'], $apiConfig['token'], $apiConfig['payload']);
 
-        // 9. Calculate new balance and process transaction
+        // 9. Process transaction
         if ($this->isSuccessfulResponse($apiResult)) {
-            // Debit user wallet and create successful transaction
-            $wallet->debit($validatedData['planPrice']);
-            
+            $oldBalance = (float) $user->balance;
+            $user->debit((float) $validatedData['planPrice'], false, ['fundingtype' => 'data']);
+
             Transaction::create([
                 'id' => $reference,
                 'status' => 'success',
@@ -87,65 +80,65 @@ class DataPurchaseController extends Controller
                 'type' => 'data',
                 'userId' => $user->id,
                 'name' => $validatedData['planName'],
-                'price' => $validatedData['planPrice'],
+                'price' => (int) round($validatedData['planPrice']),
                 'phone' => $validatedData['phoneNumber'],
-                'oldbal' => $wallet->balance + $validatedData['planPrice'],
-                'newbal' => $wallet->balance,
-                'response' => 'Vendor-' . $activeVendor->vendorApi . ' - ' . json_encode($apiResult)
+                'oldbal' => $oldBalance,
+                'newbal' => (float) $user->balance,
+                'response' => 'Vendor-'.$vendorNumber.' - '.json_encode($apiResult),
             ]);
 
             return Inertia::location(route('buy-data'));
-        } else {
-            // Create failed transaction record
-            Transaction::create([
-                'id' => $reference,
-                'status' => 'fail',
-                'network' => $validatedData['network'],
-                'type' => 'data',
-                'userId' => $user->id,
-                'name' => $validatedData['planName'],
-                'price' => $validatedData['planPrice'],
-                'phone' => $validatedData['phoneNumber'],
-                'oldbal' => $wallet->balance,
-                'newbal' => $wallet->balance, // Balance unchanged on failure
-                'response' => 'Vendor-' . $activeVendor->vendorApi . ' - ' . json_encode($apiResult)
-            ]);
-
-            // Switch to alternative vendor
-            $this->switchToAlternativeVendor($activeVendor, $apiResult);
-
-            return Inertia::render('BuyData/Index', [
-                'error' => $apiResult['message'] ?? 'Failed to process the transaction'
-            ]);
         }
+
+        // Failed transaction record (balance unchanged)
+        Transaction::create([
+            'id' => $reference,
+            'status' => 'fail',
+            'network' => $validatedData['network'],
+            'type' => 'data',
+            'userId' => $user->id,
+            'name' => $validatedData['planName'],
+            'price' => (int) round($validatedData['planPrice']),
+            'phone' => $validatedData['phoneNumber'],
+            'oldbal' => (float) $user->balance,
+            'newbal' => (float) $user->balance,
+            'response' => 'Vendor-'.$vendorNumber.' - '.json_encode($apiResult),
+        ]);
+
+        // Switch to alternative vendor for the next attempt
+        $this->switchToAlternativeVendor($validatedData['network'], $validatedData['type'], $vendorNumber);
+
+        return Inertia::render('BuyData/Index', [
+            'error' => $apiResult['message'] ?? 'Failed to process the transaction',
+        ]);
     }
 
     /**
-     * Get vendor plans for specific data plan
+     * Per-vendor plan codes now live on the Plan row (vendorPlan1..5).
      */
-    protected function getVendorPlans($planId)
+    protected function getVendorPlans($planId): ?array
     {
-        $vendorPlan = VendorPlan::where('plan_id', $planId)->first();
-        if (!$vendorPlan) {
+        $plan = Plan::find($planId);
+        if (! $plan) {
             return null;
         }
 
         return [
-            'vendor1' => $vendorPlan->vendor_plan1,
-            'vendor2' => $vendorPlan->vendor_plan2,
-            'vendor3' => $vendorPlan->vendor_plan3,
-            'vendor4' => $vendorPlan->vendor_plan4,
-            'vendor5' => $vendorPlan->vendor_plan5,
+            'vendor1' => $plan->vendorPlan1,
+            'vendor2' => $plan->vendorPlan2,
+            'vendor3' => $plan->vendorPlan3,
+            'vendor4' => $plan->vendorPlan4,
+            'vendor5' => $plan->vendorPlan5,
         ];
     }
 
     /**
-     * Get vendor network mappings
+     * Per-vendor network codes live on the `networks` row keyed by network name.
      */
-    protected function getVendorNetwork($network)
+    protected function getVendorNetwork($network): ?array
     {
-        $vendorNetwork = VendorNetwork::where('network', $network)->first();
-        if (!$vendorNetwork) {
+        $vendorNetwork = Network::find($network);
+        if (! $vendorNetwork) {
             return null;
         }
 
@@ -159,30 +152,42 @@ class DataPurchaseController extends Controller
     }
 
     /**
-     * Get active vendor for network and type
+     * Map a service type to its `vendorselection` column.
      */
-    protected function getActiveVendor($network, $type)
+    protected function vendorSelectionColumn(string $type): string
     {
-        return ActiveVendor::where('network', $network)
-            ->where('type', $type)
-            ->first();
+        return match (strtoupper(str_replace(' ', '_', $type))) {
+            'SME' => 'SME',
+            'SME2' => 'SME2',
+            'CORPORATE_GIFTING', 'GIFTING' => 'CORPORATE_GIFTING',
+            'CORPORATE_GIFTING2' => 'CORPORATE_GIFTING2',
+            'DATASHARE', 'CORPORATE' => 'DATASHARE',
+            default => 'SME',
+        };
     }
 
     /**
-     * Prepare API configuration for vendor call
+     * The currently active vendor number (1-5) for a network + service type.
+     * Vendor selections are stored one row per network (id = network name).
      */
-    protected function prepareApiConfig($activeVendor, $vendorApi, $validatedData, $reference, $planIds, $networkProviders)
+    protected function getActiveVendorNumber(string $network, string $type): int
     {
-        if (!$activeVendor) {
-            throw new \Exception('No active vendor configured');
-        }
+        $selection = VendorSelection::firstOrCreate(['id' => strtoupper($network)]);
+        $column = $this->vendorSelectionColumn($type);
 
-        $vendorNumber = $activeVendor->vendor_number;
-        $vendorUrl = $vendorApi->{'vendor' . $vendorNumber . 'url'};
-        $vendorKey = $vendorApi->{'vendor' . $vendorNumber . 'key'};
-        
-        $vendorPlanId = $planIds['vendor' . $vendorNumber] ?? $validatedData['planId'];
-        $vendorNetwork = $networkProviders['vendor' . $vendorNumber] ?? $validatedData['network'];
+        return max(1, min(5, (int) ($selection->{$column} ?? 1)));
+    }
+
+    /**
+     * Prepare API configuration for the vendor call.
+     */
+    protected function prepareApiConfig(int $vendorNumber, $vendorApi, $validatedData, $reference, $planIds, $networkProviders): array
+    {
+        $vendorUrl = $vendorApi->{'vendor'.$vendorNumber.'url'};
+        $vendorKey = $vendorApi->{'vendor'.$vendorNumber.'key'};
+
+        $vendorPlanId = $planIds['vendor'.$vendorNumber] ?? $validatedData['planId'];
+        $vendorNetwork = $networkProviders['vendor'.$vendorNumber] ?? $validatedData['network'];
 
         return [
             'url' => $vendorUrl,
@@ -193,7 +198,7 @@ class DataPurchaseController extends Controller
                 'billersCode' => $validatedData['phoneNumber'],
                 'variation_code' => $vendorPlanId,
                 'phone' => $validatedData['phoneNumber'],
-            ]
+            ],
         ];
     }
 
@@ -204,7 +209,7 @@ class DataPurchaseController extends Controller
     {
         try {
             $response = Http::timeout(30)->withHeaders([
-                'Authorization' => 'Bearer ' . $token,
+                'Authorization' => 'Bearer '.$token,
                 'Content-Type' => 'application/json',
             ])->post($url, $payload);
 
@@ -212,7 +217,7 @@ class DataPurchaseController extends Controller
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
-                'message' => 'API call failed: ' . $e->getMessage()
+                'message' => 'API call failed: '.$e->getMessage(),
             ];
         }
     }
@@ -222,21 +227,19 @@ class DataPurchaseController extends Controller
      */
     protected function isSuccessfulResponse($apiResult)
     {
-        // Customize based on your vendor's success response format
         return isset($apiResult['code']) && $apiResult['code'] === '000';
     }
 
     /**
-     * Switch to alternative vendor on failure
+     * Advance to the next vendor (1-5, wrapping) for the given service type.
      */
-    protected function switchToAlternativeVendor($activeVendor, $apiResult)
+    protected function switchToAlternativeVendor(string $network, string $type, int $currentVendor): void
     {
-        // Logic to switch to next available vendor
-        // This is a simplified version - you might want to implement more sophisticated vendor switching
-        $nextVendorNumber = $activeVendor->vendor_number + 1;
-        if ($nextVendorNumber <= 5) {
-            $activeVendor->update(['vendor_number' => $nextVendorNumber]);
-        }
+        $selection = VendorSelection::firstOrCreate(['id' => strtoupper($network)]);
+        $column = $this->vendorSelectionColumn($type);
+
+        $next = $currentVendor >= 5 ? 1 : $currentVendor + 1;
+        $selection->update([$column => (string) $next]);
     }
 
     /**
@@ -260,13 +263,13 @@ class DataPurchaseController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $wallet = $user->wallet;
-        
+        $balance = (float) $user->balance;
+
         return Inertia::render('BuyData/Index', [
             'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
+                'balance' => $balance,
+                'bonus_balance' => 0.0,
+                'total_balance' => $balance,
             ],
             'networks' => [
                 ['value' => 'mtn', 'label' => 'MTN'],
@@ -276,7 +279,7 @@ class DataPurchaseController extends Controller
             ],
             'user' => [
                 'id' => $user->id,
-                'role' => $user->role ?? 'USER',
+                'role' => $user->role?->value ?? 'USER',
             ],
         ]);
     }

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Wallet;
 use App\Services\VerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,26 +16,26 @@ class VerificationController extends Controller
         $this->verificationService = $verificationService;
     }
 
+    private function walletPayload($user): array
+    {
+        $balance = (float) $user->balance;
+
+        return [
+            'balance' => $balance,
+            'bonus_balance' => 0.0,
+            'total_balance' => $balance,
+        ];
+    }
+
     /**
      * Show NIN verification page
      */
     public function nin()
     {
-        $userId = Auth::id();
-
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
         $ninPrice = (float) config('services.verification.nin_price', 100);
 
         return Inertia::render('Verification/Nin', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
-            ],
+            'wallet' => $this->walletPayload(Auth::user()),
             'price' => $ninPrice,
             'verificationMethods' => config('services.verification.nin_methods', [
                 'nin' => ['active' => true, 'label' => 'By NIN Number'],
@@ -51,21 +50,10 @@ class VerificationController extends Controller
      */
     public function bvn()
     {
-        $userId = Auth::id();
-
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
         $bvnPrice = (float) config('services.verification.bvn_price', 150);
 
         return Inertia::render('Verification/Bvn', [
-            'wallet' => [
-                'balance' => (float) $wallet->balance,
-                'bonus_balance' => (float) $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
-            ],
+            'wallet' => $this->walletPayload(Auth::user()),
             'price' => $bvnPrice,
         ]);
     }

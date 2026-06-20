@@ -2,67 +2,73 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\NinIpeClearance;
-use App\Models\Wallet;
+use App\Models\Ipe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class NinIpeClearanceController extends Controller
 {
+    private function sortColumn(?string $sort): string
+    {
+        return match ($sort) {
+            'created_at', 'createdAt' => 'createdAt',
+            'updated_at', 'updatedAt' => 'updatedAt',
+            'id', 'status' => $sort,
+            'nin', 'trkid' => 'trkid',
+            default => 'createdAt',
+        };
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();
-        
-        // Get wallet
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-        
-        // Get NIN IPE Clearance price from config
+        $balance = (float) $user->balance;
+
         $price = config('services.nin.ipe_price', 500);
-        
-        // Build query
-        $query = NinIpeClearance::query()
-            ->where('user_id', $user->id)
+
+        $query = Ipe::query()
+            ->where('userId', $user->id)
             ->with('user');
-        
-        // Search
+
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('nin', 'like', "%{$search}%")
+                $q->where('trkid', 'like', "%{$search}%")
                     ->orWhere('comment', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($uq) use ($search) {
                         $uq->where('name', 'like', "%{$search}%");
                     });
             });
         }
-        
-        // Status filter
+
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
-        
-        // Sorting
-        $sortField = $request->input('sort', 'created_at');
-        $sortDirection = $request->input('direction', 'desc');
-        $allowedSorts = ['id', 'nin', 'status', 'created_at', 'updated_at'];
-        
-        if (in_array($sortField, $allowedSorts)) {
-            $query->orderBy($sortField, $sortDirection);
-        }
-        
-        $transactions = $query->paginate(10)->withQueryString();
-        
+
+        $transactions = $query
+            ->orderBy($this->sortColumn($request->input('sort')), $request->input('direction', 'desc'))
+            ->paginate(10)
+            ->through(fn ($v) => [
+                'id' => $v->id,
+                'reference' => $v->id,
+                'nin' => $v->nin,
+                'status' => $v->status,
+                'result' => $v->result,
+                'comment' => $v->comment,
+                'old_balance' => (float) $v->oldBal,
+                'new_balance' => (float) $v->newBal,
+                'created_at' => $v->createdAt,
+            ])
+            ->withQueryString();
+
         return Inertia::render('NinIpeClearance/Index', [
             'price' => $price,
             'transactions' => $transactions,
             'filters' => $request->only(['search', 'status', 'sort', 'direction']),
             'wallet' => [
-                'balance' => $wallet->balance,
-                'bonus_balance' => $wallet->bonus_balance,
-                'total_balance' => $wallet->total_balance,
+                'balance' => $balance,
+                'bonus_balance' => 0.0,
+                'total_balance' => $balance,
             ],
         ]);
     }
@@ -72,67 +78,48 @@ class NinIpeClearanceController extends Controller
         $request->validate([
             'nin' => 'required|string|size:11',
         ]);
-        
+
         $user = Auth::user();
-        $price = config('services.nin.ipe_price', 500);
-        
-        // Check wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $user->id],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-        
-        if ($wallet->total_balance < $price) {
+        $price = (float) config('services.nin.ipe_price', 500);
+
+        if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);
         }
-        
-        $oldBalance = $wallet->total_balance;
-        
-        // Deduct from wallet
-        if ($wallet->bonus_balance >= $price) {
-            $wallet->bonus_balance -= $price;
-        } else {
-            $remaining = $price - $wallet->bonus_balance;
-            $wallet->bonus_balance = 0;
-            $wallet->balance -= $remaining;
-        }
-        $wallet->save();
-        
-        // Create clearance record
-        $clearance = NinIpeClearance::create([
-            'user_id' => $user->id,
-            'nin' => $request->nin,
+
+        $oldBalance = (float) $user->balance;
+        $user->debit($price, false, ['fundingtype' => 'nin_ipe']);
+
+        $reference = Ipe::generateReference();
+
+        Ipe::create([
+            'trkid' => $request->nin,
             'status' => 'processing',
-            'old_balance' => $oldBalance,
-            'new_balance' => $wallet->total_balance,
-            'reference' => NinIpeClearance::generateReference(),
+            'result' => 'Pending',
+            'comment' => "IPE clearance request {$reference}",
+            'oldBal' => $oldBalance,
+            'newBal' => (float) $user->balance,
+            'userId' => $user->id,
         ]);
-        
+
         // TODO: Call external NIN IPE Clearance API here
-        // For now, simulate processing
-        
-        return back()->with('success', 'NIN IPE Clearance submitted successfully. Reference: ' . $clearance->reference);
+
+        return back()->with('success', 'NIN IPE Clearance submitted successfully. Reference: '.$reference);
     }
 
-    public function checkStatus(Request $request, NinIpeClearance $clearance)
+    public function checkStatus(Request $request, Ipe $clearance)
     {
-        // Ensure user owns this clearance
-        if ($clearance->user_id !== Auth::id()) {
+        if ($clearance->userId !== Auth::id()) {
             abort(403);
         }
-        
-        // TODO: Call external API to check status
-        // For now, simulate a successful clearance
-        
+
         if ($clearance->status === 'processing') {
             $clearance->update([
                 'status' => 'completed',
                 'result' => 'NIN IPE Clearance completed successfully',
                 'comment' => 'Clearance completed via API',
-                'cleared_at' => now(),
             ]);
         }
-        
+
         return back()->with('success', 'Status updated successfully');
     }
 }

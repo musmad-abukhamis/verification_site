@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SaveNetworkRequest;
-use App\Models\VendorNetwork;
+use App\Models\Network;
 use Inertia\Inertia;
 
 class NetworkController extends Controller
@@ -24,29 +24,27 @@ class NetworkController extends Controller
     {
         // Validate network name
         $validNetworks = ['MTN', 'AIRTEL', 'GLO', '9MOBILE'];
-        if (!in_array(strtoupper($network), $validNetworks)) {
+        if (! in_array(strtoupper($network), $validNetworks)) {
             abort(404, 'Invalid network');
         }
 
         $networkName = strtoupper($network);
-        
-        // Get or create network data
-        $networkData = VendorNetwork::where('network', $networkName)->first();
-        
-        if (!$networkData) {
-            $networkData = VendorNetwork::create([
-                'network' => $networkName,
+
+        // Get or create network data (network name is the primary key)
+        $networkData = Network::firstOrCreate(
+            ['id' => $networkName],
+            [
                 'vendor1network' => '1',
                 'vendor2network' => '1',
                 'vendor3network' => '1',
                 'vendor4network' => '1',
                 'vendor5network' => '1',
-            ]);
-        }
+            ]
+        );
 
         return Inertia::render('Admin/NetworkId/Edit', [
             'networkName' => $networkName,
-            'networkData' => $networkData
+            'networkData' => $networkData,
         ]);
     }
 
@@ -57,8 +55,8 @@ class NetworkController extends Controller
     {
         $validated = $request->validated();
 
-        $network = VendorNetwork::updateOrCreate(
-            ['network' => $validated['id']],
+        Network::updateOrCreate(
+            ['id' => $validated['id']],
             [
                 'vendor1network' => (string) $validated['vendor1Network'],
                 'vendor2network' => (string) $validated['vendor2Network'],

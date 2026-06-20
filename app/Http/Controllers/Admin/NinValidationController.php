@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\NinValidation;
+use App\Models\Transaction;
+use App\Models\Validation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -14,33 +15,31 @@ class NinValidationController extends Controller
      */
     public function index(Request $request)
     {
-        $query = NinValidation::query()
+        $query = Validation::query()
             ->with('user')
-            ->latest();
+            ->latest('createdAt');
 
-        // Filter by status
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
 
-        // Filter by provider
+        // The provider is encoded in the comment (e.g. "NIN verify v1").
         if ($provider = $request->input('provider')) {
-            $query->where('provider', $provider);
+            $query->where('comment', 'like', "%{$provider}%");
         }
 
-        // Search by NIN or user
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('nin', 'like', "%{$search}%")
-                  ->orWhere('id_value', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', "%{$search}%")
-                         ->orWhere('email', 'like', "%{$search}%");
-                  });
+                    ->orWhere('comment', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
             });
         }
 
-        $validations = $query->paginate(20)->through(fn ($v) => [
+        $validations = $query->paginate(20)->through(fn (Validation $v) => [
             'id' => $v->id,
             'user' => $v->user ? [
                 'id' => $v->user->id,
@@ -48,20 +47,20 @@ class NinValidationController extends Controller
                 'email' => $v->user->email,
             ] : null,
             'nin' => $v->nin,
-            'id_type' => $v->id_type,
-            'id_value' => $v->id_value,
+            'id_type' => null,
+            'id_value' => $v->nin,
             'status' => $v->status,
-            'provider' => $v->provider,
-            'verification_fee' => (float) $v->verification_fee,
-            'is_verified' => $v->is_verified,
-            'validated_at' => $v->validated_at?->format('Y-m-d H:i'),
-            'created_at' => $v->created_at->format('Y-m-d H:i'),
+            'provider' => $v->comment,
+            'verification_fee' => 0.0,
+            'is_verified' => $v->status === 'completed',
+            'validated_at' => $v->updatedAt?->format('Y-m-d H:i'),
+            'created_at' => $v->createdAt?->format('Y-m-d H:i'),
         ]);
 
         return Inertia::render('Admin/NinValidations/Index', [
             'validations' => $validations,
             'filters' => $request->only(['status', 'provider', 'search']),
-            'statuses' => ['pending', 'completed', 'failed'],
+            'statuses' => ['processing', 'completed', 'failed'],
             'providers' => ['v1', 'v2', 'demo', 'phone'],
         ]);
     }
@@ -69,7 +68,7 @@ class NinValidationController extends Controller
     /**
      * Display the specified NIN validation
      */
-    public function show(NinValidation $validation)
+    public function show(Validation $validation)
     {
         $validation->load('user');
 
@@ -82,19 +81,19 @@ class NinValidationController extends Controller
                     'email' => $validation->user->email,
                 ] : null,
                 'nin' => $validation->nin,
-                'id_type' => $validation->id_type,
-                'id_value' => $validation->id_value,
+                'id_type' => null,
+                'id_value' => $validation->nin,
                 'status' => $validation->status,
-                'provider' => $validation->provider,
-                'verification_fee' => (float) $validation->verification_fee,
-                'is_verified' => $validation->is_verified,
-                'reference' => $validation->reference,
+                'provider' => $validation->comment,
+                'verification_fee' => 0.0,
+                'is_verified' => $validation->status === 'completed',
+                'reference' => $validation->id,
                 'comment' => $validation->comment,
-                'old_balance' => (float) $validation->old_balance,
-                'new_balance' => (float) $validation->new_balance,
+                'old_balance' => (float) $validation->oldBal,
+                'new_balance' => (float) $validation->newBal,
                 'result' => $validation->getParsedResult(),
-                'validated_at' => $validation->validated_at?->format('Y-m-d H:i:s'),
-                'created_at' => $validation->created_at->format('Y-m-d H:i:s'),
+                'validated_at' => $validation->updatedAt?->format('Y-m-d H:i:s'),
+                'created_at' => $validation->createdAt?->format('Y-m-d H:i:s'),
             ],
         ]);
     }
@@ -107,22 +106,27 @@ class NinValidationController extends Controller
         $today = now()->startOfDay();
         $thisMonth = now()->startOfMonth();
 
+        $ninRevenue = fn () => Transaction::whereIn('type', [
+            Transaction::TYPE_NIN_VERIFICATION,
+            Transaction::TYPE_NIN_VALIDATION,
+        ])->where('status', 'success');
+
         return response()->json([
-            'total_validations' => NinValidation::count(),
-            'today_validations' => NinValidation::whereDate('created_at', $today)->count(),
-            'month_validations' => NinValidation::where('created_at', '>=', $thisMonth)->count(),
-            'total_revenue' => NinValidation::sum('verification_fee'),
-            'today_revenue' => NinValidation::whereDate('created_at', $today)->sum('verification_fee'),
+            'total_validations' => Validation::count(),
+            'today_validations' => Validation::whereDate('createdAt', $today)->count(),
+            'month_validations' => Validation::where('createdAt', '>=', $thisMonth)->count(),
+            'total_revenue' => (float) $ninRevenue()->sum('price'),
+            'today_revenue' => (float) $ninRevenue()->whereDate('createdAt', $today)->sum('price'),
             'status_breakdown' => [
-                'completed' => NinValidation::where('status', 'completed')->count(),
-                'pending' => NinValidation::where('status', 'pending')->count(),
-                'failed' => NinValidation::where('status', 'failed')->count(),
+                'completed' => Validation::where('status', 'completed')->count(),
+                'processing' => Validation::where('status', 'processing')->count(),
+                'failed' => Validation::where('status', 'failed')->count(),
             ],
             'provider_breakdown' => [
-                'v1' => NinValidation::where('provider', 'v1')->count(),
-                'v2' => NinValidation::where('provider', 'v2')->count(),
-                'demo' => NinValidation::where('provider', 'demo')->count(),
-                'phone' => NinValidation::where('provider', 'phone')->count(),
+                'v1' => Validation::where('comment', 'like', '%v1%')->count(),
+                'v2' => Validation::where('comment', 'like', '%v2%')->count(),
+                'demo' => Validation::where('comment', 'like', '%demo%')->count(),
+                'phone' => Validation::where('comment', 'like', '%phone%')->count(),
             ],
         ]);
     }

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\NinDetail;
 use App\Models\Transaction;
-use App\Models\VerificationLog;
-use App\Models\Wallet;
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -26,26 +26,17 @@ class VerificationService
     /**
      * Verify NIN (National Identity Number)
      */
-    public function verifyNin(int $userId, array $data): array
+    public function verifyNin(string $userId, array $data): array
     {
-        $reference = Transaction::generateReference();
-        $amount = config('services.verification.nin_price', 100);
+        $reference = Transaction::generateReference('NIN');
+        $amount = (float) config('services.verification.nin_price', 100);
         $verificationType = $data['verification_type'];
 
-        // Check wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        if (!$wallet->debit($amount)) {
-            return [
-                'success' => false,
-                'message' => 'Insufficient wallet balance',
-            ];
+        $user = User::find($userId);
+        if (! $user) {
+            return ['success' => false, 'message' => 'User not found'];
         }
 
-        // Prepare API payload based on verification type
         $apiPayload = ['reference' => $reference];
         $identityNumber = '';
 
@@ -59,7 +50,7 @@ class VerificationService
                 $apiPayload['phone_number'] = $data['phone_number'];
                 break;
             case 'demographic':
-                $identityNumber = $data['last_name'] . '_' . $data['first_name'];
+                $identityNumber = $data['last_name'].'_'.$data['first_name'];
                 $apiPayload['last_name'] = $data['last_name'];
                 $apiPayload['first_name'] = $data['first_name'];
                 $apiPayload['gender'] = $data['gender'];
@@ -67,52 +58,53 @@ class VerificationService
                 break;
         }
 
-        // Create transaction
-        $transaction = Transaction::create([
-            'user_id' => $userId,
-            'reference' => $reference,
-            'type' => 'nin_verification',
-            'status' => 'pending',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => [
-                'verification_type' => $verificationType,
-                'identity_number' => $identityNumber,
-            ],
-            'provider' => config('services.nin.provider', 'nimc'),
-        ]);
+        $oldBalance = (float) $user->balance;
 
-        // Create verification log
-        $verificationLog = VerificationLog::create([
-            'user_id' => $userId,
-            'transaction_id' => $transaction->id,
-            'type' => 'nin',
-            'identity_number' => $identityNumber,
+        if (! $user->debit($amount, false, ['fundingtype' => 'nin_verification'])) {
+            return ['success' => false, 'message' => 'Insufficient wallet balance'];
+        }
+
+        $transaction = Transaction::create([
+            'id' => $reference,
+            'network' => 'NIN',
+            'name' => 'NIN Verification ('.$verificationType.')',
+            'price' => (int) round($amount),
+            'type' => 'nin_verification',
+            'phone' => $identityNumber,
+            'oldbal' => $oldBalance,
+            'newbal' => (float) $user->balance,
             'status' => 'pending',
+            'userId' => $userId,
+            'response' => 'pending',
         ]);
 
         try {
-            // Call NIN verification API
             $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Bearer ' . $this->ninApiKey,
+                'Authorization' => 'Bearer '.$this->ninApiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->ninBaseUrl . '/verify-nin', $apiPayload);
+            ])->post($this->ninBaseUrl.'/verify-nin', $apiPayload);
 
-            $data = $response->json();
+            $body = $response->json();
 
-            if ($response->successful() && ($data['status'] ?? false)) {
-                $verificationData = $data['data'] ?? [];
+            if ($response->successful() && ($body['status'] ?? false)) {
+                $verificationData = $body['data'] ?? [];
 
-                $verificationLog->update([
-                    'verification_data' => $verificationData,
-                    'status' => 'verified',
+                $transaction->markAsSuccess($body['reference'] ?? null, json_encode($verificationData));
+
+                NinDetail::create([
+                    'id' => $reference,
+                    'surname' => $verificationData['last_name'] ?? ($data['last_name'] ?? null),
+                    'othernames' => $verificationData['first_name'] ?? ($data['first_name'] ?? null),
+                    'idtype' => $verificationType,
+                    'idvalue' => $identityNumber,
+                    'sliptype' => 'verification',
+                    'oldBal' => $oldBalance,
+                    'newBal' => (float) $user->balance,
+                    'price' => (int) round($amount),
+                    'status' => 'success',
+                    'channel' => 'system',
+                    'userId' => $userId,
                 ]);
-
-                $transaction->markAsSuccess(
-                    $data['reference'] ?? null,
-                    'NIN verification successful'
-                );
 
                 return [
                     'success' => true,
@@ -131,31 +123,21 @@ class VerificationService
             }
 
             // Failed - refund and update
-            $wallet->credit($amount);
-            $verificationLog->update([
-                'status' => 'failed',
-                'error_message' => $data['message'] ?? 'Verification failed',
-            ]);
-            $transaction->markAsFailed($data['message'] ?? 'Verification failed');
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            $transaction->markAsFailed($body['message'] ?? 'Verification failed');
 
             return [
                 'success' => false,
-                'message' => $data['message'] ?? 'NIN verification failed',
+                'message' => $body['message'] ?? 'NIN verification failed',
             ];
-
         } catch (\Exception $e) {
             Log::error('NIN verification failed', [
                 'reference' => $reference,
                 'verification_type' => $verificationType,
-                'identity_number' => $identityNumber,
                 'error' => $e->getMessage(),
             ]);
 
-            $wallet->credit($amount);
-            $verificationLog->update([
-                'status' => 'failed',
-                'error_message' => 'Service error',
-            ]);
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
             $transaction->markAsFailed('Service temporarily unavailable');
 
             return [
@@ -168,80 +150,58 @@ class VerificationService
     /**
      * Verify BVN (Bank Verification Number)
      */
-    public function verifyBvn(int $userId, string $bvnNumber): array
+    public function verifyBvn(string $userId, string $bvnNumber): array
     {
-        $reference = Transaction::generateReference();
-        $amount = config('services.verification.bvn_price', 150);
+        $reference = Transaction::generateReference('BVN');
+        $amount = (float) config('services.verification.bvn_price', 150);
 
-        // Validate BVN format (11 digits)
-        if (!preg_match('/^\d{11}$/', $bvnNumber)) {
+        if (! preg_match('/^\d{11}$/', $bvnNumber)) {
             return [
                 'success' => false,
                 'message' => 'Invalid BVN format. BVN must be 11 digits.',
             ];
         }
 
-        // Check wallet balance
-        $wallet = Wallet::firstOrCreate(
-            ['user_id' => $userId],
-            ['balance' => 0, 'bonus_balance' => 0]
-        );
-
-        if (!$wallet->debit($amount)) {
-            return [
-                'success' => false,
-                'message' => 'Insufficient wallet balance',
-            ];
+        $user = User::find($userId);
+        if (! $user) {
+            return ['success' => false, 'message' => 'User not found'];
         }
 
-        // Create transaction
-        $transaction = Transaction::create([
-            'user_id' => $userId,
-            'reference' => $reference,
-            'type' => 'bvn_verification',
-            'status' => 'pending',
-            'amount' => $amount,
-            'fee' => 0,
-            'total_amount' => $amount,
-            'details' => [
-                'bvn_number' => $bvnNumber,
-            ],
-            'provider' => config('services.bvn.provider', 'nibss'),
-        ]);
+        $oldBalance = (float) $user->balance;
 
-        // Create verification log
-        $verificationLog = VerificationLog::create([
-            'user_id' => $userId,
-            'transaction_id' => $transaction->id,
-            'type' => 'bvn',
-            'identity_number' => $bvnNumber,
+        if (! $user->debit($amount, false, ['fundingtype' => 'bvn_verification'])) {
+            return ['success' => false, 'message' => 'Insufficient wallet balance'];
+        }
+
+        $transaction = Transaction::create([
+            'id' => $reference,
+            'network' => 'BVN',
+            'name' => 'BVN Verification',
+            'price' => (int) round($amount),
+            'type' => 'bvn_verification',
+            'phone' => $bvnNumber,
+            'oldbal' => $oldBalance,
+            'newbal' => (float) $user->balance,
             'status' => 'pending',
+            'userId' => $userId,
+            'response' => 'pending',
         ]);
 
         try {
-            // Call BVN verification API
             $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Bearer ' . $this->bvnApiKey,
+                'Authorization' => 'Bearer '.$this->bvnApiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->bvnBaseUrl . '/verify-bvn', [
+            ])->post($this->bvnBaseUrl.'/verify-bvn', [
                 'bvn' => $bvnNumber,
                 'reference' => $reference,
             ]);
 
-            $data = $response->json();
+            $body = $response->json();
 
-            if ($response->successful() && ($data['status'] ?? false)) {
-                $verificationData = $data['data'] ?? [];
+            if ($response->successful() && ($body['status'] ?? false)) {
+                $verificationData = $body['data'] ?? [];
 
-                $verificationLog->update([
-                    'verification_data' => $verificationData,
-                    'status' => 'verified',
-                ]);
-
-                $transaction->markAsSuccess(
-                    $data['reference'] ?? null,
-                    'BVN verification successful'
-                );
+                $transaction->markAsSuccess($body['reference'] ?? null, json_encode($verificationData));
 
                 return [
                     'success' => true,
@@ -261,30 +221,20 @@ class VerificationService
             }
 
             // Failed - refund and update
-            $wallet->credit($amount);
-            $verificationLog->update([
-                'status' => 'failed',
-                'error_message' => $data['message'] ?? 'Verification failed',
-            ]);
-            $transaction->markAsFailed($data['message'] ?? 'Verification failed');
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
+            $transaction->markAsFailed($body['message'] ?? 'Verification failed');
 
             return [
                 'success' => false,
-                'message' => $data['message'] ?? 'BVN verification failed',
+                'message' => $body['message'] ?? 'BVN verification failed',
             ];
-
         } catch (\Exception $e) {
             Log::error('BVN verification failed', [
                 'reference' => $reference,
-                'bvn' => $bvnNumber,
                 'error' => $e->getMessage(),
             ]);
 
-            $wallet->credit($amount);
-            $verificationLog->update([
-                'status' => 'failed',
-                'error_message' => 'Service error',
-            ]);
+            $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
             $transaction->markAsFailed('Service temporarily unavailable');
 
             return [
@@ -295,26 +245,30 @@ class VerificationService
     }
 
     /**
-     * Get user's verification history
+     * Get user's verification history (from the transactions ledger).
      */
-    public function getVerificationHistory(int $userId, ?string $type = null): array
+    public function getVerificationHistory(string $userId, ?string $type = null): array
     {
-        $query = VerificationLog::where('user_id', $userId)
-            ->with('transaction')
-            ->orderBy('created_at', 'desc');
+        $typeMap = ['nin' => 'nin_verification', 'bvn' => 'bvn_verification'];
 
-        if ($type) {
-            $query->where('type', $type);
+        $query = Transaction::where('userId', $userId)
+            ->whereIn('type', array_values($typeMap))
+            ->orderByDesc('createdAt');
+
+        if ($type && isset($typeMap[$type])) {
+            $query->where('type', $typeMap[$type]);
         }
 
-        return $query->get()->map(function ($log) {
+        return $query->get()->map(function (Transaction $txn) {
+            $kind = $txn->type === 'bvn_verification' ? 'BVN' : 'NIN';
+
             return [
-                'id' => $log->id,
-                'type' => strtoupper($log->type),
-                'identity_number' => substr($log->identity_number, 0, 6) . '****',
-                'status' => $log->status,
-                'date' => $log->created_at->format('Y-m-d H:i:s'),
-                'amount' => $log->transaction->amount ?? 0,
+                'id' => $txn->id,
+                'type' => $kind,
+                'identity_number' => substr((string) $txn->phone, 0, 6).'****',
+                'status' => $txn->status,
+                'date' => $txn->createdAt?->format('Y-m-d H:i:s'),
+                'amount' => (float) $txn->price,
             ];
         })->toArray();
     }
