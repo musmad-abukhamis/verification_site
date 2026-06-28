@@ -1,12 +1,28 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     wallet: Object,
     recent_transactions: Array,
+    reserved_accounts: { type: Array, default: () => [] },
 });
+
+const page = usePage();
+const authUser = computed(() => page.props.auth?.user ?? {});
+const copied = ref(null);
+
+const copy = async (value) => {
+    try {
+        await navigator.clipboard.writeText(value);
+        copied.value = value;
+        setTimeout(() => (copied.value = null), 1500);
+    } catch (e) {
+        // clipboard unavailable; ignore
+    }
+};
 
 const getStatusColor = (status) => {
     const colors = {
@@ -43,6 +59,56 @@ const getTypeLabel = (type) => {
 
         <div class="py-12">
             <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                <!-- Welcome Banner -->
+                <div class="overflow-hidden rounded-lg mb-6 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-pink-500/20 border border-gray-100 dark:border-gray-700">
+                    <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
+                                Welcome back, {{ authUser.username || authUser.name }}!
+                                <span v-if="authUser.role" class="text-base font-medium text-gray-500 dark:text-gray-400">({{ authUser.role }})</span>
+                                👋
+                            </h1>
+                            <p class="mt-1 text-gray-600 dark:text-gray-300">
+                                Your balance:
+                                <span class="font-semibold text-gray-900 dark:text-gray-100">₦{{ wallet.total_balance.toLocaleString() }}</span>
+                            </p>
+                        </div>
+                        <Link :href="route('wallet.fund')">
+                            <PrimaryButton>Fund Wallet</PrimaryButton>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Virtual Accounts -->
+                <div v-if="reserved_accounts.length" class="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800 mb-6">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Your Virtual Accounts</h3>
+                            <Link :href="route('wallet.fund')" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 text-sm">Manage →</Link>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div
+                                v-for="acct in reserved_accounts"
+                                :key="acct.account_number"
+                                class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex flex-col gap-2"
+                            >
+                                <div class="text-xs font-medium text-indigo-600 dark:text-indigo-400 uppercase">{{ acct.bank }}</div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xl font-mono font-bold tracking-wide text-gray-900 dark:text-gray-100">{{ acct.account_number }}</span>
+                                    <button
+                                        type="button"
+                                        class="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                        @click="copy(acct.account_number)"
+                                    >
+                                        {{ copied === acct.account_number ? 'Copied' : 'Copy' }}
+                                    </button>
+                                </div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">{{ acct.account_name }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Balance Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <!-- Total Balance -->
@@ -165,6 +231,54 @@ const getTypeLabel = (type) => {
                                         </svg>
                                     </div>
                                     <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">BVN Verify</span>
+                                </div>
+                            </Link>
+
+                            <!-- BVN Search -->
+                            <Link :href="route('bvn-search.index')" class="group">
+                                <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">
+                                    <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mb-3">
+                                        <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">BVN Search</span>
+                                </div>
+                            </Link>
+
+                            <!-- BVN Modification -->
+                            <Link :href="route('bvn-modification.index')" class="group">
+                                <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">
+                                    <div class="w-12 h-12 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center mb-3">
+                                        <svg class="w-6 h-6 text-pink-600 dark:text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">BVN Modification</span>
+                                </div>
+                            </Link>
+
+                            <!-- BVN SDK Onboarding -->
+                            <Link :href="route('bvn-sdk-form.index')" class="group">
+                                <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">
+                                    <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mb-3">
+                                        <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">BVN Onboarding</span>
+                                </div>
+                            </Link>
+
+                            <!-- BVN Retrieval -->
+                            <Link :href="route('bvn-retrieval.index')" class="group">
+                                <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">
+                                    <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center mb-3">
+                                        <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">BVN Retrieval</span>
                                 </div>
                             </Link>
 

@@ -170,6 +170,21 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
+    // Data vending vendor #1 (bozavtu). Seeded into the `vendorapi` table by
+    // VendorApiSeeder; the key stays out of source control.
+    'data_vendors' => [
+        'vendor1_url' => env('DATA_VENDOR1_URL', 'https://vtu.bozavtu.com/api/data'),
+        'vendor1_key' => env('DATA_VENDOR1_KEY'),
+    ],
+
+    // Quicklysim — data vendor #5. Access token is fetched per-request via
+    // HTTP Basic auth (see DataPurchaseController::getQuicklysimToken).
+    'quicklysim' => [
+        'base_url' => env('QUICKLYSIM_BASE_URL', 'https://quicklysim.com/api'),
+        'username' => env('QUICKLYSIM_USERNAME'),
+        'password' => env('QUICKLYSIM_PASSWORD'),
+    ],
+
     // Billstack — reserved virtual-account funding (PALMPAY) with BVN KYC.
     // Port of nimcweb's reserveAccount flow. The webhook (x-wiaxy-signature)
     // verifies as md5(token).

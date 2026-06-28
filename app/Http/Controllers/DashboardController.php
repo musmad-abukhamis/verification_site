@@ -35,6 +35,7 @@ class DashboardController extends Controller
                 'total_balance' => $balance,
             ],
             'recent_transactions' => $recentTransactions,
+            'reserved_accounts' => $user->reservedAccounts(),
         ]);
     }
 }

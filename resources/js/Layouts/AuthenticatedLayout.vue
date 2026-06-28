@@ -1,270 +1,271 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import DarkModeToggle from '@/Components/DarkModeToggle.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import DarkModeToggle from '@/Components/DarkModeToggle.vue';
-import { Link } from '@inertiajs/vue3';
 
-const showingNavigationDrawer = ref(false);
+const page = usePage();
+const showingSidebar = ref(false);
+const expandedMenus = ref(new Set());
+
+const authUser = computed(() => page.props.auth?.user ?? {});
+const isAdmin = computed(() => authUser.value?.is_admin);
+
+const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount ?? 0));
+
+// Active state uses Ziggy's route().current() (proven elsewhere in this app).
+const current = (pattern) => route().current(pattern);
+
+const menuItems = computed(() => [
+    { name: 'Dashboard', route: 'dashboard', pattern: 'dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { name: 'Buy Airtime', route: 'vtu.airtime', pattern: 'vtu.airtime*', icon: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z' },
+    { name: 'Buy Data', route: 'buy-data', pattern: 'buy-data*', icon: 'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0' },
+    {
+        name: 'Wallet',
+        icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
+        children: [
+            { name: 'Overview', route: 'wallet.index', pattern: 'wallet.index' },
+            { name: 'Fund Wallet', route: 'wallet.fund', pattern: 'wallet.fund' },
+            { name: 'Transactions', route: 'wallet.transactions', pattern: 'wallet.transactions' },
+        ],
+    },
+    {
+        name: 'NIN Services',
+        icon: 'M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2',
+        children: [
+            { name: 'Verify NIN', route: 'nin.verify.index', pattern: 'nin.verify.*' },
+            { name: 'NIN Validation', route: 'nin.validation.index', pattern: 'nin.validation.*' },
+            { name: 'IPE Clearance', route: 'nin.ipe.index', pattern: 'nin.ipe.*' },
+        ],
+    },
+    {
+        name: 'BVN Services',
+        icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+        children: [
+            { name: 'Verify BVN', route: 'verification.bvn', pattern: 'verification.bvn*' },
+            { name: 'BVN Search', route: 'bvn-search.index', pattern: 'bvn-search.*' },
+            { name: 'Modification', route: 'bvn-modification.index', pattern: 'bvn-modification.index' },
+            { name: 'My Modifications', route: 'bvn-modification.requests', pattern: 'bvn-modification.requests' },
+            { name: 'Onboarding', route: 'bvn-sdk-form.index', pattern: 'bvn-sdk-form.*' },
+            { name: 'Retrieval', route: 'bvn-retrieval.index', pattern: 'bvn-retrieval.*' },
+        ],
+    },
+    { name: 'Verification History', route: 'verification.history', pattern: 'verification.history', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    {
+        name: 'Reports',
+        icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+        children: [
+            { name: 'Data Transactions', route: 'reports.data-transactions', pattern: 'reports.data-transactions' },
+            { name: 'NIN/BVN Transactions', route: 'reports.verify-transactions', pattern: 'reports.verify-transactions' },
+            { name: 'Data Sub Stats', route: 'reports.data-stats', pattern: 'reports.data-stats' },
+            { name: 'NIN/BVN Verify Stats', route: 'reports.verify-stats', pattern: 'reports.verify-stats' },
+        ],
+    },
+    { name: 'Profile', route: 'profile.edit', pattern: 'profile.edit', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+]);
+
+const toggleMenu = (name) => {
+    const set = expandedMenus.value;
+    set.has(name) ? set.delete(name) : set.add(name);
+};
+
+const isGroupActive = (item) => item.children?.some((c) => current(c.pattern)) ?? false;
+const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupActive(item);
 </script>
 
 <template>
     <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-        <!-- Traditional Top Navigation (Desktop) -->
-        <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 hidden md:block">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between h-16">
-                    <div class="flex">
-                        <!-- Logo -->
-                        <div class="flex-shrink-0 flex items-center">
-                            <Link :href="route('dashboard')">
-                                <ApplicationLogo class="block h-9 w-auto text-gray-800 dark:text-gray-200" />
-                            </Link>
+        <!-- Sidebar -->
+        <aside
+            :class="[
+                'fixed top-0 left-0 z-40 w-64 h-screen transition-transform bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700',
+                showingSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+            ]"
+        >
+            <div class="h-full flex flex-col">
+                <!-- Logo -->
+                <div class="flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-700">
+                    <Link :href="route('dashboard')" class="flex items-center">
+                        <ApplicationLogo class="block h-8 w-auto text-gray-800 dark:text-gray-200" />
+                    </Link>
+                </div>
+
+                <!-- User profile -->
+                <div class="px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold uppercase">
+                            {{ (authUser.username || authUser.name || '?').charAt(0) }}
                         </div>
-                        
-                        <!-- Desktop Navigation Links -->
-                        <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                            <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                                Dashboard
-                            </NavLink>
-                            <NavLink :href="route('wallet.index')" :active="route().current('wallet.*')">
-                                Wallet
-                            </NavLink>
-                            <NavLink :href="route('vtu.airtime')" :active="route().current('vtu.airtime*')">
-                                Airtime
-                            </NavLink>
-                            <NavLink :href="route('buy-data')" :active="route().current('buy-data*')">
-                                Buy Data
-                            </NavLink>
-                            <NavLink :href="route('verification.nin')" :active="route().current('verification.nin*')">
-                                NIN
-                            </NavLink>
-                            <NavLink :href="route('verification.bvn')" :active="route().current('verification.bvn*')">
-                                BVN
-                            </NavLink>
-                            <NavLink :href="route('bvn-modification.index')" :active="route().current('bvn-modification.*')">
-                                BVN Mod
-                            </NavLink>
-                            <NavLink :href="route('bvn-sdk-form.index')" :active="route().current('bvn-sdk-form.*')">
-                                BVN Onboarding
-                            </NavLink>
-                            <NavLink :href="route('bvn-retrieval.index')" :active="route().current('bvn-retrieval.*')">
-                                BVN Retrieval
-                            </NavLink>
-                            <NavLink :href="route('bvn-search.index')" :active="route().current('bvn-search.*')">
-                                BVN Search
-                            </NavLink>
-                            <NavLink
-                                v-if="$page.props.auth.user.is_admin"
-                                :href="route('admin.dashboard')" 
-                                :active="route().current('admin.*')"
-                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                            >
-                                Admin
-                            </NavLink>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                {{ authUser.username || authUser.name }}
+                            </p>
+                            <span class="inline-block mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                {{ formatCurrency(authUser.balance) }}
+                            </span>
                         </div>
                     </div>
-                    
-                    <div class="hidden sm:ml-6 sm:flex sm:items-center">
-                        <!-- Dark Mode Toggle -->
-                        <DarkModeToggle class="mr-4" />
-                        
-                        <!-- User Dropdown -->
-                        <div class="ml-3 relative">
+                </div>
+
+                <!-- Navigation -->
+                <nav class="flex-1 overflow-y-auto px-3 py-4">
+                    <ul class="space-y-1">
+                        <li v-for="item in menuItems" :key="item.name">
+                            <!-- Leaf item -->
+                            <Link
+                                v-if="!item.children"
+                                :href="route(item.route)"
+                                @click="showingSidebar = false"
+                                :class="[
+                                    'flex items-center p-3 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                                    current(item.pattern) && 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+                                ]"
+                            >
+                                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
+                                </svg>
+                                <span class="ml-3 text-sm">{{ item.name }}</span>
+                            </Link>
+
+                            <!-- Group item -->
+                            <div v-else>
+                                <button
+                                    type="button"
+                                    @click="toggleMenu(item.name)"
+                                    :class="[
+                                        'w-full flex items-center justify-between p-3 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                                        isGroupActive(item) && 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+                                    ]"
+                                >
+                                    <span class="flex items-center">
+                                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
+                                        </svg>
+                                        <span class="ml-3 text-sm">{{ item.name }}</span>
+                                    </span>
+                                    <svg
+                                        :class="['w-4 h-4 transition-transform', isMenuExpanded(item) ? 'rotate-180' : '']"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    >
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                <div v-show="isMenuExpanded(item)" class="ml-6 mt-1 space-y-1">
+                                    <Link
+                                        v-for="child in item.children"
+                                        :key="child.route"
+                                        :href="route(child.route)"
+                                        @click="showingSidebar = false"
+                                        :class="[
+                                            'block px-3 py-2 text-sm rounded-lg transition-colors',
+                                            current(child.pattern)
+                                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white',
+                                        ]"
+                                    >
+                                        {{ child.name }}
+                                    </Link>
+                                </div>
+                            </div>
+                        </li>
+
+                        <!-- Admin link -->
+                        <li v-if="isAdmin">
+                            <Link
+                                :href="route('admin.dashboard')"
+                                @click="showingSidebar = false"
+                                :class="[
+                                    'flex items-center p-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors',
+                                    current('admin.*') && 'bg-red-50 dark:bg-red-900/20',
+                                ]"
+                            >
+                                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span class="ml-3 text-sm font-medium">Admin Panel</span>
+                            </Link>
+                        </li>
+                    </ul>
+                </nav>
+
+                <!-- Footer: logout -->
+                <div class="px-3 py-4 border-t border-gray-200 dark:border-gray-700">
+                    <Link
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
+                        class="w-full flex items-center p-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span class="ml-3 text-sm">Log Out</span>
+                    </Link>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main column -->
+        <div class="md:ml-64">
+            <!-- Top bar -->
+            <nav class="bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                <div class="px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between h-16">
+                        <!-- Mobile hamburger -->
+                        <button
+                            @click="showingSidebar = !showingSidebar"
+                            class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+                        >
+                            <span class="sr-only">Toggle sidebar</span>
+                            <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+
+                        <div class="flex items-center ml-auto space-x-4">
+                            <DarkModeToggle />
                             <Dropdown align="right" width="48">
                                 <template #trigger>
                                     <button class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none">
-                                        {{ $page.props.auth.user.name }}
+                                        {{ authUser.name }}
                                         <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </button>
                                 </template>
                                 <template #content>
-                                    <DropdownLink :href="route('profile.edit')">
-                                        Profile
-                                    </DropdownLink>
-                                    <DropdownLink :href="route('logout')" method="post" as="button">
-                                        Log Out
-                                    </DropdownLink>
+                                    <DropdownLink :href="route('profile.edit')">Profile</DropdownLink>
+                                    <DropdownLink :href="route('logout')" method="post" as="button">Log Out</DropdownLink>
                                 </template>
                             </Dropdown>
                         </div>
                     </div>
                 </div>
-            </div>
-        </nav>
+            </nav>
 
-        <!-- Mobile Header with Hamburger - STICKY -->
-        <div class="md:hidden sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-            <div class="flex items-center justify-between px-4 py-3">
-                <div class="flex items-center">
-                    <button
-                        @click="showingNavigationDrawer = true"
-                        class="mr-3 inline-flex items-center justify-center p-2 rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-                    >
-                        <span class="sr-only">Open menu</span>
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                    </button>
-                    <Link :href="route('dashboard')">
-                        <ApplicationLogo class="block h-8 w-auto text-gray-800 dark:text-gray-200" />
-                    </Link>
+            <!-- Optional page heading -->
+            <header class="bg-white shadow dark:bg-gray-800" v-if="$slots.header">
+                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                    <slot name="header" />
                 </div>
-                <div class="flex items-center">
-                    <DarkModeToggle class="mr-3" />
-                    <div class="text-sm text-gray-700 dark:text-gray-300">
-                        {{ $page.props.auth.user.name }}
-                    </div>
+            </header>
+
+            <!-- Page content -->
+            <main>
+                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                    <slot />
                 </div>
-            </div>
+            </main>
         </div>
 
-        <!-- Mobile Side Drawer -->
-        <div v-if="showingNavigationDrawer" class="fixed inset-0 z-50 md:hidden">
-            <div @click="showingNavigationDrawer = false" class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true"></div>
-            <div class="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-gray-800 h-full">
-                <div class="absolute top-0 right-0 -mr-12 pt-2">
-                    <button
-                        @click="showingNavigationDrawer = false"
-                        class="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
-                    >
-                        <span class="sr-only">Close sidebar</span>
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
-                    <div class="flex-shrink-0 flex items-center px-4">
-                        <Link :href="route('dashboard')" @click="showingNavigationDrawer = false">
-                            <ApplicationLogo class="h-8 w-auto" />
-                        </Link>
-                    </div>
-                    <nav class="mt-5 px-2 space-y-1">
-                        <ResponsiveNavLink
-                            :href="route('dashboard')"
-                            :active="route().current('dashboard')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Dashboard
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('wallet.index')"
-                            :active="route().current('wallet.*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Wallet
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('vtu.airtime')"
-                            :active="route().current('vtu.airtime*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Airtime
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('buy-data')"
-                            :active="route().current('buy-data*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Buy Data
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('verification.nin')"
-                            :active="route().current('verification.nin*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            NIN
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('verification.bvn')"
-                            :active="route().current('verification.bvn*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            BVN
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('bvn-modification.index')"
-                            :active="route().current('bvn-modification.*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            BVN Modification
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('bvn-sdk-form.index')"
-                            :active="route().current('bvn-sdk-form.*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            BVN Onboarding
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('bvn-retrieval.index')"
-                            :active="route().current('bvn-retrieval.*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            BVN Retrieval
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('bvn-search.index')"
-                            :active="route().current('bvn-search.*')"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            BVN Search
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            v-if="$page.props.auth.user.is_admin"
-                            :href="route('admin.dashboard')"
-                            :active="route().current('admin.*')"
-                            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Admin
-                        </ResponsiveNavLink>
-                    </nav>
-                </div>
-                <div class="flex-shrink-0 flex border-t border-gray-200 dark:border-gray-700 p-4">
-                    <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {{ $page.props.auth.user.name }}
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                            {{ $page.props.auth.user.email }}
-                        </div>
-                    </div>
-                    <div class="mt-3 space-y-1">
-                        <ResponsiveNavLink :href="route('profile.edit')" @click="showingNavigationDrawer = false">
-                            Profile
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('logout')"
-                            method="post"
-                            as="button"
-                            @click="showingNavigationDrawer = false"
-                        >
-                            Log Out
-                        </ResponsiveNavLink>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page Heading -->
-        <header class="bg-white shadow dark:bg-gray-800" v-if="$slots.header">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                <slot name="header" />
-            </div>
-        </header>
-
-        <!-- Page Content -->
-        <main>
-            <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-                <slot />
-            </div>
-        </main>
+        <!-- Mobile overlay -->
+        <div
+            v-if="showingSidebar"
+            @click="showingSidebar = false"
+            class="fixed inset-0 z-30 bg-gray-900/50 md:hidden"
+        ></div>
     </div>
 </template>

@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             PlanSeeder::class,
+            NetworkSeeder::class,
+            VendorSelectionSeeder::class,
+            VendorApiSeeder::class,
             VerifyApiConfigSeeder::class,
         ]);
     }

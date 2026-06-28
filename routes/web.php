@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\DataPlanApiController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataPurchaseController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\VtuController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WalletController;
@@ -129,6 +130,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/bvn-search', [BvnSearchController::class, 'index'])->name('bvn-search.index');
     Route::post('/bvn-search/v1', [BvnSearchController::class, 'searchV1'])->name('bvn-search.v1');
     Route::post('/bvn-search/v2', [BvnSearchController::class, 'searchV2'])->name('bvn-search.v2');
+
+    // Report Routes (ported from nimcweb "Transactions"/"Reports" sidebar groups)
+    Route::get('/reports/data-transactions', [ReportController::class, 'dataTransactions'])->name('reports.data-transactions');
+    Route::get('/reports/nin-bvn-transactions', [ReportController::class, 'verifyTransactions'])->name('reports.verify-transactions');
+    Route::get('/reports/data-stats', [ReportController::class, 'dataStats'])->name('reports.data-stats');
+    Route::get('/reports/nin-bvn-stats', [ReportController::class, 'verifyStats'])->name('reports.verify-stats');
 });
 
 // Admin routes moved to admin.php

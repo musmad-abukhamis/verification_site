@@ -105,6 +105,16 @@ class User extends Authenticatable implements MustVerifyEmailContract
         return $this->hasMany(AccountKyc::class, 'userId');
     }
 
+    /**
+     * The user's reserved virtual accounts (Billstack), formatted for display.
+     *
+     * @return array<int, array{bank: string, account_number: string, account_name: string}>
+     */
+    public function reservedAccounts(): array
+    {
+        return optional($this->kyc()->first())->toFormattedAccounts() ?? [];
+    }
+
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class, 'userId');

@@ -1,5 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import BvnPremiumSlip from '@/Components/BvnPremiumSlip.vue';
+import BvnLongSlip from '@/Components/BvnLongSlip.vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -53,6 +55,12 @@ const fmtDate = (d) => {
 const fullName = computed(() => {
     const r = result.value || {};
     return [r.surname, r.firstname, r.middlename].filter(Boolean).join(' ');
+});
+
+// Raw base64 JPEG (no data: prefix) -> data URL for the slip generators.
+const photoDataUrl = computed(() => {
+    const photo = result.value?.photo;
+    return photo ? `data:image/jpeg;base64,${photo}` : '';
 });
 
 const goToPage = (url) => { if (url) router.visit(url, { preserveState: true, preserveScroll: true, only: ['history'] }); };
@@ -115,6 +123,41 @@ const printSlip = () => window.print();
                         <button @click="printSlip" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white text-sm font-medium rounded-lg">Print Slip</button>
                         <button @click="reset" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm rounded-lg text-gray-600 dark:text-gray-300">Verify Another</button>
                     </div>
+                </div>
+
+                <!-- Downloadable PDF slips -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto w-full print:hidden">
+                    <BvnPremiumSlip
+                        :surname="result.surname || ''"
+                        :othernames="[result.firstname, result.middlename].filter(Boolean).join(' ')"
+                        :dob="result.dob || ''"
+                        :gender="result.gender || ''"
+                        :nin="String(result.bvn || '')"
+                        :photo="photoDataUrl"
+                        :issued-date="fmtDate(new Date())"
+                        :qr-value="`BVN:${result.bvn || ''}|${fullName}`"
+                        :watermark="String(result.bvn || 'VERIFIED')"
+                    />
+                    <BvnLongSlip
+                        :bvn="String(result.bvn || '')"
+                        :nin="String(result.nin || '')"
+                        :first-name="result.firstname || ''"
+                        :last-name="result.surname || ''"
+                        :middle-name="result.middlename || ''"
+                        :phone="result.phone || ''"
+                        :email="result.email || ''"
+                        :dob="result.dob || ''"
+                        :gender="result.gender || ''"
+                        :marital="result.marital_status || ''"
+                        :state="result.state_of_origin || ''"
+                        :lga="result.lga_of_origin || ''"
+                        :address="result.residential_Address || ''"
+                        :enrollment-bank="result.enrollment_bank || ''"
+                        :enrollment-branch="result.enrollment_bank_branch || ''"
+                        :reg-date="result.registration_date || ''"
+                        :residential-addr="result.residential_Address || ''"
+                        :image-url="photoDataUrl"
+                    />
                 </div>
 
                 <!-- Printable BVN slip -->

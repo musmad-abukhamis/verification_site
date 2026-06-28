@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\BvnPriceController;
 use App\Http\Controllers\Admin\BvnSdkFormController;
 use App\Http\Controllers\Admin\BvnRetrievalController;
 use App\Http\Controllers\Admin\BvnSearchController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\WalletController;
 use Illuminate\Support\Facades\Route;
 
@@ -46,7 +47,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     // Verification Logs
     Route::get('/verification-logs', [VerificationLogController::class, 'index'])->name('verification-logs.index');
-    
+
+    // Reports (ported from nimcweb admin "Reports"/"Transactions" groups)
+    Route::get('/reports/nin-bvn-transactions', [ReportController::class, 'verifyTransactions'])->name('reports.verify-transactions');
+    Route::get('/reports/data-stats', [ReportController::class, 'dataStats'])->name('reports.data-stats');
+    Route::get('/reports/verify-stats', [ReportController::class, 'verifyStats'])->name('reports.verify-stats');
+
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
     Route::patch('/settings', [SettingController::class, 'update'])->name('settings.update');

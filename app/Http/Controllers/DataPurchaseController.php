@@ -58,7 +58,15 @@ class DataPurchaseController extends Controller
             return Inertia::render('BuyData/Index', ['error' => 'User not found']);
         }
 
-        if ($user->balance < $validatedData['planPrice']) {
+        // Never trust the client-supplied price: resolve the authoritative,
+        // role-adjusted price from the plan itself.
+        $plan = Plan::find($validatedData['planId']);
+        if (! $plan) {
+            return Inertia::render('BuyData/Index', ['error' => 'Selected plan not found']);
+        }
+        $price = (float) $plan->priceForUser($user);
+
+        if ((float) $user->balance < $price) {
             return Inertia::render('BuyData/Index', ['error' => 'Insufficient Balance! Please fund your wallet to continue the transaction.']);
         }
 
@@ -71,7 +79,7 @@ class DataPurchaseController extends Controller
         // 9. Process transaction
         if ($this->isSuccessfulResponse($apiResult)) {
             $oldBalance = (float) $user->balance;
-            $user->debit((float) $validatedData['planPrice'], false, ['fundingtype' => 'data']);
+            $user->debit($price, false, ['fundingtype' => 'data']);
 
             Transaction::create([
                 'id' => $reference,
@@ -79,8 +87,8 @@ class DataPurchaseController extends Controller
                 'network' => $validatedData['network'],
                 'type' => 'data',
                 'userId' => $user->id,
-                'name' => $validatedData['planName'],
-                'price' => (int) round($validatedData['planPrice']),
+                'name' => $plan->name,
+                'price' => (int) round($price),
                 'phone' => $validatedData['phoneNumber'],
                 'oldbal' => $oldBalance,
                 'newbal' => (float) $user->balance,
@@ -97,16 +105,13 @@ class DataPurchaseController extends Controller
             'network' => $validatedData['network'],
             'type' => 'data',
             'userId' => $user->id,
-            'name' => $validatedData['planName'],
-            'price' => (int) round($validatedData['planPrice']),
+            'name' => $plan->name,
+            'price' => (int) round($price),
             'phone' => $validatedData['phoneNumber'],
             'oldbal' => (float) $user->balance,
             'newbal' => (float) $user->balance,
             'response' => 'Vendor-'.$vendorNumber.' - '.json_encode($apiResult),
         ]);
-
-        // Switch to alternative vendor for the next attempt
-        $this->switchToAlternativeVendor($validatedData['network'], $validatedData['type'], $vendorNumber);
 
         return Inertia::render('BuyData/Index', [
             'error' => $apiResult['message'] ?? 'Failed to process the transaction',
@@ -179,7 +184,12 @@ class DataPurchaseController extends Controller
     }
 
     /**
-     * Prepare API configuration for the vendor call.
+     * Prepare the API call for the active vendor.
+     *
+     * Faithful to nimcweb's Buy-data-action: vendors 1 & 5 take a
+     * {network, phone, bypass, data_plan, request-id} body; vendors 2-4 take a
+     * {network, mobile_number, plan, Ported_number} body. Vendor 5 authenticates
+     * with a freshly-fetched Quicklysim access token instead of its stored key.
      */
     protected function prepareApiConfig(int $vendorNumber, $vendorApi, $validatedData, $reference, $planIds, $networkProviders): array
     {
@@ -188,32 +198,46 @@ class DataPurchaseController extends Controller
 
         $vendorPlanId = $planIds['vendor'.$vendorNumber] ?? $validatedData['planId'];
         $vendorNetwork = $networkProviders['vendor'.$vendorNumber] ?? $validatedData['network'];
+        $phone = $validatedData['phoneNumber'];
+
+        $payload = match ($vendorNumber) {
+            2, 3, 4 => [
+                'network' => $vendorNetwork,
+                'mobile_number' => $phone,
+                'plan' => $vendorPlanId,
+                'Ported_number' => true,
+            ],
+            // Vendors 1 and 5 share the same body shape.
+            default => [
+                'network' => $vendorNetwork,
+                'phone' => $phone,
+                'bypass' => true,
+                'data_plan' => $vendorPlanId,
+                'request-id' => $reference,
+            ],
+        };
+
+        $token = $vendorNumber === 5 ? ($this->getQuicklysimToken() ?? $vendorKey) : $vendorKey;
 
         return [
             'url' => $vendorUrl,
-            'token' => $vendorKey,
-            'payload' => [
-                'request_id' => $reference,
-                'serviceID' => $this->getServiceId($vendorNetwork, 'data'),
-                'billersCode' => $validatedData['phoneNumber'],
-                'variation_code' => $vendorPlanId,
-                'phone' => $validatedData['phoneNumber'],
-            ],
+            'token' => $token,
+            'payload' => $payload,
         ];
     }
 
     /**
-     * Call vendor API
+     * Call the vendor API. Auth scheme is "Token <key>" (nimcweb convention).
      */
     protected function callVendorApi($url, $token, $payload)
     {
         try {
             $response = Http::timeout(30)->withHeaders([
-                'Authorization' => 'Bearer '.$token,
+                'Authorization' => 'Token '.$token,
                 'Content-Type' => 'application/json',
             ])->post($url, $payload);
 
-            return $response->json();
+            return $response->json() ?? [];
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
@@ -223,38 +247,38 @@ class DataPurchaseController extends Controller
     }
 
     /**
-     * Check if API response is successful
+     * Success = the vendor returned status/Status of "success"/"successful".
      */
-    protected function isSuccessfulResponse($apiResult)
+    protected function isSuccessfulResponse($apiResult): bool
     {
-        return isset($apiResult['code']) && $apiResult['code'] === '000';
+        $status = strtolower((string) ($apiResult['status'] ?? $apiResult['Status'] ?? ''));
+
+        return in_array($status, ['success', 'successful'], true);
     }
 
     /**
-     * Advance to the next vendor (1-5, wrapping) for the given service type.
+     * Fetch a Quicklysim access token (vendor 5) via HTTP Basic auth.
+     * Returns null when credentials are unconfigured or the call fails.
      */
-    protected function switchToAlternativeVendor(string $network, string $type, int $currentVendor): void
+    protected function getQuicklysimToken(): ?string
     {
-        $selection = VendorSelection::firstOrCreate(['id' => strtoupper($network)]);
-        $column = $this->vendorSelectionColumn($type);
+        $username = config('services.quicklysim.username');
+        $password = config('services.quicklysim.password');
+        $url = config('services.quicklysim.base_url').'/user';
 
-        $next = $currentVendor >= 5 ? 1 : $currentVendor + 1;
-        $selection->update([$column => (string) $next]);
-    }
+        if (! $username || ! $password) {
+            return null;
+        }
 
-    /**
-     * Map network to service ID for vendor API
-     */
-    protected function getServiceId($network, $service)
-    {
-        $mapping = [
-            'mtn' => ['data' => 'mtn-data'],
-            'glo' => ['data' => 'glo-data'],
-            'airtel' => ['data' => 'airtel-data'],
-            '9mobile' => ['data' => 'etisalat-data'],
-        ];
+        try {
+            $response = Http::timeout(20)
+                ->withBasicAuth($username, $password)
+                ->post($url);
 
-        return $mapping[strtolower($network)][$service] ?? $network;
+            return $response->successful() ? ($response->json('AccessToken') ?: null) : null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     /**

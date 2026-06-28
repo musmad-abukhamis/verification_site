@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AccountKyc;
 use App\Models\WalletHistory;
 use App\Services\Wallet\BillstackService;
 use Illuminate\Http\Request;
@@ -27,7 +26,7 @@ class WalletController extends Controller
         return Inertia::render('Wallet/Index', [
             'wallet' => $this->walletPayload($user),
             'recent_transactions' => $recent,
-            'reserved_accounts' => $this->reservedAccounts($user->id),
+            'reserved_accounts' => $user->reservedAccounts(),
         ]);
     }
 
@@ -40,7 +39,7 @@ class WalletController extends Controller
 
         return Inertia::render('Wallet/Fund', [
             'wallet' => $this->walletPayload($user),
-            'reserved_accounts' => $this->reservedAccounts($user->id),
+            'reserved_accounts' => $user->reservedAccounts(),
         ]);
     }
 
@@ -140,46 +139,5 @@ class WalletController extends Controller
             'new_balance' => (float) $w->newbal,
             'date' => $w->createdAt?->format('M d, Y H:i'),
         ];
-    }
-
-    /**
-     * Build the user's reserved virtual accounts from their accountkyc row.
-     * Mirrors nimcweb's GetReservedAccounts (skips empty / "0" columns).
-     */
-    private function reservedAccounts(string $userId): array
-    {
-        $account = AccountKyc::where('userId', $userId)->first();
-
-        if (! $account) {
-            return [];
-        }
-
-        $banks = [
-            'palmpay' => ['label' => 'PalmPay Bank', 'name' => 'name'],
-            'palmpay2' => ['label' => 'PalmPay Business', 'name' => 'palmpay2_name'],
-            'moniepoint' => ['label' => 'Moniepoint Bank', 'name' => 'name'],
-            'wema' => ['label' => 'Wema Bank', 'name' => 'wema_name'],
-            'providus' => ['label' => 'Providus Bank', 'name' => 'name'],
-            'sterling' => ['label' => 'Sterling Bank', 'name' => 'name'],
-            'opay' => ['label' => 'Opay Bank', 'name' => 'name'],
-            'fidelity' => ['label' => 'Fidelity Bank', 'name' => 'name'],
-            'Ninesp' => ['label' => '9PSB Bank', 'name' => 'ninesp_name'],
-        ];
-
-        $accounts = [];
-
-        foreach ($banks as $column => $meta) {
-            $number = $account->{$column} ?? null;
-
-            if ($number && $number !== '0') {
-                $accounts[] = [
-                    'bank' => $meta['label'],
-                    'account_number' => $number,
-                    'account_name' => $account->{$meta['name']} ?: ($account->name ?: 'Account'),
-                ];
-            }
-        }
-
-        return $accounts;
     }
 }

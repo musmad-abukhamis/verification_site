@@ -161,15 +161,8 @@ const resetForm = () => {
     selectedPlan.value = null;
 };
 
-const getPlanPrice = (plan) => {
-    const user = props.user;
-    if (user.role === 'AGENT') {
-        return plan.agent_price || plan.price;
-    } else if (user.role === 'API') {
-        return plan.api_price || plan.price;
-    }
-    return plan.price;
-};
+// The API already returns the role-adjusted price (Plan::priceForUser).
+const getPlanPrice = (plan) => plan.price;
 
 const submitForm = async () => {
     if (!isFormValid.value) return;
@@ -318,7 +311,7 @@ const submitForm = async () => {
                                                 :key="plan.id"
                                                 :value="plan.id"
                                             >
-                                                {{ plan.name }} - ₦{{ getPlanPrice(plan).toLocaleString() }} ({{ plan.validity_days }} days)
+                                                {{ plan.name }} - ₦{{ getPlanPrice(plan).toLocaleString() }} ({{ plan.validity }})
                                             </option>
                                         </select>
                                         <div v-if="form.errors.planId" class="mt-1 text-sm text-red-600 dark:text-red-400">
