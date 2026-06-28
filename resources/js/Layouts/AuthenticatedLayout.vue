@@ -211,7 +211,7 @@ const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupAc
         <!-- Main column -->
         <div class="md:ml-64">
             <!-- Top bar -->
-            <nav class="bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <nav class="sticky top-0 z-30 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                 <div class="px-4 sm:px-6 lg:px-8">
                     <div class="flex items-center justify-between h-16">
                         <!-- Mobile hamburger -->
@@ -247,15 +247,15 @@ const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupAc
             </nav>
 
             <!-- Optional page heading -->
-            <header class="bg-white shadow dark:bg-gray-800" v-if="$slots.header">
-                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <header class="sticky top-16 z-20 bg-white shadow dark:bg-gray-800" v-if="$slots.header">
+                <div class="py-5 px-4 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
             <!-- Page content -->
             <main>
-                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <div class="py-6 px-4 sm:px-6 lg:px-8">
                     <slot />
                 </div>
             </main>

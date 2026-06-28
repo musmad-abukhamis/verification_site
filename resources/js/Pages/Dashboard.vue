@@ -57,8 +57,8 @@ const getTypeLabel = (type) => {
             </h2>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <!-- Welcome Banner -->
                 <div class="overflow-hidden rounded-lg mb-6 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-pink-500/20 border border-gray-100 dark:border-gray-700">
                     <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">

@@ -67,8 +67,8 @@ const copy = async (value) => {
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Fund Wallet</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div>
+            <div class="max-w-3xl mx-auto space-y-6">
                 <!-- Balance -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">

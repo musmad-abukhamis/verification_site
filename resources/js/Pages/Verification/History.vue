@@ -25,8 +25,8 @@ const getStatusColor = (status) => {
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Verification History</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <!-- Filter Tabs -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                     <div class="border-b border-gray-200">

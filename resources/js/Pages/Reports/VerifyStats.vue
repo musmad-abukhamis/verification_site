@@ -57,8 +57,8 @@ const maxDailyTotal = computed(() => Math.max(1, ...props.daily.map((d) => d.tot
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">NIN/BVN Verify Stats</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div>
+            <div class="space-y-6">
                 <!-- Date range controls -->
                 <div class="bg-white shadow-sm rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
                     <div class="flex flex-wrap items-center gap-3">

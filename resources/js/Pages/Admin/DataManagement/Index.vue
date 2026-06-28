@@ -48,8 +48,8 @@ const statCards = [
             </h2>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <!-- Stats Grid -->
                 <div class="grid grid-cols-1 gap-6 mb-8 sm:grid-cols-2 lg:grid-cols-4">
                     <div 

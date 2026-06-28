@@ -50,8 +50,8 @@ const statusColor = (s) => {
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">My Wallet Transactions</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div>
+            <div class="space-y-6">
                 <!-- Summary cards -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white shadow-sm rounded-lg p-6">

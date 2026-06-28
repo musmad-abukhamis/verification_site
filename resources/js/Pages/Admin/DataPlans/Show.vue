@@ -23,8 +23,8 @@ const getStatusColor = (status) => {
             </h2>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <div class="bg-white rounded-lg shadow dark:bg-gray-800">
                     <div class="p-6">
                         <div class="flex justify-between items-start mb-6">

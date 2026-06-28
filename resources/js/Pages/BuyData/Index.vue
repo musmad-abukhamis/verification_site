@@ -205,8 +205,8 @@ const submitForm = async () => {
 
     <AuthenticatedLayout>
         <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
-            <div class="py-12">
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div>
+                <div>
                     <!-- Header -->
                     <div class="text-center mb-12">
                         <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">

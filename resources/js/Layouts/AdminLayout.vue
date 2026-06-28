@@ -187,7 +187,7 @@ const isMenuExpanded = (menuName) => {
         <div class="md:ml-64">
             <!-- Top Navigation -->
             <nav class="bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="px-4 sm:px-6 lg:px-8">
                     <div class="flex justify-between h-16">
                         <!-- Mobile menu button -->
                         <div class="flex items-center md:hidden">
@@ -221,7 +221,7 @@ const isMenuExpanded = (menuName) => {
 
             <!-- Page Content -->
             <main class="py-6">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="px-4 sm:px-6 lg:px-8">
                     <slot />
                 </div>
             </main>

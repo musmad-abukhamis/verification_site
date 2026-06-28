@@ -56,8 +56,8 @@ const submit = () => {
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Buy Data Bundle</h2>
         </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <!-- Wallet Balance Card -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                     <div class="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">

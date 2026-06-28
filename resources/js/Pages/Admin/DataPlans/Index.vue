@@ -55,8 +55,8 @@ const getStatusColor = (status) => {
             </h2>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div>
+            <div>
                 <!-- Header with Create Button -->
                 <div class="mb-6 flex justify-between items-center">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
