@@ -71,7 +71,7 @@ return [
         */
         'providers' => [
             'prembly' => [
-                'label'    => 'Prembly',
+                'label'    => 'V1',
                 'active'   => true,
                 'base_url' => env('NIN_BASE_URL', 'https://api.prembly.com'),
                 'api_key'  => env('NIN_API_KEY'),
@@ -84,7 +84,7 @@ return [
             ],
 
             'arewasmart' => [
-                'label'    => 'ArewaSmart',
+                'label'    => 'V2',
                 'active'   => true,
                 'base_url' => env('AREWASMART_BASE_URL', env('NIN_BASE_URL', 'https://api.prembly.com')),
                 'api_key'  => env('AREWASMART_API_KEY', env('NIN_API_KEY')),
@@ -97,7 +97,7 @@ return [
             ],
 
             'provider3' => [
-                'label'    => 'Provider 3 (Configure)',
+                'label'    => 'V3',
                 'active'   => env('PROVIDER3_ACTIVE', false),
                 'base_url' => env('PROVIDER3_BASE_URL'),
                 'api_key'  => env('PROVIDER3_API_KEY'),
@@ -110,7 +110,7 @@ return [
             ],
 
             'provider4' => [
-                'label'    => 'Provider 4 (Configure)',
+                'label'    => 'V4',
                 'active'   => env('PROVIDER4_ACTIVE', false),
                 'base_url' => env('PROVIDER4_BASE_URL'),
                 'api_key'  => env('PROVIDER4_API_KEY'),
@@ -123,7 +123,7 @@ return [
             ],
 
             'provider5' => [
-                'label'    => 'Provider 5 (Configure)',
+                'label'    => 'V5',
                 'active'   => env('PROVIDER5_ACTIVE', false),
                 'base_url' => env('PROVIDER5_BASE_URL'),
                 'api_key'  => env('PROVIDER5_API_KEY'),

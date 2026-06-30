@@ -17,8 +17,8 @@ const getStatusClass = (status) => {
 
 const getProviderLabel = (provider) => {
     const labels = {
-        v1: 'V1 (Prembly)',
-        v2: 'V2 (ArewaSmart)',
+        v1: 'V1',
+        v2: 'V2',
         demo: 'Demo',
         phone: 'Phone',
     };
