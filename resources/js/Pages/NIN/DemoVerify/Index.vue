@@ -107,7 +107,7 @@ const pagination = computed(() => ({
                 <div class="flex gap-2 mb-6">
                     <button v-for="v in ['v1', 'v2']" :key="v" @click="provider = v"
                         :class="['px-5 py-2 rounded-lg text-sm font-semibold transition-colors', provider === v ? 'bg-emerald-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200']">
-                        {{ v === 'v1' ? 'V1 — ArewaSmart' : 'V2 — ArewaSmart Alt' }}
+                        {{ v === 'v1' ? 'V1' : 'V2' }}
                     </button>
                 </div>
 
