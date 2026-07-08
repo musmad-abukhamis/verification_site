@@ -19,6 +19,11 @@ use App\Http\Controllers\Admin\BvnRetrievalController;
 use App\Http\Controllers\Admin\BvnSearchController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\WalletController;
+use App\Http\Controllers\Admin\AgentIdController;
+use App\Http\Controllers\Admin\IdCardController;
+use App\Http\Controllers\Admin\EnrollmentRecordController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\Admin\SiteSettingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -53,9 +58,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/reports/data-stats', [ReportController::class, 'dataStats'])->name('reports.data-stats');
     Route::get('/reports/verify-stats', [ReportController::class, 'verifyStats'])->name('reports.verify-stats');
 
-    // Settings
+    // Settings (pricing / verification methods)
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
     Route::patch('/settings', [SettingController::class, 'update'])->name('settings.update');
+
+    // Site Settings (site info + contact details → powers Help & Support)
+    Route::get('/site-settings', [SiteSettingController::class, 'index'])->name('site-settings.index');
+    Route::put('/site-settings', [SiteSettingController::class, 'update'])->name('site-settings.update');
     
     // Data Management Routes
     Route::get('/data-management', [DataManagementController::class, 'index'])->name('data-management.index');
@@ -128,4 +137,23 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // BVN Search Logs (read-only)
     Route::get('/bvn-searches', [BvnSearchController::class, 'index'])->name('bvn-searches.index');
+
+    // Agent ID card generator (client-side PDF, no DB)
+    Route::get('/agent-id', [AgentIdController::class, 'index'])->name('agent-id.index');
+
+    // ID Card Application Management (review / status / delete)
+    Route::get('/idcard', [IdCardController::class, 'index'])->name('idcard.index');
+    Route::patch('/idcard/{idCard}/status', [IdCardController::class, 'updateStatus'])->name('idcard.status');
+    Route::delete('/idcard/{idCard}', [IdCardController::class, 'destroy'])->name('idcard.destroy');
+
+    // Enrollment Records (spreadsheet upload → upsert into Record)
+    Route::get('/enrollment-records', [EnrollmentRecordController::class, 'index'])->name('enrollment-records.index');
+    Route::post('/enrollment-records/upload', [EnrollmentRecordController::class, 'upload'])->name('enrollment-records.upload');
+
+    // Notification Management (global + user-specific announcements)
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+    Route::put('/notifications/{notification}', [NotificationController::class, 'update'])->name('notifications.update');
+    Route::patch('/notifications/{notification}/toggle', [NotificationController::class, 'toggle'])->name('notifications.toggle');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 });

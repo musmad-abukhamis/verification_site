@@ -5,6 +5,8 @@ import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import DarkModeToggle from '@/Components/DarkModeToggle.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
+import NotificationBell from '@/Components/NotificationBell.vue';
+import GlobalNotificationModal from '@/Components/GlobalNotificationModal.vue';
 
 const page = usePage();
 const showingSidebar = ref(false);
@@ -45,12 +47,13 @@ const menuItems = computed(() => [
         name: 'BVN Services',
         icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
         children: [
-            { name: 'Verify BVN', route: 'verification.bvn', pattern: 'verification.bvn*' },
             { name: 'BVN Search', route: 'bvn-search.index', pattern: 'bvn-search.*' },
             { name: 'Modification', route: 'bvn-modification.index', pattern: 'bvn-modification.index' },
             { name: 'My Modifications', route: 'bvn-modification.requests', pattern: 'bvn-modification.requests' },
             { name: 'Onboarding', route: 'bvn-sdk-form.index', pattern: 'bvn-sdk-form.*' },
             { name: 'Retrieval', route: 'bvn-retrieval.index', pattern: 'bvn-retrieval.*' },
+            { name: 'ID Card', route: 'idcard.index', pattern: 'idcard.*' },
+            { name: 'BVN Records', route: 'bvn-records.index', pattern: 'bvn-records.*' },
         ],
     },
     { name: 'Verification History', route: 'verification.history', pattern: 'verification.history', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
@@ -65,6 +68,7 @@ const menuItems = computed(() => [
         ],
     },
     { name: 'Profile', route: 'profile.edit', pattern: 'profile.edit', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+    { name: 'Help & Support', route: 'help.index', pattern: 'help.*', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 ]);
 
 const toggleMenu = (name) => {
@@ -226,6 +230,7 @@ const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupAc
                         </button>
 
                         <div class="flex items-center ml-auto space-x-4">
+                            <NotificationBell />
                             <DarkModeToggle />
                             <Dropdown align="right" width="48">
                                 <template #trigger>
@@ -267,5 +272,8 @@ const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupAc
             @click="showingSidebar = false"
             class="fixed inset-0 z-30 bg-gray-900/50 md:hidden"
         ></div>
+
+        <!-- Global announcement modal -->
+        <GlobalNotificationModal />
     </div>
 </template>

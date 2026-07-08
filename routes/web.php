@@ -20,6 +20,10 @@ use App\Http\Controllers\BvnModificationController;
 use App\Http\Controllers\BvnSdkFormController;
 use App\Http\Controllers\BvnRetrievalController;
 use App\Http\Controllers\BvnSearchController;
+use App\Http\Controllers\IdCardController;
+use App\Http\Controllers\BvnRecordController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\HelpController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -131,6 +135,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/bvn-search', [BvnSearchController::class, 'index'])->name('bvn-search.index');
     Route::post('/bvn-search/v1', [BvnSearchController::class, 'searchV1'])->name('bvn-search.v1');
     Route::post('/bvn-search/v2', [BvnSearchController::class, 'searchV2'])->name('bvn-search.v2');
+
+    // ID Card Application Routes (form + own requests on one page)
+    Route::get('/idcard', [IdCardController::class, 'index'])->name('idcard.index');
+    Route::post('/idcard', [IdCardController::class, 'store'])->name('idcard.store');
+    Route::get('/idcard/{idCard}/image', [IdCardController::class, 'image'])->name('idcard.image');
+
+    // BVN Enrolment Records search (Ticket ID / Agent ID)
+    Route::get('/bvn-records', [BvnRecordController::class, 'index'])->name('bvn-records.index');
+
+    // Notifications (read / dismiss — list is shared via Inertia props)
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+    Route::post('/notifications/{notification}/dismiss', [NotificationController::class, 'dismiss'])->name('notifications.dismiss');
+
+    // Help & Support (contact info + message form)
+    Route::get('/help', [HelpController::class, 'index'])->name('help.index');
+    Route::post('/help', [HelpController::class, 'submit'])->name('help.submit');
 
     // Report Routes (ported from nimcweb "Transactions"/"Reports" sidebar groups)
     Route::get('/reports/data-transactions', [ReportController::class, 'dataTransactions'])->name('reports.data-transactions');
