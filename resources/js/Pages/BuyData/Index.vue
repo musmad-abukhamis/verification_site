@@ -164,6 +164,7 @@ const buyAgain = () => {
 
 /* --------------------------------------------------------- status polling   */
 let poll = null;
+let announcedRef = null;
 
 const stopPolling = () => {
     if (poll) {
@@ -173,29 +174,46 @@ const stopPolling = () => {
 };
 
 const showResult = (txn) => {
+    if (announcedRef === txn.reference) return;
+    announcedRef = txn.reference;
     const icon = txn.status === 'success' ? 'success' : (txn.status === 'fail' ? 'error' : 'info');
     Swal.fire({ title: txn.status === 'success' ? 'Success' : 'Update', text: txn.message, icon });
 };
 
-onMounted(() => {
-    const txn = props.transaction;
+// Poll the lightweight JSON endpoint (not a full Inertia reload) until the
+// transaction reaches a terminal state, then sync the page props once.
+const startPolling = (reference) => {
+    if (poll) return;
+    poll = setInterval(async () => {
+        try {
+            const res = await fetch(route('buy-data.status', reference), {
+                headers: { Accept: 'application/json' },
+            });
+            if (!res.ok) return;
+            const txn = await res.json();
+            if (txn.terminal) {
+                stopPolling();
+                showResult(txn);
+                router.reload({ only: ['transaction', 'balance', 'lastPurchase'] });
+            }
+        } catch {
+            // network hiccup — try again on the next tick
+        }
+    }, 1500);
+};
+
+const track = (txn) => {
     if (!txn) return;
     if (txn.terminal) {
+        stopPolling();
         showResult(txn);
     } else {
-        poll = setInterval(() => router.reload({ only: ['transaction'] }), 3000);
+        startPolling(txn.reference);
     }
-});
+};
 
-watch(
-    () => props.transaction,
-    (txn) => {
-        if (txn && txn.terminal) {
-            stopPolling();
-            showResult(txn);
-        }
-    }
-);
+onMounted(() => track(props.transaction));
+watch(() => props.transaction, track);
 
 onBeforeUnmount(stopPolling);
 

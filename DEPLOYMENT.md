@@ -407,7 +407,7 @@ Create `/etc/supervisor/conf.d/verification-worker.conf`:
 ```ini
 [program:verification-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/verification-site/artisan queue:work --queue=default --sleep=3 --tries=3 --max-time=3600
+command=php /var/www/verification-site/artisan queue:work --queue=default --sleep=1 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 stopwaitsecs=3600
