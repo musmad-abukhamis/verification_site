@@ -27,18 +27,19 @@ class DataPurchaseController extends Controller
     {
         $user = Auth::user();
 
+        // Closures keep partial reloads (router.reload({ only: [...] })) from
+        // paying for props they didn't ask for.
         return Inertia::render('BuyData/Index', [
             'networks' => self::NETWORKS,
-            'plans' => DataCache::catalogForRole($user->role),
-            'prefixMap' => DataCache::prefixMap(),
-            'balance' => (float) $user->balance,
-            'lastPurchase' => $this->lastPurchase($user->getKey()),
-            'beneficiaries' => $user->beneficiaries()
+            'plans' => fn () => DataCache::catalogForRole($user->role),
+            'prefixMap' => fn () => DataCache::prefixMap(),
+            'balance' => fn () => (float) $user->fresh()->balance,
+            'lastPurchase' => fn () => $this->lastPurchase($user->getKey()),
+            'beneficiaries' => fn () => $user->beneficiaries()
                 ->latest('updated_at')
                 ->limit(10)
                 ->get(['phone', 'network', 'is_ported', 'label']),
-            // Live status prop — refreshed by router.reload({ only: ['transaction'] }).
-            'transaction' => $this->transactionProp($request->query('ref'), $user->getKey()),
+            'transaction' => fn () => $this->transactionProp($request->query('ref'), $user->getKey()),
         ]);
     }
 
