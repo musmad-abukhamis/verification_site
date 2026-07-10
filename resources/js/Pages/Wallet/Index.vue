@@ -79,10 +79,7 @@ const getTypeLabel = (type) => {
                             <Link :href="route('wallet.fund')">
                                 <PrimaryButton>Fund Wallet</PrimaryButton>
                             </Link>
-                            <Link :href="route('vtu.airtime')">
-                                <PrimaryButton class="bg-green-600 hover:bg-green-700">Buy Airtime</PrimaryButton>
-                            </Link>
-                            <Link :href="route('vtu.data')">
+                            <Link :href="route('buy-data')">
                                 <PrimaryButton class="bg-blue-600 hover:bg-blue-700">Buy Data</PrimaryButton>
                             </Link>
                             <Link :href="route('verification.nin')">

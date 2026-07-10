@@ -29,23 +29,26 @@ class PromoteUserToAdmin extends Command
     {
         $email = $this->argument('email');
 
-        if (!$email) {
+        if (! $email) {
             // If no email provided, promote the first user
             $user = User::first();
-            if (!$user) {
+            if (! $user) {
                 $this->error('No users found in the database.');
+
                 return 1;
             }
         } else {
             $user = User::where('email', $email)->first();
-            if (!$user) {
+            if (! $user) {
                 $this->error("User with email '{$email}' not found.");
+
                 return 1;
             }
         }
 
         if ($user->role === UserRole::ADMIN) {
             $this->warn("User '{$user->name}' ({$user->email}) is already an admin.");
+
             return 0;
         }
 

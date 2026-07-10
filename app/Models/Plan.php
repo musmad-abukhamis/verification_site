@@ -5,35 +5,34 @@ namespace App\Models;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Prisma model: Plan (table "Plan", integer auto-increment id).
+ * A data bundle. Integer PK. Per-vendor external plan codes live in
+ * plan_vendor_mappings, not on this row.
  *
- * Replaces the old DataPlan. Field map: plan_type → type, validity_days →
- * validity, is_active → status ('on'/'off'), agent_price → agentPrice,
- * api_price → apiPrice.
+ * `status` is type-level availability (a whole data type can be switched off);
+ * `plan_status` is this plan's own visibility.
  */
 class Plan extends Model
 {
-    protected $table = 'Plan';
-
-    public $timestamps = false;
-
-    protected $guarded = [];
+    protected $fillable = [
+        'network', 'type', 'name', 'price', 'agent_price', 'api_price',
+        'validity', 'status', 'plan_status',
+    ];
 
     protected function casts(): array
     {
         return [
-            'price' => 'integer',
-            'agentPrice' => 'integer',
-            'apiPrice' => 'integer',
-            'apiKey' => 'integer',
+            'price' => 'float',
+            'agent_price' => 'float',
+            'api_price' => 'float',
         ];
     }
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('status', 'on')->where('planStatus', 'on');
+        return $query->where('status', 'on')->where('plan_status', 'on');
     }
 
     public function scopeByNetwork(Builder $query, string $network): Builder
@@ -46,17 +45,25 @@ class Plan extends Model
         return $query->where('type', $type);
     }
 
-    /**
-     * Resolve the price for a given user based on their role.
-     */
-    public function priceForUser(?User $user): int
+    public function vendorMappings(): HasMany
     {
-        $role = $user?->role;
+        return $this->hasMany(PlanVendorMapping::class, 'plan_id');
+    }
 
+    /**
+     * Authoritative, role-adjusted price. Never trust a client-supplied price.
+     */
+    public function priceForRole(?UserRole $role): float
+    {
         return match ($role) {
-            UserRole::AGENT, UserRole::SMART => (int) ($this->agentPrice ?: $this->price),
-            UserRole::API => (int) ($this->apiPrice ?: $this->price),
-            default => (int) $this->price,
+            UserRole::AGENT, UserRole::SMART => (float) ($this->agent_price ?: $this->price),
+            UserRole::API => (float) ($this->api_price ?: $this->price),
+            default => (float) $this->price,
         };
+    }
+
+    public function priceForUser(?User $user): float
+    {
+        return $this->priceForRole($user?->role);
     }
 }

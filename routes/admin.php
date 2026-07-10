@@ -1,14 +1,14 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\DataManagementController;
-use App\Http\Controllers\Admin\NetworkController;
+use App\Http\Controllers\Admin\DataPlanController;
+use App\Http\Controllers\Admin\DataRoutingController;
+use App\Http\Controllers\Admin\DataTransactionController;
+use App\Http\Controllers\Admin\DataWalletController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\VendorController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\VendorController;
-use App\Http\Controllers\Admin\DataPlanController;
-use App\Http\Controllers\Admin\VendorSelectionController;
 use App\Http\Controllers\Admin\VerificationLogController;
 use App\Http\Controllers\Admin\ServicePriceController;
 use App\Http\Controllers\Admin\NinValidationController;
@@ -66,42 +66,42 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/site-settings', [SiteSettingController::class, 'index'])->name('site-settings.index');
     Route::put('/site-settings', [SiteSettingController::class, 'update'])->name('site-settings.update');
     
-    // Data Management Routes
-    Route::get('/data-management', [DataManagementController::class, 'index'])->name('data-management.index');
-    Route::get('/data-management/plans', [DataManagementController::class, 'plans'])->name('data-management.plans');
-    Route::get('/data-management/networks', [DataManagementController::class, 'networks'])->name('data-management.networks');
-    Route::get('/data-management/transactions', [DataManagementController::class, 'transactions'])->name('data-management.transactions');
-    
-    // Vendor Management Routes
+    // ---- Data module (normalized vendor-routing) ----
+
+    // Vendors CRUD
     Route::get('/vendors', [VendorController::class, 'index'])->name('vendors.index');
-    Route::get('/vendors/create', [VendorController::class, 'create'])->name('vendors.create');
     Route::post('/vendors', [VendorController::class, 'store'])->name('vendors.store');
-    
-    // Vendor API Configuration - MUST be before /vendors/{vendor}
-    Route::get('/vendors/api', [VendorController::class, 'apiConfig'])->name('vendors.api');
-    Route::put('/vendors/api', [VendorController::class, 'updateApiConfig'])->name('vendors.api.update');
-    
-    // Active Vendors Configuration - MUST be before /vendors/{vendor}
-    Route::get('/vendors/active', [VendorController::class, 'activeVendors'])->name('vendors.active');
-    Route::post('/vendors/active', [VendorController::class, 'updateActiveVendors'])->name('vendors.active.update');
-    
-    // Dynamic vendor routes - MUST be after specific routes
-    Route::get('/vendors/{vendor}', [VendorController::class, 'show'])->name('vendors.show');
-    Route::get('/vendors/{vendor}/edit', [VendorController::class, 'edit'])->name('vendors.edit');
     Route::put('/vendors/{vendor}', [VendorController::class, 'update'])->name('vendors.update');
+    Route::patch('/vendors/{vendor}/toggle', [VendorController::class, 'toggle'])->name('vendors.toggle');
     Route::delete('/vendors/{vendor}', [VendorController::class, 'destroy'])->name('vendors.destroy');
-    
-    // Data Plan Management Routes
-    Route::resource('dataplan', DataPlanController::class);
-    
-    // Vendor Selection Routes
-    Route::get('dvnsel', [VendorSelectionController::class, 'index'])->name('vendor.selection');
-    
-    // Network ID Configuration Routes
-    Route::get('/networkid', [NetworkController::class, 'index'])->name('networkid.index');
-    Route::get('/networkid/{network}/edit', [NetworkController::class, 'edit'])->name('networkid.edit');
-    Route::post('/networks', [NetworkController::class, 'store'])->name('networks.store');
-    
+
+    // Plans CRUD (+ per-vendor external plan id mappings, both status toggles)
+    Route::get('/dataplan', [DataPlanController::class, 'index'])->name('dataplan.index');
+    Route::get('/dataplan/create', [DataPlanController::class, 'create'])->name('dataplan.create');
+    Route::post('/dataplan', [DataPlanController::class, 'store'])->name('dataplan.store');
+    Route::get('/dataplan/{dataplan}/edit', [DataPlanController::class, 'edit'])->name('dataplan.edit');
+    Route::put('/dataplan/{dataplan}', [DataPlanController::class, 'update'])->name('dataplan.update');
+    Route::patch('/dataplan/{dataplan}/toggle-status', [DataPlanController::class, 'toggleStatus'])->name('dataplan.toggle-status');
+    Route::patch('/dataplan/{dataplan}/toggle-plan-status', [DataPlanController::class, 'togglePlanStatus'])->name('dataplan.toggle-plan-status');
+    Route::delete('/dataplan/{dataplan}', [DataPlanController::class, 'destroy'])->name('dataplan.destroy');
+
+    // Routing matrix + network codes + settings + prefixes
+    Route::get('/data/routing', [DataRoutingController::class, 'index'])->name('data.routing.index');
+    Route::put('/data/routing', [DataRoutingController::class, 'updateRoutes'])->name('data.routing.update');
+    Route::put('/data/network-codes', [DataRoutingController::class, 'updateNetworkCodes'])->name('data.network-codes.update');
+    Route::put('/data/settings', [DataRoutingController::class, 'updateSettings'])->name('data.settings.update');
+    Route::post('/data/prefixes', [DataRoutingController::class, 'addPrefix'])->name('data.prefixes.add');
+    Route::delete('/data/prefixes', [DataRoutingController::class, 'removePrefix'])->name('data.prefixes.remove');
+
+    // Data transactions (all users) + attempt drill-down
+    Route::get('/data-transactions', [DataTransactionController::class, 'index'])->name('data-transactions.index');
+    Route::get('/data-transactions/{dataTransaction}', [DataTransactionController::class, 'show'])->name('data-transactions.show');
+
+    // Manual wallet credit/debit through the data-module ledger
+    Route::get('/data-wallet', [DataWalletController::class, 'index'])->name('data-wallet.index');
+    Route::post('/data-wallet/{user}/credit', [DataWalletController::class, 'credit'])->name('data-wallet.credit');
+    Route::post('/data-wallet/{user}/debit', [DataWalletController::class, 'debit'])->name('data-wallet.debit');
+
     // Service Prices & Slip Types Management
     Route::get('/service-prices', [ServicePriceController::class, 'index'])->name('service-prices.index');
     Route::put('/service-prices/{servicePrice}', [ServicePriceController::class, 'updateServicePrice'])->name('service-prices.update');

@@ -20,14 +20,14 @@ class VerifyApiConfigSeeder extends Seeder
         $config = VerifyApiConfig::firstOrCreate(['id' => 'API1']);
 
         $defaults = [
-            'regslipprice'      => 50,
+            'regslipprice' => 50,
             'standardslipsprice' => 100,
-            'premiumslipprice'  => 150,
-            'nvsslipprice'      => 200,
-            'advslipprice'      => 250,
-            'ipeprice'          => 50,
-            'validation'        => 50,
-            'status'            => 'Active',
+            'premiumslipprice' => 150,
+            'nvsslipprice' => 200,
+            'advslipprice' => 250,
+            'ipeprice' => 50,
+            'validation' => 50,
+            'status' => 'Active',
         ];
 
         foreach ($defaults as $column => $value) {

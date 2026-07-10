@@ -3,141 +3,88 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\VendorApiRequest;
-use App\Models\VendorApi;
-use App\Models\VendorSelection;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\Admin\VendorRequest;
+use App\Models\Vendor;
+use App\Services\DataCache;
 use Inertia\Inertia;
 
 class VendorController extends Controller
 {
-    /** Networks that carry a vendor selection row. */
-    private array $networks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+    private const DRIVERS = [
+        ['value' => 'token_style_a', 'label' => 'Token style A ({network,phone,bypass,data_plan})'],
+        ['value' => 'token_style_b', 'label' => 'Token style B ({network,mobile_number,plan,Ported_number})'],
+        ['value' => 'oauth', 'label' => 'OAuth (client credentials → token)'],
+    ];
 
-    /** The service-type columns on the vendorselection row. */
-    private array $types = ['SME', 'SME2', 'CORPORATE_GIFTING', 'CORPORATE_GIFTING2', 'DATASHARE'];
+    /** Fields whose values are masked in the UI, per driver. */
+    private const SECRET_FIELDS = ['key', 'client_secret'];
 
-    private function vendorList(): array
-    {
-        return [
-            ['id' => 1, 'name' => 'VTpass'],
-            ['id' => 2, 'name' => 'ClubKonnect'],
-            ['id' => 3, 'name' => 'Monnify'],
-            ['id' => 4, 'name' => 'Flutterwave'],
-            ['id' => 5, 'name' => 'Paystack'],
-        ];
-    }
-
-    /**
-     * Flatten the per-network vendorselection rows into {network,type,vendor_number}.
-     */
-    private function activeVendorMatrix(): array
-    {
-        $matrix = [];
-
-        foreach ($this->networks as $network) {
-            $selection = VendorSelection::firstOrCreate(['id' => $network]);
-
-            foreach ($this->types as $type) {
-                $matrix[] = [
-                    'network' => $network,
-                    'type' => $type,
-                    'vendor_number' => (int) ($selection->{$type} ?? 1),
-                ];
-            }
-        }
-
-        return $matrix;
-    }
-
-    /**
-     * Display a listing of vendors
-     */
     public function index()
     {
-        $vendors = [
-            ['id' => 1, 'name' => 'VTpass', 'status' => 'active'],
-            ['id' => 2, 'name' => 'ClubKonnect', 'status' => 'active'],
-            ['id' => 3, 'name' => 'Monnify', 'status' => 'inactive'],
-            ['id' => 4, 'name' => 'Flutterwave', 'status' => 'inactive'],
-            ['id' => 5, 'name' => 'Paystack', 'status' => 'inactive'],
-        ];
+        $vendors = Vendor::withCount(['routes', 'planMappings'])
+            ->orderBy('priority')
+            ->get()
+            ->map(fn (Vendor $v) => [
+                'id' => $v->id,
+                'name' => $v->name,
+                'base_url' => $v->base_url,
+                'driver' => $v->driver,
+                'is_active' => $v->is_active,
+                'priority' => $v->priority,
+                'routes_count' => $v->routes_count,
+                'plan_mappings_count' => $v->plan_mappings_count,
+            ]);
 
         return Inertia::render('Admin/Vendors/Index', [
             'vendors' => $vendors,
-            'activeVendors' => $this->activeVendorMatrix(),
+            'drivers' => self::DRIVERS,
         ]);
     }
 
-    /**
-     * Show vendor API configuration
-     */
-    public function apiConfig()
+    public function store(VendorRequest $request)
     {
-        $vendorApi = VendorApi::first();
+        $data = $request->validated();
+        $data['credentials'] = array_filter($request->input('credentials', []), fn ($v) => $v !== null && $v !== '');
 
-        return Inertia::render('Admin/Vendors/ApiConfig', [
-            'vendorApi' => $vendorApi ?? new VendorApi(),
-        ]);
+        Vendor::create($data);
+        DataCache::flush();
+
+        return redirect()->route('admin.vendors.index')->with('success', 'Vendor created.');
     }
 
-    /**
-     * Update vendor API configuration
-     */
-    public function updateApiConfig(VendorApiRequest $request)
+    public function update(VendorRequest $request, Vendor $vendor)
     {
-        $vendorApi = VendorApi::first() ?? new VendorApi();
+        $data = $request->validated();
 
-        $vendorApi->fill($request->validated());
-        $vendorApi->save();
-
-        return response()->json([
-            'message' => 'Vendor API configuration updated successfully!',
-            'data' => $vendorApi,
-        ], 200);
-    }
-
-    /**
-     * Show active vendors configuration
-     */
-    public function activeVendors()
-    {
-        return Inertia::render('Admin/Vendors/ActiveVendors', [
-            'activeVendors' => $this->activeVendorMatrix(),
-            'networks' => $this->networks,
-            'types' => $this->types,
-            'vendors' => $this->vendorList(),
-        ]);
-    }
-
-    /**
-     * Update active vendors configuration
-     */
-    public function updateActiveVendors(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'configurations' => 'required|array',
-            'configurations.*.network' => 'required|string',
-            'configurations.*.type' => 'required|string',
-            'configurations.*.vendor_number' => 'required|integer|min:1|max:5',
-        ]);
-
-        if ($validator->fails()) {
-            return back()->withErrors($validator);
-        }
-
-        foreach ($request->configurations as $config) {
-            $type = strtoupper(str_replace(' ', '_', $config['type']));
-
-            if (! in_array($type, $this->types, true)) {
-                continue;
+        // Merge credentials: only overwrite fields the admin actually typed, so
+        // masked secrets left untouched keep their stored value.
+        $existing = (array) $vendor->credentials;
+        foreach ($request->input('credentials', []) as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $existing[$key] = $value;
             }
-
-            $selection = VendorSelection::firstOrCreate(['id' => strtoupper($config['network'])]);
-            $selection->update([$type => (string) $config['vendor_number']]);
         }
+        $data['credentials'] = $existing;
 
-        return back()->with('success', 'Active vendors configuration updated successfully.');
+        $vendor->update($data);
+        DataCache::flush();
+
+        return redirect()->route('admin.vendors.index')->with('success', 'Vendor updated.');
+    }
+
+    public function toggle(Vendor $vendor)
+    {
+        $vendor->update(['is_active' => ! $vendor->is_active]);
+        DataCache::flush();
+
+        return back()->with('success', 'Vendor '.($vendor->is_active ? 'activated' : 'deactivated').'.');
+    }
+
+    public function destroy(Vendor $vendor)
+    {
+        $vendor->delete(); // cascades mappings/routes
+        DataCache::flush();
+
+        return redirect()->route('admin.vendors.index')->with('success', 'Vendor deleted.');
     }
 }

@@ -18,8 +18,7 @@ class VerificationResult
         public ?string $errorCode = null,
         public int $httpStatus = 200,
         public ?array $raw = null,
-    ) {
-    }
+    ) {}
 
     public static function success(array $data, ?array $raw = null): self
     {

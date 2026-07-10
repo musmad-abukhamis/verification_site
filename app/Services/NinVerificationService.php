@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 class NinVerificationService
 {
     protected $baseUrl;
+
     protected $apiKey;
 
     public function __construct()
@@ -23,11 +24,11 @@ class NinVerificationService
     {
         try {
             $endpoint = $provider === 'provider1' ? '/nin/verify_1' : '/nin/verify_2';
-            
+
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . $endpoint, [
+            ])->post($this->baseUrl.$endpoint, [
                 'idType' => $data['idType'],
                 'idValue' => $data['idValue'],
                 'slipType' => $data['slipType'],
@@ -43,14 +44,15 @@ class NinVerificationService
             return [
                 'success' => false,
                 'message' => $response->json('message') ?? 'Verification failed',
-                'reference' => 'Verify_' . now()->timestamp,
+                'reference' => 'Verify_'.now()->timestamp,
             ];
         } catch (\Exception $e) {
-            Log::error('NIN Verification Error: ' . $e->getMessage());
+            Log::error('NIN Verification Error: '.$e->getMessage());
+
             return [
                 'success' => false,
                 'message' => 'Network error occurred',
-                'reference' => 'Verify_' . now()->timestamp,
+                'reference' => 'Verify_'.now()->timestamp,
             ];
         }
     }
@@ -62,9 +64,9 @@ class NinVerificationService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/nin/demo', [
+            ])->post($this->baseUrl.'/nin/demo', [
                 'firstName' => $data['firstName'],
                 'lastName' => $data['lastName'],
                 'gender' => $data['gender'],
@@ -84,7 +86,8 @@ class NinVerificationService
                 'message' => $response->json('message') ?? 'Demo verification failed',
             ];
         } catch (\Exception $e) {
-            Log::error('NIN Demo Verification Error: ' . $e->getMessage());
+            Log::error('NIN Demo Verification Error: '.$e->getMessage());
+
             return [
                 'success' => false,
                 'message' => 'Network error occurred',
@@ -99,9 +102,9 @@ class NinVerificationService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/nin/phone', [
+            ])->post($this->baseUrl.'/nin/phone', [
                 'value' => $data['value'],
                 'ref' => $data['ref'] ?? null,
             ]);
@@ -118,7 +121,8 @@ class NinVerificationService
                 'message' => $response->json('message') ?? 'Phone verification failed',
             ];
         } catch (\Exception $e) {
-            Log::error('NIN Phone Verification Error: ' . $e->getMessage());
+            Log::error('NIN Phone Verification Error: '.$e->getMessage());
+
             return [
                 'success' => false,
                 'message' => 'Network error occurred',
@@ -144,9 +148,9 @@ class NinVerificationService
             }
 
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . $endpoint, $payload);
+            ])->post($this->baseUrl.$endpoint, $payload);
 
             if ($response->successful()) {
                 return [
@@ -160,7 +164,8 @@ class NinVerificationService
                 'message' => $response->json('message') ?? 'IPE submission failed',
             ];
         } catch (\Exception $e) {
-            Log::error('IPE Submission Error: ' . $e->getMessage());
+            Log::error('IPE Submission Error: '.$e->getMessage());
+
             return [
                 'success' => false,
                 'message' => 'Network error occurred',
@@ -175,9 +180,9 @@ class NinVerificationService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->get($this->baseUrl . '/nin/ipe/arewa/status', [
+            ])->get($this->baseUrl.'/nin/ipe/arewa/status', [
                 'tracking_id' => $trackingId,
             ]);
 
@@ -193,7 +198,8 @@ class NinVerificationService
                 'message' => $response->json('message') ?? 'Status check failed',
             ];
         } catch (\Exception $e) {
-            Log::error('IPE Status Check Error: ' . $e->getMessage());
+            Log::error('IPE Status Check Error: '.$e->getMessage());
+
             return [
                 'success' => false,
                 'message' => 'Network error occurred',

@@ -21,9 +21,9 @@ class ArewaSmartProvider extends PremblyProvider
     public function verifyByNin(string $nin): VerificationResult
     {
         return $this->attempt('nin', function () use ($nin) {
-            $response = $this->http()->post($this->baseUrl() . '/api/v1/nin/verify_2', [
-                'idType'   => 'nin',
-                'idValue'  => $nin,
+            $response = $this->http()->post($this->baseUrl().'/api/v1/nin/verify_2', [
+                'idType' => 'nin',
+                'idValue' => $nin,
                 'slipType' => 'standard',
             ]);
 

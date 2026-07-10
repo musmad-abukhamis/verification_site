@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DataTransaction;
 use App\Models\NinDetail;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -78,13 +78,17 @@ class ReportController extends Controller
         [$from, $to, $preset] = $this->resolveRange($request);
         $userId = $request->input('userId', 'all');
 
-        $query = Transaction::where('type', 'data');
-        $this->applyUser($query, $userId);
-        $this->applyRange($query, $from, $to);
+        $query = DataTransaction::query();
+        if ($userId !== 'all' && $userId !== '') {
+            $query->where('user_id', $userId);
+        }
+        if ($from && $to) {
+            $query->whereBetween('created_at', [$from, $to]);
+        }
 
-        $transactions = $query->orderBy('createdAt')->get();
+        $transactions = $query->orderBy('created_at')->get();
 
-        $isSuccess = fn (Transaction $t) => strtolower((string) $t->status) === 'success';
+        $isSuccess = fn (DataTransaction $t) => strtolower((string) $t->status) === 'success';
 
         $networkStats = [];
         foreach ($transactions as $t) {
@@ -94,7 +98,7 @@ class ReportController extends Controller
             if ($isSuccess($t)) {
                 $networkStats[$key]['success']++;
                 $networkStats[$key]['amount'] += (float) $t->price;
-                $networkStats[$key]['dataGB'] += $this->parseDataMB($t->name) / 1000;
+                $networkStats[$key]['dataGB'] += $this->parseDataMB($t->plan_name) / 1000;
             }
         }
         foreach ($networkStats as &$ns) {
@@ -102,11 +106,11 @@ class ReportController extends Controller
         }
         unset($ns);
 
-        $daily = $this->dailyTrend($transactions, $isSuccess, fn (Transaction $t) => $this->parseDataMB($t->name) / 1000);
+        $daily = $this->dailyTrend($transactions, $isSuccess, fn (DataTransaction $t) => $this->parseDataMB($t->plan_name) / 1000);
 
         $successful = $transactions->filter($isSuccess);
         $revenue = (float) $successful->sum('price');
-        $dataGB = round($successful->sum(fn (Transaction $t) => $this->parseDataMB($t->name)) / 1000, 2);
+        $dataGB = round($successful->sum(fn (DataTransaction $t) => $this->parseDataMB($t->plan_name)) / 1000, 2);
 
         return Inertia::render('Admin/Reports/DataStats', [
             'filters' => ['preset' => $preset, 'from' => $from?->toDateString(), 'to' => $to?->toDateString(), 'userId' => (string) $userId],
@@ -257,7 +261,8 @@ class ReportController extends Controller
     {
         $daily = [];
         foreach ($records as $r) {
-            $date = $r->createdAt?->toDateString();
+            // NinDetail uses `createdAt`; DataTransaction uses `created_at`.
+            $date = ($r->created_at ?? $r->createdAt)?->toDateString();
             if (! $date) {
                 continue;
             }
