@@ -33,7 +33,7 @@ abstract class AbstractNinProvider implements NinProvider
     public function isActive(): bool
     {
         return (bool) $this->config('active', false)
-            && !empty($this->config('base_url'));
+            && ! empty($this->config('base_url'));
     }
 
     public function supportedMethods(): array
@@ -64,8 +64,8 @@ abstract class AbstractNinProvider implements NinProvider
         return Http::timeout(30)
             ->acceptJson()
             ->withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey(),
-                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer '.$this->apiKey(),
+                'Content-Type' => 'application/json',
             ]);
     }
 
@@ -73,11 +73,11 @@ abstract class AbstractNinProvider implements NinProvider
      * Execute a request callback and translate transport-level failures
      * (timeouts, DNS, connection refused) into a normalized result.
      *
-     * @param callable():VerificationResult $callback
+     * @param  callable():VerificationResult  $callback
      */
     protected function attempt(string $method, callable $callback): VerificationResult
     {
-        if (!$this->isActive()) {
+        if (! $this->isActive()) {
             return VerificationResult::failure(
                 "The {$this->label()} provider is not configured.",
                 'provider_unavailable',
@@ -85,7 +85,7 @@ abstract class AbstractNinProvider implements NinProvider
             );
         }
 
-        if (!in_array($method, $this->supportedMethods(), true)) {
+        if (! in_array($method, $this->supportedMethods(), true)) {
             return VerificationResult::failure(
                 "{$this->label()} does not support verification by {$method}.",
                 'method_not_supported',
@@ -96,14 +96,16 @@ abstract class AbstractNinProvider implements NinProvider
         try {
             return $callback();
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            Log::warning("[NIN][{$this->key()}] connection/timeout: " . $e->getMessage());
+            Log::warning("[NIN][{$this->key()}] connection/timeout: ".$e->getMessage());
+
             return VerificationResult::failure(
                 'The verification provider did not respond in time. Please try again.',
                 'timeout',
                 504,
             );
         } catch (\Throwable $e) {
-            Log::error("[NIN][{$this->key()}] unexpected error: " . $e->getMessage());
+            Log::error("[NIN][{$this->key()}] unexpected error: ".$e->getMessage());
+
             return VerificationResult::failure(
                 'An unexpected error occurred while contacting the provider.',
                 'provider_error',

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DataTransaction;
 use App\Models\NinDetail;
-use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,7 +28,7 @@ class ReportController extends Controller
      | ====================================================================== */
     public function dataTransactions(Request $request)
     {
-        $base = Transaction::where('userId', Auth::id())->where('type', 'data');
+        $base = DataTransaction::where('user_id', Auth::id());
 
         $query = clone $base;
 
@@ -36,7 +36,7 @@ class ReportController extends Controller
             $query->where(function (Builder $q) use ($search) {
                 $q->where('id', 'like', "%{$search}%")
                     ->orWhere('network', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
+                    ->orWhere('plan_name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('status', 'like', "%{$search}%");
             });
@@ -51,19 +51,19 @@ class ReportController extends Controller
         }
 
         $transactions = $query
-            ->orderByDesc('createdAt')
+            ->orderByDesc('created_at')
             ->paginate(15)
-            ->through(fn (Transaction $t) => [
+            ->through(fn (DataTransaction $t) => [
                 'id' => $t->id,
                 'network' => $t->network,
-                'name' => $t->name,
+                'name' => $t->plan_name,
                 'price' => (float) $t->price,
                 'type' => $t->type,
                 'phone' => $t->phone,
                 'old_balance' => (float) $t->oldbal,
                 'new_balance' => (float) $t->newbal,
                 'status' => $t->status,
-                'date' => $t->createdAt?->format('M d, Y H:i'),
+                'date' => $t->created_at?->format('M d, Y H:i'),
             ])
             ->withQueryString();
 
@@ -137,13 +137,12 @@ class ReportController extends Controller
     {
         [$from, $to, $preset] = $this->resolveRange($request);
 
-        $transactions = Transaction::where('userId', Auth::id())
-            ->where('type', 'data')
-            ->whereBetween('createdAt', [$from, $to])
-            ->orderBy('createdAt')
+        $transactions = DataTransaction::where('user_id', Auth::id())
+            ->whereBetween('created_at', [$from, $to])
+            ->orderBy('created_at')
             ->get();
 
-        $isSuccess = fn (Transaction $t) => strtolower((string) $t->status) === 'success';
+        $isSuccess = fn (DataTransaction $t) => strtolower((string) $t->status) === 'success';
 
         // Network breakdown
         $networkStats = [];
@@ -154,7 +153,7 @@ class ReportController extends Controller
             if ($isSuccess($t)) {
                 $networkStats[$key]['success']++;
                 $networkStats[$key]['amount'] += (float) $t->price;
-                $networkStats[$key]['dataGB'] += $this->parseDataMB($t->name) / 1000;
+                $networkStats[$key]['dataGB'] += $this->parseDataMB($t->plan_name) / 1000;
             }
         }
         foreach ($networkStats as &$ns) {
@@ -163,11 +162,11 @@ class ReportController extends Controller
         unset($ns);
 
         // Daily trend
-        $daily = $this->dailyTrend($transactions, $isSuccess, fn (Transaction $t) => $this->parseDataMB($t->name) / 1000);
+        $daily = $this->dailyTrend($transactions, $isSuccess, fn (DataTransaction $t) => $this->parseDataMB($t->plan_name) / 1000);
 
         $successful = $transactions->filter($isSuccess);
         $revenue = (float) $successful->sum('price');
-        $dataGB = round($successful->sum(fn (Transaction $t) => $this->parseDataMB($t->name)) / 1000, 2);
+        $dataGB = round($successful->sum(fn (DataTransaction $t) => $this->parseDataMB($t->plan_name)) / 1000, 2);
 
         return Inertia::render('Reports/DataStats', [
             'filters' => ['preset' => $preset, 'from' => $from->toDateString(), 'to' => $to->toDateString()],
@@ -286,7 +285,9 @@ class ReportController extends Controller
     {
         $daily = [];
         foreach ($records as $r) {
-            $date = $r->createdAt?->toDateString();
+            // NinDetail uses the Prisma `createdAt` column; DataTransaction uses
+            // the standard `created_at`.
+            $date = ($r->created_at ?? $r->createdAt)?->toDateString();
             if (! $date) {
                 continue;
             }

@@ -35,14 +35,6 @@ return [
         ],
     ],
 
-    // VTU Service Configuration
-    'vtu' => [
-        'provider' => env('VTU_PROVIDER', 'vtpass'),
-        'base_url' => env('VTU_BASE_URL', 'https://sandbox.vtpass.com/api'),
-        'api_key' => env('VTU_API_KEY'),
-        'secret_key' => env('VTU_SECRET_KEY'),
-    ],
-
     // NIN Verification Configuration
     'nin' => [
         'provider' => env('NIN_PROVIDER', 'prembly'),
@@ -170,19 +162,12 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
-    // Data vending vendor #1 (bozavtu). Seeded into the `vendorapi` table by
-    // VendorApiSeeder; the key stays out of source control.
+    // Live data vendor (bozavtu). Seeded into the normalized `vendors` table by
+    // VendorSeeder; the key stays out of source control. Additional vendors are
+    // managed entirely from the admin Vendors screen (Phase 2).
     'data_vendors' => [
         'vendor1_url' => env('DATA_VENDOR1_URL', 'https://vtu.bozavtu.com/api/data'),
         'vendor1_key' => env('DATA_VENDOR1_KEY'),
-    ],
-
-    // Quicklysim — data vendor #5. Access token is fetched per-request via
-    // HTTP Basic auth (see DataPurchaseController::getQuicklysimToken).
-    'quicklysim' => [
-        'base_url' => env('QUICKLYSIM_BASE_URL', 'https://quicklysim.com/api'),
-        'username' => env('QUICKLYSIM_USERNAME'),
-        'password' => env('QUICKLYSIM_PASSWORD'),
     ],
 
     // Billstack — reserved virtual-account funding (PALMPAY) with BVN KYC.

@@ -100,6 +100,21 @@ class User extends Authenticatable implements MustVerifyEmailContract
         return $this->hasMany(WalletHistory::class, 'userId');
     }
 
+    public function dataTransactions(): HasMany
+    {
+        return $this->hasMany(DataTransaction::class, 'user_id');
+    }
+
+    public function walletEntries(): HasMany
+    {
+        return $this->hasMany(WalletEntry::class, 'user_id');
+    }
+
+    public function beneficiaries(): HasMany
+    {
+        return $this->hasMany(Beneficiary::class, 'user_id');
+    }
+
     public function kyc(): HasMany
     {
         return $this->hasMany(AccountKyc::class, 'userId');

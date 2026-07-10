@@ -1,13 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Admin\DataPlanController;
-use App\Http\Controllers\Admin\DataPlanApiController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataPurchaseController;
+use App\Http\Controllers\DataTransactionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\VtuController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\NIN\VerifyController as NinVerifyController;
@@ -50,21 +48,12 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // VTU Routes
-    Route::get('/vtu/airtime', [VtuController::class, 'airtime'])->name('vtu.airtime');
-    Route::post('/vtu/airtime', [VtuController::class, 'purchaseAirtime'])->name('vtu.airtime.purchase');
-    Route::get('/vtu/data', [VtuController::class, 'data'])->name('vtu.data');
-    Route::post('/vtu/data', [VtuController::class, 'purchaseData'])->name('vtu.data.purchase');
-    Route::post('/vtu/verify-phone', [VtuController::class, 'verifyPhone'])->name('vtu.verify-phone');
-    
-    // Buy Data Routes
+    // Buy Data (normalized vendor-routing module with queued fulfilment)
     Route::get('/buy-data', [DataPurchaseController::class, 'index'])->name('buy-data');
-    Route::post('/buy-data', [DataPurchaseController::class, 'buyData'])->name('buy-data.purchase');
-    
-    // API Routes for Buy Data
-    Route::get('/api/plans/{network}', [VtuController::class, 'getDataTypes']);
-    Route::get('/api/plans/{network}/{type}', [VtuController::class, 'getDataPlans']);
-    
+    Route::post('/buy-data', [DataPurchaseController::class, 'store'])->name('buy-data.store');
+    Route::get('/buy-data/{reference}/status', [DataPurchaseController::class, 'status'])->name('buy-data.status');
+    Route::get('/data-transactions', [DataTransactionController::class, 'index'])->name('data-transactions.index');
+
     // Verification Routes
     Route::get('/verification/nin', [VerificationController::class, 'nin'])->name('verification.nin');
     Route::post('/verification/nin', [VerificationController::class, 'verifyNin'])->name('verification.nin.verify');
@@ -159,16 +148,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/nin-bvn-stats', [ReportController::class, 'verifyStats'])->name('reports.verify-stats');
 });
 
-// Admin routes moved to admin.php
-
-Route::prefix('api/admin')->middleware(['auth', 'admin'])->group(function () {
-    Route::get('dataplan', [DataPlanApiController::class, 'getAll']);
-    Route::get('dataplan/{id}', [DataPlanApiController::class, 'getById']);
-    
-    // Vendor Selection API Routes
-    Route::get('vendor-selection/{networkId}', [App\Http\Controllers\Admin\VendorSelectionController::class, 'getSelection']);
-    Route::post('vendor-selection', [App\Http\Controllers\Admin\VendorSelectionController::class, 'saveSelection']);
-});
+// Admin routes moved to admin.php.
+// The old JSON data-plan / vendor-selection admin endpoints were removed with
+// the denormalized vendor schema; the normalized admin surface is rebuilt in
+// Phase 2 (see plan).
 
 require __DIR__.'/admin.php';
 require __DIR__.'/auth.php';

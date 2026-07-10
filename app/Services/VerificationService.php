@@ -11,8 +11,11 @@ use Illuminate\Support\Facades\Log;
 class VerificationService
 {
     protected string $ninBaseUrl;
+
     protected string $ninApiKey;
+
     protected string $bvnBaseUrl;
+
     protected string $bvnApiKey;
 
     public function __construct()

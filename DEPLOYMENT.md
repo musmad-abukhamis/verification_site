@@ -19,7 +19,7 @@ with HTTPS, a queue worker, the scheduler, and optional Inertia SSR.
 | Node.js          | **20 LTS** (Vite 6 needs Node 18+) — only for building front-end assets |
 | Database         | **PostgreSQL 14+** (`DB_CONNECTION=pgsql`) |
 | Web server       | Nginx (reverse proxy to PHP-FPM) |
-| Process manager  | Supervisor (queue worker + optional SSR) |
+| Process manager  | Supervisor — queue worker (**required**: data purchases are fulfilled by queued jobs) + optional SSR |
 | Queue / Cache / Session | **database**-backed by default (no Redis required) |
 | Outbound HTTPS   | App calls NIN / BVN / VTU / Paystack / Billstack APIs |
 | Inbound webhook  | `POST /api/webhooks/billstack` must be publicly reachable over HTTPS |
@@ -385,10 +385,18 @@ then `php artisan config:cache && sudo systemctl reload nginx`.
 
 ---
 
-## 15. Queue worker (Supervisor)
+## 15. Queue worker (Supervisor) — **required for data purchases**
 
-The app uses the **database** queue. Run a persistent worker so queued work
-(e.g. mail, post-funding processing) is handled.
+The app uses the **database** queue, and the buy-data (VTU) module depends on it:
+`DataPurchaseService` debits the user's wallet and dispatches a `ProcessDataPurchase`
+job — **only that job calls the vendor API**. With no worker running, customers are
+charged and their orders sit at `pending` forever; nothing ever reaches the vendor.
+This is not optional background polish — treat a dead worker as a full outage of
+data vending.
+
+> For **local development**, `composer run dev` already starts a worker
+> (`queue:listen`) and the scheduler alongside the server and Vite. Don't test
+> data purchases with only `php artisan serve` + `npm run dev`.
 
 ```bash
 sudo apt install -y supervisor
@@ -424,10 +432,13 @@ sudo supervisorctl status
 
 ---
 
-## 16. Scheduler (cron)
+## 16. Scheduler (cron) — **required for data-purchase reconciliation**
 
-Run Laravel's scheduler every minute (harmless even if no tasks are defined yet,
-and ready for any you add later):
+Run Laravel's scheduler every minute. The buy-data module relies on it:
+`ReconcilePendingTransactions` re-queries the vendor for any purchase left in
+`processing` (e.g. after a timeout or ambiguous response) and either confirms it
+as `success` or refunds the wallet. Without the scheduler, those transactions —
+and the customer's money — stay stuck until someone intervenes manually.
 
 ```bash
 crontab -e -u deploy
@@ -587,6 +598,8 @@ chmod +x deploy.sh
 | **DB connection refused** | `php8.3-pgsql` missing, wrong `DB_*` creds, or Postgres not running. Test with the `psql "postgresql://…"` string from step 6. |
 | **Config changes ignored** | A cached config is stale: `php artisan optimize:clear` then re-cache. |
 | **Queued jobs never run** | Supervisor worker down: `sudo supervisorctl status`; after deploys run `php artisan queue:restart`. |
+| **Data purchases stuck at `pending`** (wallet debited, nothing sent) | The queue worker isn't running — see step 15. Check `SELECT COUNT(*) FROM jobs;` for a backlog. Once the worker starts, queued purchases are sent to the vendor **live**, so flush stale test jobs first if they shouldn't go through. |
+| **Data purchases stuck at `processing`** | The scheduler isn't running, so `ReconcilePendingTransactions` never requeries/refunds — see step 16. |
 | **Webhook returns 404** | Wrong URL — it's `/api/webhooks/billstack`. 419/422/405 means it's reachable (good); 404 means routing/Nginx issue. |
 | **SSR errors / hydration warnings** | Stop relying on SSR: don't run the `verification-ssr` program (the app falls back to client rendering). If using SSR, rebuild and restart it after each deploy. |
 

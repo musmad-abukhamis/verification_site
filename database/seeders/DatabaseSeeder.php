@@ -22,10 +22,11 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
+            VendorSeeder::class,
+            NetworkPrefixSeeder::class,
             PlanSeeder::class,
-            NetworkSeeder::class,
-            VendorSelectionSeeder::class,
-            VendorApiSeeder::class,
+            DataRoutingSeeder::class,
+            DataSettingSeeder::class,
             VerifyApiConfigSeeder::class,
         ]);
     }

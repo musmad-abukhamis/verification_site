@@ -19,11 +19,11 @@ class NinProviderManager
 {
     /** @var array<string, class-string<NinProvider>> */
     protected array $registry = [
-        'prembly'    => PremblyProvider::class,
+        'prembly' => PremblyProvider::class,
         'arewasmart' => ArewaSmartProvider::class,
-        'provider3'  => ProviderThreeProvider::class,
-        'provider4'  => ProviderFourProvider::class,
-        'provider5'  => ProviderFiveProvider::class,
+        'provider3' => ProviderThreeProvider::class,
+        'provider4' => ProviderFourProvider::class,
+        'provider5' => ProviderFiveProvider::class,
     ];
 
     /** @var array<string, NinProvider> */
@@ -36,7 +36,7 @@ class NinProviderManager
 
     public function get(string $key): ?NinProvider
     {
-        if (!$this->has($key)) {
+        if (! $this->has($key)) {
             return null;
         }
 
@@ -79,11 +79,11 @@ class NinProviderManager
             }
 
             return [
-                'key'     => $p->key(),
-                'label'   => $p->label(),
-                'active'  => $p->isActive(),
+                'key' => $p->key(),
+                'label' => $p->label(),
+                'active' => $p->isActive(),
                 'methods' => $p->supportedMethods(),
-                'prices'  => $prices,
+                'prices' => $prices,
             ];
         }, $this->active());
     }

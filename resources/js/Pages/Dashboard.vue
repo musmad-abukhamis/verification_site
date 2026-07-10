@@ -144,9 +144,6 @@ const getTypeLabel = (type) => {
                             <Link :href="route('wallet.fund')">
                                 <PrimaryButton>Fund Wallet</PrimaryButton>
                             </Link>
-                            <Link :href="route('vtu.airtime')">
-                                <PrimaryButton class="bg-green-600 hover:bg-green-700">Buy Airtime</PrimaryButton>
-                            </Link>
                             <Link :href="route('buy-data')">
                                 <PrimaryButton class="bg-blue-600 hover:bg-blue-700">Buy Data</PrimaryButton>
                             </Link>
@@ -162,18 +159,6 @@ const getTypeLabel = (type) => {
                     <div class="p-6">
                         <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Our Services</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <!-- Airtime Service -->
-                            <Link :href="route('vtu.airtime')" class="group">
-                                <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">
-                                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-3">
-                                        <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                        </svg>
-                                    </div>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Airtime</span>
-                                </div>
-                            </Link>
-
                             <!-- Data Service -->
                             <Link :href="route('buy-data')" class="group">
                                 <div class="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all">

@@ -72,6 +72,13 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     });
 });
 
+// Data purchases for API-role resellers. Authenticated by the app-managed
+// apitoken string (no Sanctum PAT infra), gated to role = API.
+Route::middleware('api.token')->prefix('v1')->group(function () {
+    Route::post('/data', [\App\Http\Controllers\Api\DataController::class, 'store'])->name('api.data.store');
+    Route::get('/data/{reference}', [\App\Http\Controllers\Api\DataController::class, 'show'])->name('api.data.show');
+});
+
 // Billstack reserved-account funding webhook (signed with x-wiaxy-signature).
 Route::post('/webhooks/billstack', [BillstackWebhookController::class, 'handle'])
     ->name('api.webhooks.billstack');

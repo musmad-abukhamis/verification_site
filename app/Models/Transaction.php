@@ -26,8 +26,11 @@ class Transaction extends Model
 
     // Transaction type constants (kept for call-site compatibility).
     const TYPE_NIN_VERIFICATION = 'nin_verification';
+
     const TYPE_NIN_SLIP_DOWNLOAD = 'nin_slip_download';
+
     const TYPE_NIN_IPE = 'nin_ipe';
+
     const TYPE_NIN_VALIDATION = 'nin_validation';
 
     protected $guarded = [];

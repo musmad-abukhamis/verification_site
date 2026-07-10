@@ -23,9 +23,9 @@ class PremblyProvider extends AbstractNinProvider
     public function verifyByNin(string $nin): VerificationResult
     {
         return $this->attempt('nin', function () use ($nin) {
-            $response = $this->http()->post($this->baseUrl() . '/api/v1/nin/verify_1', [
-                'idType'   => 'nin',
-                'idValue'  => $nin,
+            $response = $this->http()->post($this->baseUrl().'/api/v1/nin/verify_1', [
+                'idType' => 'nin',
+                'idValue' => $nin,
                 'slipType' => 'standard',
             ]);
 
@@ -36,11 +36,11 @@ class PremblyProvider extends AbstractNinProvider
     public function verifyByPhone(string $phone): VerificationResult
     {
         return $this->attempt('phone', function () use ($phone) {
-            $response = $this->http()->post($this->baseUrl() . '/api/v1/nin/phone', [
-                'value'   => $phone,
-                'idType'  => 'phone',
+            $response = $this->http()->post($this->baseUrl().'/api/v1/nin/phone', [
+                'value' => $phone,
+                'idType' => 'phone',
                 'idValue' => $phone,
-                'ref'     => null,
+                'ref' => null,
             ]);
 
             return $this->normalize($response);
@@ -50,13 +50,13 @@ class PremblyProvider extends AbstractNinProvider
     public function verifyByDemographic(array $demographic): VerificationResult
     {
         return $this->attempt('demographic', function () use ($demographic) {
-            $response = $this->http()->post($this->baseUrl() . '/api/v1/nin/demo', [
-                'firstName'   => $demographic['first_name'],
-                'lastName'    => $demographic['last_name'],
-                'gender'      => $demographic['gender'],
+            $response = $this->http()->post($this->baseUrl().'/api/v1/nin/demo', [
+                'firstName' => $demographic['first_name'],
+                'lastName' => $demographic['last_name'],
+                'gender' => $demographic['gender'],
                 // Provider expects dd-mm-yyyy; UI sends YYYY-MM-DD.
                 'dateOfBirth' => $this->toProviderDob($demographic['date_of_birth']),
-                'ref'         => null,
+                'ref' => null,
             ]);
 
             return $this->normalize($response);
@@ -70,7 +70,7 @@ class PremblyProvider extends AbstractNinProvider
     {
         $body = $response->json() ?? [];
 
-        if ($response->successful() && !isset($body['error'])) {
+        if ($response->successful() && ! isset($body['error'])) {
             return VerificationResult::success(array_merge($extra, $body), $body);
         }
 
