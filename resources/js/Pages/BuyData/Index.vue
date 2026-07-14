@@ -164,6 +164,8 @@ const buyAgain = () => {
 
 /* --------------------------------------------------------- status polling   */
 let poll = null;
+let pollingRef = null;
+let failedTicks = 0;
 let announcedRef = null;
 
 const stopPolling = () => {
@@ -171,6 +173,8 @@ const stopPolling = () => {
         clearInterval(poll);
         poll = null;
     }
+    pollingRef = null;
+    failedTicks = 0;
 };
 
 const showResult = (txn) => {
@@ -180,30 +184,45 @@ const showResult = (txn) => {
     Swal.fire({ title: txn.status === 'success' ? 'Success' : 'Update', text: txn.message, icon });
 };
 
+const syncProps = () => router.reload({ only: ['transaction', 'balance', 'lastPurchase'] });
+
 // Poll the lightweight JSON endpoint (not a full Inertia reload) until the
 // transaction reaches a terminal state, then sync the page props once.
 const startPolling = (reference) => {
-    if (poll) return;
+    if (poll && pollingRef === reference) return;
+    stopPolling();
+    pollingRef = reference;
     poll = setInterval(async () => {
         try {
-            const res = await fetch(route('buy-data.status', reference), {
+            // Relative URL (absolute=false) so a mis-detected scheme/host
+            // behind the production proxy can't break the request.
+            const res = await fetch(route('buy-data.status', reference, false), {
                 headers: { Accept: 'application/json' },
+                cache: 'no-store',
             });
-            if (!res.ok) return;
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const txn = await res.json();
+            failedTicks = 0;
             if (txn.terminal) {
                 stopPolling();
                 showResult(txn);
-                router.reload({ only: ['transaction', 'balance', 'lastPurchase'] });
+                syncProps();
             }
         } catch {
-            // network hiccup — try again on the next tick
+            // Transient hiccups just retry; if the JSON endpoint keeps
+            // failing (expired session, proxy quirks), periodically fall
+            // back to an Inertia partial reload — the transaction watcher
+            // below will then announce the terminal state.
+            if (++failedTicks % 4 === 0) syncProps();
         }
     }, 1500);
 };
 
 const track = (txn) => {
-    if (!txn) return;
+    if (!txn) {
+        stopPolling();
+        return;
+    }
     if (txn.terminal) {
         stopPolling();
         showResult(txn);
