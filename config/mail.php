@@ -65,6 +65,14 @@ return [
             'transport' => 'resend',
         ],
 
+        // Brevo transactional email over their HTTP API (App\Mail\BrevoApiTransport,
+        // registered in AppServiceProvider). Set MAIL_MAILER=brevo and BREVO_API_KEY.
+        'brevo' => [
+            'transport' => 'brevo',
+            'key' => env('BREVO_API_KEY'),
+            'endpoint' => env('BREVO_ENDPOINT', 'https://api.brevo.com/v3/smtp/email'),
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
