@@ -36,6 +36,9 @@ class OtpPasswordResetController extends Controller
     /** Wrong guesses allowed before the code is destroyed. */
     private const MAX_ATTEMPTS = 5;
 
+    /** Marks an OTP row as holding a Termii pin_id rather than a local hash. */
+    private const REMOTE_PREFIX = 'termii:';
+
     public function create(): Response
     {
         return Inertia::render('Auth/ResetPasswordOtp', [
@@ -63,24 +66,7 @@ class OtpPasswordResetController extends Controller
         $user = User::findByIdentifier($login);
 
         if ($user && filled($user->phone)) {
-            $code = (string) random_int(100000, 999999);
-
-            // userId is unique on OTP, so this replaces any outstanding code --
-            // requesting a new one invalidates the old, as it should.
-            Otp::updateOrCreate(
-                ['userId' => $user->id],
-                [
-                    'code' => Hash::make($code),
-                    'expiresAt' => Carbon::now()->addMinutes(self::TTL_MINUTES),
-                    'attempts' => 0,
-                ]
-            );
-
-            $termii->send(
-                $user->phone,
-                "Your ".config('app.name')." password reset code is {$code}. "
-                ."It expires in ".self::TTL_MINUTES." minutes. If you did not request this, ignore this message."
-            );
+            $this->issueCode($user, $termii);
         }
 
         // Deliberately the same answer whether or not the account exists: this
@@ -93,9 +79,67 @@ class OtpPasswordResetController extends Controller
     }
 
     /**
+     * Issue a code by whichever Termii product is available.
+     *
+     * The stored OTP row is only written after Termii accepts the message.
+     * Writing first would replace a working code with one the user never
+     * received, locking them out until it expires.
+     *
+     * In "otp" mode the code lives at Termii and we hold its pin_id, marked
+     * with a prefix so reset() knows how to check it. The prefix also keeps
+     * codes issued before a mode switch verifiable.
+     */
+    private function issueCode(User $user, Termii $termii): void
+    {
+        $expiresAt = Carbon::now()->addMinutes(self::TTL_MINUTES);
+
+        $message = 'Your '.config('app.name').' password reset code is :code. '
+            .'It expires in '.self::TTL_MINUTES.' minutes. '
+            .'If you did not request this, ignore this message.';
+
+        if ($termii->usesRemoteOtp()) {
+            $pinId = $termii->sendOtp(
+                $user->phone,
+                $message,
+                length: 6,
+                ttlMinutes: self::TTL_MINUTES,
+                attempts: self::MAX_ATTEMPTS,
+            );
+
+            if (! $pinId) {
+                return;
+            }
+
+            $this->storeCode($user, self::REMOTE_PREFIX.$pinId, $expiresAt);
+
+            return;
+        }
+
+        $code = (string) random_int(100000, 999999);
+
+        if (! $termii->send($user->phone, str_replace(':code', $code, $message))) {
+            return;
+        }
+
+        $this->storeCode($user, Hash::make($code), $expiresAt);
+    }
+
+    /**
+     * userId is unique on OTP, so this replaces any outstanding code --
+     * requesting a new one invalidates the old, as it should.
+     */
+    private function storeCode(User $user, string $value, Carbon $expiresAt): void
+    {
+        Otp::updateOrCreate(
+            ['userId' => $user->id],
+            ['code' => $value, 'expiresAt' => $expiresAt, 'attempts' => 0],
+        );
+    }
+
+    /**
      * Verify the code and set the new password.
      */
-    public function reset(Request $request): RedirectResponse
+    public function reset(Request $request, Termii $termii): RedirectResponse
     {
         $request->validate([
             'login' => 'required|string',
@@ -116,7 +160,7 @@ class OtpPasswordResetController extends Controller
             ]);
         }
 
-        if (! Hash::check($request->input('code'), $otp->code)) {
+        if (! $this->codeMatches($otp, $request->input('code'), $termii)) {
             $otp->increment('attempts');
 
             if ($otp->attempts >= self::MAX_ATTEMPTS) {
@@ -142,6 +186,19 @@ class OtpPasswordResetController extends Controller
 
         return redirect()->route('login')
             ->with('status', 'Your password has been reset. Please sign in.');
+    }
+
+    /**
+     * A locally-issued code is a hash we check ourselves; a Termii-issued one
+     * has to go back to their API.
+     */
+    private function codeMatches(Otp $otp, string $submitted, Termii $termii): bool
+    {
+        if (str_starts_with($otp->code, self::REMOTE_PREFIX)) {
+            return $termii->verifyOtp(substr($otp->code, strlen(self::REMOTE_PREFIX)), $submitted);
+        }
+
+        return Hash::check($submitted, $otp->code);
     }
 
     /**

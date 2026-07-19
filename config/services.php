@@ -191,6 +191,19 @@ return [
         // "dnd" delivers to numbers on Nigeria's do-not-disturb list, which is
         // most of them; "generic" silently fails for those users.
         'channel' => env('TERMII_CHANNEL', 'dnd'),
+
+        // "otp"   -> /api/sms/otp/send, Termii generates and verifies the code
+        // "plain" -> /api/sms/send, we generate the code and verify it locally
+        //
+        // Defaults to otp because plain SMS is not activated on this account:
+        // it answers 400 "Country Inactive. Contact Administrator to activate
+        // country." The OTP product is what nimcweb used and is active.
+        //
+        // "plain" is the better design -- it keeps attempt limits and expiry in
+        // our database instead of depending on Termii's verify endpoint being
+        // reachable at reset time. Switch to it once plain SMS is activated;
+        // no code change required.
+        'mode' => env('TERMII_MODE', 'otp'),
     ],
 
 ];
