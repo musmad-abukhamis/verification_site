@@ -253,10 +253,57 @@ Gotchas the script encodes, worth knowing:
 in the `wallet_entries` ledger; the refunds themselves arrive with
 `wallethistory` (§7 order 3). This import is rows only.
 
-## 9. Open items
+### Result (2026-07-19)
+
+Ran clean: staged 1577, `INSERT 0 1577`, nothing dropped by the conflict clause.
+The target table held **one row before the import** — a test submission made on
+abc.softel.ng, deleted (with `returning`, output in the session log) after
+confirming its origin. Expect this on later tables too: **the target is no longer
+virgin**, so "rollback is just a delete" stops being true.
+
+## 9. Generic table copy — `scripts/migrate-table.sh`
+
+BvnModification needed its own script only because 400 MB of bytea has to spool
+to disk. Everything else is small enough for a direct pipe, so the remaining
+tables share one script:
+
+```bash
+cd /var/www/verification_site && git pull
+export SRC_PW='<from nimcweb/.env DATABASE_URL>'
+
+bash scripts/migrate-table.sh bvnRetrieval check
+bash scripts/migrate-table.sh bvnRetrieval copy
+bash scripts/migrate-table.sh bvnRetrieval verify
+bash scripts/migrate-table.sh bvnRetrieval cleanup
+```
+
+Table names are **case-sensitive**: `bvnRetrieval`, `NINDetails`, `Transactions`,
+`wallethistory`, `Pin`.
+
+It computes the column list as the **intersection** of source and target columns
+in source order, so `remember_token` (target-only) and any source-only column are
+skipped instead of breaking the copy. `check` prints both sets — **read that
+output**; a source-only column means data is being silently discarded, which is
+fine for `remember_token` and not fine in general.
+
+`check` also probes `userId` against **target** `users` when the table has that
+column, and `copy` re-checks it on the staged rows and aborts before inserting.
+
+### bvnRetrieval — measured 2026-07-19
+
+452 rows, 168 kB, no bytea, 113 distinct users, **0 orphan userIds**, longest
+value 25 chars (all target columns are `varchar(255)`), no embedded newlines.
+Status mix: completed 415, rejected 26, pending 9, processing 2. Range
+2026-06-15 → same-day, so this table is **live and recent** — expect drift and
+plan a delta re-run at cutover.
+
+## 10. Open items
 
 - [x] Run the users copy — done, confirmed on the VPS 2026-07-19.
-- [ ] Run the BvnModification copy (§8); confirm 1577.
+- [x] Run the BvnModification copy (§8) — done 2026-07-19, 1577 inserted.
+- [ ] Confirm BvnModification image bytes (~383 MB, 1 empty) via
+      `migrate-bvnmod.sh verify` — count is proven, byte integrity is not.
+- [ ] Delete `/root/bvnmod.csv` (766 MB) once verified.
 - [ ] Email `yauyusufsaeed@gmail.com` — their nimcweb password won't work on
       abc.softel.ng; they keep the target account (`zaks`).
 - [ ] **`admin@example.com` on live production holds a balance of ₦975,200.**
