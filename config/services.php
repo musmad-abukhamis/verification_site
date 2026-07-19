@@ -178,4 +178,19 @@ return [
         'base_url' => env('BILLSTACK_BASE_URL', 'https://api.billstack.co/v2'),
     ],
 
+    // Termii — SMS, used to deliver password-reset codes. Most accounts came
+    // from nimcweb and cannot receive the emailed reset link (they registered
+    // with addresses they no longer read), but all of them have a phone.
+    //
+    // nimcweb hardcoded this key in lib/pin/sendOtp.ts; it must be rotated and
+    // kept in .env here.
+    'termii' => [
+        'key' => env('TERMII_API_KEY'),
+        'sender' => env('TERMII_SENDER_ID', 'SOFT OTP'),
+        'base_url' => env('TERMII_BASE_URL', 'https://v3.api.termii.com'),
+        // "dnd" delivers to numbers on Nigeria's do-not-disturb list, which is
+        // most of them; "generic" silently fails for those users.
+        'channel' => env('TERMII_CHANNEL', 'dnd'),
+    ],
+
 ];
