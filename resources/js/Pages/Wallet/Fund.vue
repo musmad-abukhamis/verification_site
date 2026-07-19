@@ -20,11 +20,10 @@ const copied = ref(null);
 
 const authUser = computed(() => page.props.auth?.user ?? {});
 
+// BVN is the only input PayVessel needs: the account name comes from the
+// user's registered name, and both banks are issued in one request.
 const form = useForm({
-    firstName: '',
-    lastName: '',
     bvn: '',
-    bank: 'PALMPAY',
 });
 
 const formatCurrency = (amount) =>
@@ -137,25 +136,13 @@ const copy = async (value) => {
 
                 <form @submit.prevent="submit" class="mt-6 space-y-4">
                     <div>
-                        <InputLabel for="firstName" value="First Name" />
-                        <TextInput id="firstName" v-model="form.firstName" type="text" class="mt-1 block w-full" placeholder="Enter your first name" />
-                        <InputError class="mt-2" :message="form.errors.firstName" />
-                    </div>
-
-                    <div>
-                        <InputLabel for="lastName" value="Last Name" />
-                        <TextInput id="lastName" v-model="form.lastName" type="text" class="mt-1 block w-full" placeholder="Enter your last name" />
-                        <InputError class="mt-2" :message="form.errors.lastName" />
-                    </div>
-
-                    <div>
                         <InputLabel for="bvn" value="BVN (Bank Verification Number)" />
-                        <TextInput id="bvn" v-model="form.bvn" type="text" inputmode="numeric" maxlength="11" class="mt-1 block w-full" placeholder="Enter your 11-digit BVN" />
+                        <TextInput id="bvn" v-model="form.bvn" type="text" inputmode="numeric" maxlength="11" class="mt-1 block w-full" placeholder="Enter your 11-digit BVN" autofocus />
                         <InputError class="mt-2" :message="form.errors.bvn" />
                     </div>
 
                     <p class="text-xs text-gray-500">
-                        Your account will be created and KYC automatically processed using your BVN.
+                        Your accounts will be created in your registered name using your BVN.
                     </p>
 
                     <div class="flex justify-end gap-2 pt-2">
