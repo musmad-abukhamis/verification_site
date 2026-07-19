@@ -19,6 +19,21 @@
 # column are skipped rather than breaking the copy. Anything skipped is printed
 # by 'check' -- read that output, do not assume it is harmless.
 #
+# Two optional env vars, for tables whose primary key is a SERIAL rather than a
+# cuid (Record). Carrying integer ids across would collide with ids the target's
+# own sequence already issued, and 'on conflict do nothing' would silently drop
+# those rows:
+#
+#   EXCLUDE_COLS='id'          drop these columns; the target sequence assigns
+#   CONFLICT='(ticket_id)'     conflict target -- the real natural key
+#
+#   EXCLUDE_COLS='id' CONFLICT='(ticket_id)' bash scripts/migrate-table.sh Record copy
+#
+# Only safe when nothing references the discarded ids. Verify with:
+#   select count(*) from information_schema.constraint_column_usage cu
+#     join information_schema.table_constraints tc using (constraint_name)
+#    where cu.table_name='<T>' and tc.constraint_type='FOREIGN KEY';
+#
 # Safe to re-run: insert is "on conflict do nothing", so a second pass after
 # cutover imports only the delta.
 #
@@ -65,8 +80,15 @@ build_cols() {
   ONLY_SRC=$(comm -23 <(echo "$s" | sort) <(echo "$t" | sort) | paste -sd, -)
   ONLY_TGT=$(comm -13 <(echo "$s" | sort) <(echo "$t" | sort) | paste -sd, -)
   # keep source order, quote every identifier for camelCase
-  COLS=$(echo "$s" | grep -Fxf <(echo "$t") | sed 's/.*/"&"/' | paste -sd, -)
-  NCOLS=$(echo "$s" | grep -cFxf <(echo "$t"))
+  local keep
+  keep=$(echo "$s" | grep -Fxf <(echo "$t"))
+  if [ -n "${EXCLUDE_COLS:-}" ]; then
+    # comma-separated -> one per line, then drop them
+    keep=$(echo "$keep" | grep -Fxv -f <(echo "$EXCLUDE_COLS" | tr ',' '\n'))
+    EXCLUDED="$EXCLUDE_COLS"
+  fi
+  COLS=$(echo "$keep" | sed 's/.*/"&"/' | paste -sd, -)
+  NCOLS=$(echo "$keep" | grep -c .)
 }
 
 case "$ACTION" in
@@ -80,6 +102,8 @@ check)
   echo "columns     : $NCOLS copied"
   [ -n "$ONLY_SRC" ] && echo "  !! source-only, WILL BE DROPPED: $ONLY_SRC"
   [ -n "$ONLY_TGT" ] && echo "  -- target-only, left at default: $ONLY_TGT"
+  [ -n "${EXCLUDED:-}" ] && echo "  -- excluded by request: $EXCLUDED (target assigns)"
+  echo "conflict    : ${CONFLICT:-<any unique constraint>} do nothing"
 
   # FK precheck against TARGET users, if this table has a userId
   if echo "$COLS" | grep -q '"userId"'; then
@@ -105,9 +129,18 @@ copy)
     PGPASSWORD="$DBP" pg_dump -h "$DBH" -U "$DBU" -d "$DBN" -t "$QT" -Fc -f "$bk"
   fi
 
-  tgt -v ON_ERROR_STOP=1 -q \
-    -c "drop table if exists $STAGE" \
-    -c "create unlogged table $STAGE (like $QT)"
+  # "like" carries NOT NULL but not defaults, so a stage table built that way
+  # has an id column that is NOT NULL with no sequence -- unusable when we are
+  # deliberately not copying id. Build from the column list instead.
+  if [ -n "${EXCLUDE_COLS:-}" ]; then
+    tgt -v ON_ERROR_STOP=1 -q \
+      -c "drop table if exists $STAGE" \
+      -c "create unlogged table $STAGE as select $COLS from $QT with no data"
+  else
+    tgt -v ON_ERROR_STOP=1 -q \
+      -c "drop table if exists $STAGE" \
+      -c "create unlogged table $STAGE (like $QT)"
+  fi
 
   src -v ON_ERROR_STOP=1 -c "\copy (select $COLS from $QT) to stdout with csv" \
     | tgt -v ON_ERROR_STOP=1 -c "\copy $STAGE($COLS) from stdin with csv"
@@ -126,17 +159,23 @@ copy)
   fi
 
   tgt -v ON_ERROR_STOP=1 --single-transaction \
-    -c "insert into $QT ($COLS) select $COLS from $STAGE on conflict do nothing"
-  echo "inserted."
+    -c "insert into $QT ($COLS) select $COLS from $STAGE
+        on conflict ${CONFLICT:-} do nothing"
+  echo "inserted. (staged $staged -- a lower insert count means rows were"
+  echo "skipped as duplicates, which is expected on a re-run and NOT expected"
+  echo "on a first pass. Compare the two numbers.)"
   ;;
 
 verify)
   echo "source rows: $(src -Atc "select count(*) from $QT")"
   echo "target rows: $(tgt -Atc "select count(*) from $QT")"
   echo
-  echo "== rows staged but not landed (should be 0 / stage may be gone)"
+  # Match on the conflict key when one was given (id is not carried in that
+  # case), otherwise on the primary key id.
+  key=$(echo "${CONFLICT:-(id)}" | tr -d '()')
+  echo "== rows staged but not landed, matched on $key (should be 0)"
   tgt -Atc "select count(*) from $STAGE s
-            where not exists (select 1 from $QT b where b.id = s.id)" 2>/dev/null \
+            where not exists (select 1 from $QT b where b.\"$key\" = s.\"$key\")" 2>/dev/null \
     || echo "(no stage table)"
   ;;
 
