@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BillstackWebhookController;
+use App\Http\Controllers\Api\PayVesselWebhookController;
 use App\Http\Controllers\Api\NinVerificationController;
 use App\Http\Controllers\Api\Nin\PremblyController;
 use App\Http\Controllers\Api\Nin\ArewaSmartController;
@@ -79,7 +80,15 @@ Route::middleware('api.token')->prefix('v1')->group(function () {
     Route::get('/data/{reference}', [\App\Http\Controllers\Api\DataController::class, 'show'])->name('api.data.show');
 });
 
+// PayVessel static virtual-account funding webhook.
+// Signed HMAC-SHA512 over the raw body (Payvessel-Http-Signature) and
+// restricted to PayVessel's source addresses.
+Route::post('/webhooks/payvessel', [PayVesselWebhookController::class, 'handle'])
+    ->name('api.webhooks.payvessel');
+
 // Billstack reserved-account funding webhook (signed with x-wiaxy-signature).
+// PayVessel has replaced Billstack for new accounts; this stays so any
+// already-issued Billstack account is still credited.
 Route::post('/webhooks/billstack', [BillstackWebhookController::class, 'handle'])
     ->name('api.webhooks.billstack');
 
