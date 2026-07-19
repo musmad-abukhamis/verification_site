@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -30,22 +31,33 @@ class PasswordResetLinkController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'login' => 'required|string',
         ]);
+
+        // Accept username or phone as well as email, matching the login form:
+        // accounts migrated from nimcweb signed in with a username there and
+        // often do not recall the address they registered with. The link is
+        // still only ever sent to the address on file, so nothing is disclosed
+        // to whoever submitted the form.
+        $user = User::findByIdentifier($request->input('login'));
+
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'login' => [trans(Password::INVALID_USER)],
+            ]);
+        }
 
         // We will send the password reset link to this user. Once we have attempted
         // to send the link, we will examine the response then see the message we
         // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        $status = Password::sendResetLink(['email' => $user->email]);
 
         if ($status == Password::RESET_LINK_SENT) {
             return back()->with('status', __($status));
         }
 
         throw ValidationException::withMessages([
-            'email' => [trans($status)],
+            'login' => [trans($status)],
         ]);
     }
 }

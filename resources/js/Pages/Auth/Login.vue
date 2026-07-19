@@ -41,7 +41,7 @@ const submit = () => {
         <form @submit.prevent="submit" class="space-y-5">
             <!-- Login (phone or email) -->
             <div>
-                <label for="login" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Phone or email</label>
+                <label for="login" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Username, phone or email</label>
                 <div class="relative">
                     <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" /></svg>
@@ -53,7 +53,7 @@ const submit = () => {
                         required
                         autofocus
                         autocomplete="username"
-                        placeholder="Enter your phone or email"
+                        placeholder="Enter your username, phone or email"
                         class="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-11 pr-3 text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
                     />
                 </div>

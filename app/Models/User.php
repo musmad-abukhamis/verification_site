@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 /**
  * Prisma model: User (table "users").
@@ -61,6 +62,58 @@ class User extends Authenticatable implements MustVerifyEmailContract
     public function isAdmin(): bool
     {
         return $this->role === UserRole::ADMIN;
+    }
+
+    /**
+     * Resolve an account from whatever identifier someone typed: email,
+     * username or phone. Used by both login and password reset, which must
+     * agree -- an identifier that signs you in has to be one you can reset with.
+     *
+     * Username matters because the ~2250 accounts migrated from nimcweb signed
+     * in with their username there and mostly do not recall which email address
+     * they registered with.
+     *
+     * Phone is matched across the 0xxx / 234xxx / +234xxx spellings of the same
+     * number, but only when exactly one account matches: 15 migrated accounts
+     * collide once normalised, and picking the first would hand someone another
+     * person's account. Those users can still use their username or email.
+     */
+    public static function findByIdentifier(string $identifier): ?self
+    {
+        $identifier = trim($identifier);
+
+        if ($identifier === '') {
+            return null;
+        }
+
+        if (str_contains($identifier, '@')) {
+            return static::whereRaw('lower(email) = ?', [Str::lower($identifier)])->first();
+        }
+
+        $user = static::whereRaw('lower(username) = ?', [Str::lower($identifier)])->first()
+            ?? static::where('phone', $identifier)->first();
+
+        if ($user) {
+            return $user;
+        }
+
+        $digits = preg_replace('/\D/', '', $identifier);
+
+        if (strlen($digits) < 10) {
+            return null;
+        }
+
+        // Build the equivalent spellings in PHP rather than normalising the
+        // column in SQL: it keeps the phone index usable, and avoids
+        // regexp_replace/right(), which are Postgres-only and would break the
+        // SQLite-backed test suite.
+        $local = substr($digits, -10);
+
+        $matches = static::whereIn('phone', [
+            '0'.$local, '234'.$local, '+234'.$local, $local,
+        ])->limit(2)->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     /**

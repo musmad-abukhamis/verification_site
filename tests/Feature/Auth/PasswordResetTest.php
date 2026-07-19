@@ -25,9 +25,66 @@ class PasswordResetTest extends TestCase
 
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        $this->post('/forgot-password', ['login' => $user->email]);
 
         Notification::assertSentTo($user, ResetPassword::class);
+    }
+
+    /**
+     * Migrated nimcweb users know their username, not necessarily the address
+     * they registered with -- so reset has to accept the same identifiers login
+     * does. The link still goes only to the address on file.
+     */
+    public function test_reset_link_can_be_requested_with_a_username(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->create(['username' => 'zaks']);
+
+        $this->post('/forgot-password', ['login' => 'zaks']);
+
+        Notification::assertSentTo($user, ResetPassword::class);
+    }
+
+    public function test_reset_link_can_be_requested_with_a_phone_in_another_format(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->create(['phone' => '+2348012345678']);
+
+        $this->post('/forgot-password', ['login' => '08012345678']);
+
+        Notification::assertSentTo($user, ResetPassword::class);
+    }
+
+    public function test_reset_link_is_not_sent_for_an_unknown_identifier(): void
+    {
+        Notification::fake();
+
+        User::factory()->create();
+
+        $response = $this->post('/forgot-password', ['login' => 'no-such-account']);
+
+        $response->assertSessionHasErrors('login');
+        Notification::assertNothingSent();
+    }
+
+    /**
+     * An ambiguous phone must not pick an account -- 15 migrated accounts share
+     * a number once normalised, and mailing "the first match" would send one
+     * person a link that resets someone else's password.
+     */
+    public function test_reset_link_is_not_sent_for_an_ambiguous_phone(): void
+    {
+        Notification::fake();
+
+        User::factory()->create(['phone' => '08012345678']);
+        User::factory()->create(['phone' => '+2348012345678']);
+
+        $response = $this->post('/forgot-password', ['login' => '2348012345678']);
+
+        $response->assertSessionHasErrors('login');
+        Notification::assertNothingSent();
     }
 
     public function test_reset_password_screen_can_be_rendered(): void
@@ -36,7 +93,7 @@ class PasswordResetTest extends TestCase
 
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        $this->post('/forgot-password', ['login' => $user->email]);
 
         Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
             $response = $this->get('/reset-password/'.$notification->token);
@@ -53,7 +110,7 @@ class PasswordResetTest extends TestCase
 
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        $this->post('/forgot-password', ['login' => $user->email]);
 
         Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
             $response = $this->post('/reset-password', [
