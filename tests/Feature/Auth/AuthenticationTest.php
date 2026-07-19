@@ -4,6 +4,8 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -40,6 +42,69 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertGuest();
+    }
+
+    /**
+     * nimcweb hashed with bcryptjs, which emits $2a$/$2b$. password_verify()
+     * accepts those, but password_get_info() reports them as "unknown", so
+     * Laravel's bcrypt algorithm check throws rather than returning false --
+     * a 500 on the login page for every migrated account.
+     *
+     * config/hashing.php disables that check. This test fails if it comes back.
+     */
+    #[DataProvider('bcryptjsPrefixes')]
+    public function test_migrated_bcryptjs_hashes_can_authenticate(string $prefix): void
+    {
+        $user = $this->userWithRawHash('migrated', $prefix, 'migrated-secret');
+
+        $this->post('/login', [
+            'login' => 'migrated',
+            'password' => 'migrated-secret',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_migrated_bcryptjs_hash_rejects_a_wrong_password(): void
+    {
+        $this->userWithRawHash('migrated', '$2a$', 'migrated-secret');
+
+        $this->post('/login', [
+            'login' => 'migrated',
+            'password' => 'not-the-password',
+        ]);
+
+        $this->assertGuest();
+    }
+
+    /**
+     * Writes the hash with the query builder, not the model.
+     *
+     * User casts password as "hashed", and that cast decides whether a value
+     * is already hashed with the same password_get_info() check that reports
+     * $2a$/$2b$ as "unknown" -- so assigning one through Eloquent hashes it a
+     * second time. The migration inserted these rows with raw COPY, so this
+     * reproduces what is actually in the database.
+     */
+    private function userWithRawHash(string $username, string $prefix, string $password): User
+    {
+        $salt = '$2a$10$'.substr(str_replace('+', '.', base64_encode(random_bytes(16))), 0, 22);
+        $hash = $prefix.substr(crypt($password, $salt), 4);
+
+        $user = User::factory()->create(['username' => $username]);
+
+        DB::table('users')->where('id', $user->id)->update(['password' => $hash]);
+
+        return $user->refresh();
+    }
+
+    public static function bcryptjsPrefixes(): array
+    {
+        return [
+            '$2a$ (1546 accounts)' => ['$2a$'],
+            '$2b$ (713 accounts)' => ['$2b$'],
+            '$2y$ (native)' => ['$2y$'],
+        ];
     }
 
     /**

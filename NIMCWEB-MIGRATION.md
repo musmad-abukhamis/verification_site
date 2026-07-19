@@ -45,8 +45,27 @@ not a transformation.** Two deltas only:
 Primary keys are cuid strings, so **no sequences to resync** and source ids
 transfer unchanged — which keeps child-table imports simple.
 
-Passwords are bcrypt `$2a$`/`$2b$` (bcryptjs). PHP's `password_verify` accepts
-both, so migrated users log in with existing passwords.
+Passwords are bcrypt `$2a$`/`$2b$` (bcryptjs), 60 chars, no nulls:
+`$2a$12$` 1546, `$2b$10$` 713, `$2a$10$` 4.
+
+> **This section originally claimed migrated users could log in unchanged
+> because `password_verify` accepts every bcrypt prefix. That is true of
+> `password_verify` and false of Laravel**, and it put the live site into a 500
+> on 2026-07-19. The detail: `password_get_info()` recognises **only `$2y$`**
+> and reports `$2a$`/`$2b$` as `algoName: unknown`. Laravel's
+> `BcryptHasher::check()` consults that first and *throws*
+> `RuntimeException: This password does not use the Bcrypt algorithm`, so every
+> migrated login was a server error rather than a failed attempt.
+>
+> Fixed by `config/hashing.php` with `bcrypt.verify => false`, pinned by a
+> data-provider test over all three prefixes. `rehash_on_login` stays on, so
+> hashes convert to `$2y$` as users sign in.
+>
+> Same trap elsewhere: `User` casts `password` as `hashed`, and that cast uses
+> the same check to decide whether a value is already hashed — assigning a
+> `$2a$` hash through Eloquent **double-hashes it**. The migration was raw
+> `COPY`, so the data is fine, but any future rehash/repair script must write
+> with the query builder, not the model.
 
 ## 3. Shell gotchas that cost time
 
