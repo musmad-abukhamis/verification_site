@@ -178,6 +178,28 @@ return [
         'vendor1_key' => env('DATA_VENDOR1_KEY'),
     ],
 
+    // PayVessel — STATIC virtual accounts for wallet funding (replaces
+    // Billstack). Auth is api-key + api-secret headers; the webhook is signed
+    // HMAC-SHA512 over the raw body using the secret.
+    //
+    // nimcweb shipped this webhook with BOTH the signature and IP checks
+    // commented out, which let anyone credit any wallet. Both are enforced here.
+    // The header arrives as "Payvessel-Http-Signature"; nimcweb read it as
+    // HTTP_PAYVESSEL_HTTP_SIGNATURE (the PHP $_SERVER spelling), always got
+    // null, and disabled the check rather than fixing the name.
+    'payvessel' => [
+        'key' => env('PAYVESSEL_API_KEY'),
+        'secret' => env('PAYVESSEL_SECRET_KEY'),
+        'business_id' => env('PAYVESSEL_BUSINESS_ID'),
+        'base_url' => env('PAYVESSEL_BASE_URL', 'https://api.payvessel.com'),
+        // PalmPay + 9PSB. Rubies (090175) is supported by PayVessel but has no
+        // column in accountkyc, so it is not requested.
+        'bank_codes' => ['999991', '120001'],
+        // PayVessel's documented webhook source addresses. Empty disables the
+        // check -- only for local testing, never in production.
+        'webhook_ips' => array_filter(explode(',', (string) env('PAYVESSEL_WEBHOOK_IPS', '3.255.23.38,162.246.254.36'))),
+    ],
+
     // Billstack — reserved virtual-account funding (PALMPAY) with BVN KYC.
     // Port of nimcweb's reserveAccount flow. The webhook (x-wiaxy-signature)
     // verifies as md5(token).

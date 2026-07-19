@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WalletHistory;
-use App\Services\Wallet\BillstackService;
+use App\Services\Wallet\PayVesselService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -44,23 +44,26 @@ class WalletController extends Controller
     }
 
     /**
-     * Create a virtual account (with BVN KYC) for the authenticated user.
+     * Create the user's static virtual accounts (PayVessel).
+     *
+     * PayVessel replaced Billstack as the funding provider; one request issues
+     * a PalmPay and a 9PSB account. firstName/lastName are still accepted so
+     * the existing Fund Wallet form keeps working, but PayVessel takes a single
+     * name field.
      */
-    public function createVirtualAccount(Request $request, BillstackService $billstack)
+    public function createVirtualAccount(Request $request, PayVesselService $payvessel)
     {
         $validated = $request->validate([
-            'firstName' => 'required|string|max:50',
-            'lastName' => 'required|string|max:50',
+            'firstName' => 'nullable|string|max:50',
+            'lastName' => 'nullable|string|max:50',
             'bvn' => 'required|digits:11',
-            'bank' => 'nullable|in:9PSB,SAFEHAVEN,PROVIDUS,BANKLY,PALMPAY',
+            'nin' => 'nullable|digits:11',
         ]);
 
-        $result = $billstack->createAccountWithKYC(
+        $result = $payvessel->createAccounts(
             Auth::user(),
-            $validated['firstName'],
-            $validated['lastName'],
             $validated['bvn'],
-            $validated['bank'] ?? 'PALMPAY',
+            $validated['nin'] ?? null,
         );
 
         if (! $result['success']) {

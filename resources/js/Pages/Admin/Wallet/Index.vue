@@ -6,7 +6,23 @@ import { ref, watch } from 'vue';
 const props = defineProps({
     userResults: Array,
     q: String,
+    fundingSettings: {
+        type: Object,
+        default: () => ({ credit_net_of_fees: false }),
+    },
 });
+
+// Virtual-account funding: credit the gross amount the customer sent, or the
+// amount that actually settles after the provider's fee.
+const fundingForm = useForm({
+    credit_net_of_fees: props.fundingSettings.credit_net_of_fees,
+});
+
+const saveFundingSettings = () => {
+    fundingForm.post(route('admin.wallet.funding-settings.update'), {
+        preserveScroll: true,
+    });
+};
 
 const search = ref(props.q || '');
 const dropdownOpen = ref(false);
@@ -134,6 +150,53 @@ const fmt = (n) => '₦' + Number(n || 0).toLocaleString();
                     </button>
                 </form>
             </div>
+        </div>
+
+        <!-- Virtual-account funding settings -->
+        <div class="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                Virtual Account Funding
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Controls what a user is credited when money lands in their
+                virtual account.
+            </p>
+
+            <form @submit.prevent="saveFundingSettings" class="mt-4 space-y-4">
+                <label class="flex cursor-pointer items-start gap-3">
+                    <input
+                        type="checkbox"
+                        v-model="fundingForm.credit_net_of_fees"
+                        class="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span class="text-sm">
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            Deduct provider fees from funding
+                        </span>
+                        <span class="mt-0.5 block text-gray-500 dark:text-gray-400">
+                            When on, the user is credited the amount that
+                            actually settles after the payment provider's fee —
+                            so a ₦1,000 transfer credits slightly less than
+                            ₦1,000. When off, they are credited the full amount
+                            they sent and the business absorbs the fee.
+                        </span>
+                    </span>
+                </label>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        type="submit"
+                        :disabled="fundingForm.processing"
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        {{ fundingForm.processing ? 'Saving...' : 'Save setting' }}
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        Applies to payments received from now on; it does not
+                        change past transactions.
+                    </span>
+                </div>
+            </form>
         </div>
     </AdminLayout>
 </template>

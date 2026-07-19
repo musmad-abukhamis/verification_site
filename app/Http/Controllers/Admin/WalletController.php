@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\FundingSetting;
 use App\Models\User;
 use App\Models\WalletHistory;
 use Illuminate\Http\Request;
@@ -50,7 +51,30 @@ class WalletController extends Controller
         return Inertia::render('Admin/Wallet/Index', [
             'userResults' => $userResults,
             'q' => $q,
+            'fundingSettings' => [
+                'credit_net_of_fees' => FundingSetting::creditsNetOfFees(),
+            ],
         ]);
+    }
+
+    /**
+     * Choose what a funding payment credits: the gross amount the customer
+     * sent (we absorb the provider fee), or the settlement amount actually
+     * received (the user absorbs it).
+     */
+    public function updateFundingSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'credit_net_of_fees' => 'required|boolean',
+        ]);
+
+        $settings = FundingSetting::current();
+        $settings->credit_net_of_fees = $validated['credit_net_of_fees'];
+        $settings->save();
+
+        return back()->with('success', $validated['credit_net_of_fees']
+            ? 'Funding will now credit the amount received after provider fees.'
+            : 'Funding will now credit the full amount the customer sends.');
     }
 
     /**
