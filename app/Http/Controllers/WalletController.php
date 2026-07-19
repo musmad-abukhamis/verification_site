@@ -46,25 +46,17 @@ class WalletController extends Controller
     /**
      * Create the user's static virtual accounts (PayVessel).
      *
-     * PayVessel replaced Billstack as the funding provider; one request issues
-     * a PalmPay and a 9PSB account. firstName/lastName are still accepted so
-     * the existing Fund Wallet form keeps working, but PayVessel takes a single
-     * name field.
+     * BVN is the only input: PayVessel takes one name field, which we fill from
+     * the user's registered name, and a single request issues both the PalmPay
+     * and 9PSB accounts.
      */
     public function createVirtualAccount(Request $request, PayVesselService $payvessel)
     {
         $validated = $request->validate([
-            'firstName' => 'nullable|string|max:50',
-            'lastName' => 'nullable|string|max:50',
             'bvn' => 'required|digits:11',
-            'nin' => 'nullable|digits:11',
         ]);
 
-        $result = $payvessel->createAccounts(
-            Auth::user(),
-            $validated['bvn'],
-            $validated['nin'] ?? null,
-        );
+        $result = $payvessel->createAccounts(Auth::user(), $validated['bvn']);
 
         if (! $result['success']) {
             return back()->withErrors(['bvn' => $result['message']]);
