@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\OtpPasswordResetController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -33,6 +34,16 @@ Route::middleware('guest')->group(function () {
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
+
+    // SMS-code reset, for accounts that cannot receive the emailed link.
+    Route::get('reset-password-sms', [OtpPasswordResetController::class, 'create'])
+        ->name('password.otp');
+
+    Route::post('reset-password-sms/send', [OtpPasswordResetController::class, 'send'])
+        ->name('password.otp.send');
+
+    Route::post('reset-password-sms', [OtpPasswordResetController::class, 'reset'])
+        ->name('password.otp.reset');
 });
 
 Route::middleware('auth')->group(function () {
