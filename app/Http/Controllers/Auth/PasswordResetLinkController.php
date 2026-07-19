@@ -90,7 +90,7 @@ class PasswordResetLinkController extends Controller
     {
         $mailer = config('mail.default');
 
-        if (in_array($mailer, ['smtp', 'ses', 'postmark', 'resend'], true)) {
+        if (in_array($mailer, ['smtp', 'ses', 'postmark', 'resend', 'brevo'], true)) {
             return filled(config("mail.mailers.{$mailer}.host"))
                 || filled(config("mail.mailers.{$mailer}.token"))
                 || filled(config("mail.mailers.{$mailer}.key"));

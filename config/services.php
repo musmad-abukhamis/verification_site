@@ -28,6 +28,14 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
+    // Brevo transactional email. Used by App\Mail\BrevoApiTransport for the
+    // password-reset link; SMTP was never configured on this server, which made
+    // /forgot-password a 500 until it was handled.
+    'brevo' => [
+        'key' => env('BREVO_API_KEY'),
+        'endpoint' => env('BREVO_ENDPOINT', 'https://api.brevo.com/v3/smtp/email'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

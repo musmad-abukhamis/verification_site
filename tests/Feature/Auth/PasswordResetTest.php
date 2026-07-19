@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -109,6 +110,59 @@ class PasswordResetTest extends TestCase
             session('errors')->first('login'),
         );
         Notification::assertNothingSent();
+    }
+
+    /**
+     * The reset link goes out through Brevo's HTTP API rather than SMTP --
+     * see App\Mail\BrevoApiTransport. This drives the real transport (no
+     * Notification::fake) so a broken payload shape fails here.
+     */
+    public function test_reset_link_is_delivered_through_the_brevo_api(): void
+    {
+        config()->set('mail.default', 'brevo');
+        config()->set('mail.mailers.brevo.key', 'test-key');
+        config()->set('mail.from.address', 'no-reply@abc-services.com.ng');
+        config()->set('mail.from.name', 'ABC Services');
+
+        Http::fake([
+            'api.brevo.com/*' => Http::response(['messageId' => '<abc@brevo>'], 201),
+        ]);
+
+        $user = User::factory()->create(['email' => 'agent@example.com']);
+
+        $this->post('/forgot-password', ['login' => $user->email])
+            ->assertSessionHasNoErrors();
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return $request->url() === 'https://api.brevo.com/v3/smtp/email'
+                && $request->hasHeader('api-key', 'test-key')
+                && $body['sender']['email'] === 'no-reply@abc-services.com.ng'
+                && $body['to'][0]['email'] === 'agent@example.com'
+                && filled($body['subject'])
+                && str_contains($body['htmlContent'], 'reset-password');
+        });
+    }
+
+    /**
+     * A Brevo rejection must surface as a usable error, not a 500.
+     */
+    public function test_brevo_failure_is_reported_without_crashing(): void
+    {
+        config()->set('mail.default', 'brevo');
+        config()->set('mail.mailers.brevo.key', 'test-key');
+
+        Http::fake([
+            'api.brevo.com/*' => Http::response(['message' => 'Invalid API key'], 401),
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->post('/forgot-password', ['login' => $user->email]);
+
+        $response->assertSessionHasErrors('login');
+        $this->assertStringContainsString('SMS', session('errors')->first('login'));
     }
 
     public function test_reset_password_screen_can_be_rendered(): void
