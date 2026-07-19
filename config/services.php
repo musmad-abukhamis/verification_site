@@ -198,7 +198,7 @@ return [
         'base_url' => env('TERMII_BASE_URL', 'https://v3.api.termii.com'),
         // "dnd" delivers to numbers on Nigeria's do-not-disturb list, which is
         // most of them; "generic" silently fails for those users.
-        'channel' => env('TERMII_CHANNEL', 'dnd'),
+        'channel' => env('TERMII_CHANNEL', 'generic'),
 
         // "otp"   -> /api/sms/otp/send, Termii generates and verifies the code
         // "plain" -> /api/sms/send, we generate the code and verify it locally
