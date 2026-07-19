@@ -196,22 +196,29 @@ return [
         'key' => env('TERMII_API_KEY'),
         'sender' => env('TERMII_SENDER_ID', 'SOFT OTP'),
         'base_url' => env('TERMII_BASE_URL', 'https://v3.api.termii.com'),
-        // "dnd" delivers to numbers on Nigeria's do-not-disturb list, which is
-        // most of them; "generic" silently fails for those users.
+        // "generic" is a STOPGAP. It works today because the dnd route is not
+        // activated on this Termii account -- dnd answers 400 "Country
+        // Inactive. Contact Administrator to activate country." (both /sms/send
+        // and /sms/otp/send, measured 2026-07-19).
+        //
+        // Termii's own docs say generic is wrong for OTPs:
+        //   - it does NOT deliver to numbers on DND, and many Nigerian mobiles
+        //     are; those users get no code and we get no error
+        //   - MTN blocks it 8PM-8AM WAT, so overnight resets silently fail
+        //   - sustained OTP traffic on it can get the sender ID blocked
+        //
+        // Ask Termii support to activate the dnd route, then set
+        // TERMII_CHANNEL=dnd. That is the correct channel for reset codes.
         'channel' => env('TERMII_CHANNEL', 'generic'),
 
-        // "otp"   -> /api/sms/otp/send, Termii generates and verifies the code
         // "plain" -> /api/sms/send, we generate the code and verify it locally
+        // "otp"   -> /api/sms/otp/send, Termii generates and verifies the code
         //
-        // Defaults to otp because plain SMS is not activated on this account:
-        // it answers 400 "Country Inactive. Contact Administrator to activate
-        // country." The OTP product is what nimcweb used and is active.
-        //
-        // "plain" is the better design -- it keeps attempt limits and expiry in
-        // our database instead of depending on Termii's verify endpoint being
-        // reachable at reset time. Switch to it once plain SMS is activated;
-        // no code change required.
-        'mode' => env('TERMII_MODE', 'otp'),
+        // plain is the better design and the default: attempt limits and expiry
+        // stay in our database, and a reset in progress does not depend on
+        // Termii's verify endpoint being reachable. otp is kept only as a
+        // fallback if the plain SMS product is ever unavailable.
+        'mode' => env('TERMII_MODE', 'plain'),
     ],
 
 ];
