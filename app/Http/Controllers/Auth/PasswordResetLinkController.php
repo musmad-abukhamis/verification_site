@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,10 +49,30 @@ class PasswordResetLinkController extends Controller
             ]);
         }
 
+        // Mail delivery is genuinely unreliable here -- this app has run with
+        // MAIL_HOST unset, and a missing/unreachable SMTP host makes Symfony
+        // throw mid-request. That used to reach the user as a 500 with no way
+        // forward; point them at the SMS route instead.
+        if (! $this->mailerConfigured()) {
+            Log::error('Password reset link not sent: mail transport is not configured');
+
+            throw ValidationException::withMessages([
+                'login' => [$this->undeliverableMessage()],
+            ]);
+        }
+
         // We will send the password reset link to this user. Once we have attempted
         // to send the link, we will examine the response then see the message we
         // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(['email' => $user->email]);
+        try {
+            $status = Password::sendResetLink(['email' => $user->email]);
+        } catch (TransportExceptionInterface $e) {
+            Log::error('Password reset link failed to send', ['error' => $e->getMessage()]);
+
+            throw ValidationException::withMessages([
+                'login' => [$this->undeliverableMessage()],
+            ]);
+        }
 
         if ($status == Password::RESET_LINK_SENT) {
             return back()->with('status', __($status));
@@ -59,5 +81,26 @@ class PasswordResetLinkController extends Controller
         throw ValidationException::withMessages([
             'login' => [trans($status)],
         ]);
+    }
+
+    /**
+     * An SMTP mailer with no host cannot deliver; it throws on connect.
+     */
+    private function mailerConfigured(): bool
+    {
+        $mailer = config('mail.default');
+
+        if (in_array($mailer, ['smtp', 'ses', 'postmark', 'resend'], true)) {
+            return filled(config("mail.mailers.{$mailer}.host"))
+                || filled(config("mail.mailers.{$mailer}.token"))
+                || filled(config("mail.mailers.{$mailer}.key"));
+        }
+
+        return true;
+    }
+
+    private function undeliverableMessage(): string
+    {
+        return 'We could not send the email right now. Please use the "Get a code by SMS" option instead.';
     }
 }

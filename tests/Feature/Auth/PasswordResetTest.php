@@ -87,6 +87,30 @@ class PasswordResetTest extends TestCase
         Notification::assertNothingSent();
     }
 
+    /**
+     * The VPS ran with MAIL_HOST empty, so Symfony threw on connect and the
+     * user got a 500 with no way forward. An undeliverable email is an
+     * expected condition here -- say so, and point at the SMS route.
+     */
+    public function test_unconfigured_mailer_shows_an_error_instead_of_crashing(): void
+    {
+        Notification::fake();
+
+        config()->set('mail.default', 'smtp');
+        config()->set('mail.mailers.smtp.host', '');
+
+        $user = User::factory()->create();
+
+        $response = $this->post('/forgot-password', ['login' => $user->email]);
+
+        $response->assertSessionHasErrors('login');
+        $this->assertStringContainsString(
+            'SMS',
+            session('errors')->first('login'),
+        );
+        Notification::assertNothingSent();
+    }
+
     public function test_reset_password_screen_can_be_rendered(): void
     {
         Notification::fake();
