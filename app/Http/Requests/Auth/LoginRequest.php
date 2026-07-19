@@ -56,50 +56,6 @@ class LoginRequest extends FormRequest
     }
 
     /**
-     * Resolve the account being logged into, by email, username or phone.
-     *
-     * Users migrated from nimcweb signed in with their USERNAME, so username
-     * has to be accepted here or none of them can get in -- they see
-     * "credentials do not match" and report it as a broken password.
-     *
-     * Phone is matched on the last 10 digits because the same person may be
-     * stored as 08012345678 or +2348012345678; a byte-exact comparison treats
-     * those as different people. That normalisation is ambiguous for the 15
-     * accounts sharing a number, so it is only honoured when it identifies
-     * exactly one account -- an exact match is always preferred.
-     */
-    protected function resolveUser(string $login): ?User
-    {
-        if (str_contains($login, '@')) {
-            return User::whereRaw('lower(email) = ?', [Str::lower($login)])->first();
-        }
-
-        $user = User::whereRaw('lower(username) = ?', [Str::lower($login)])->first()
-            ?? User::where('phone', $login)->first();
-
-        if ($user) {
-            return $user;
-        }
-
-        $digits = preg_replace('/\D/', '', $login);
-
-        if (strlen($digits) < 10) {
-            return null;
-        }
-
-        // Build the equivalent formats in PHP rather than normalising the
-        // column in SQL: it keeps the phone index usable, and avoids
-        // regexp_replace/right(), which are Postgres-only and would break the
-        // SQLite-backed test suite.
-        $local = substr($digits, -10);
-        $candidates = ['0'.$local, '234'.$local, '+234'.$local, $local];
-
-        $matches = User::whereIn('phone', $candidates)->limit(2)->get();
-
-        return $matches->count() === 1 ? $matches->first() : null;
-    }
-
-    /**
      * Attempt to authenticate the request's credentials.
      *
      * @throws \Illuminate\Validation\ValidationException
@@ -113,7 +69,7 @@ class LoginRequest extends FormRequest
 
         // Resolve the account first, then authenticate by id, so the password
         // check itself stays Auth::attempt's job (hashing, rehashing, events).
-        $user = $this->resolveUser($login);
+        $user = User::findByIdentifier($login);
 
         $credentials = [
             'id' => $user?->id ?? '',
