@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\BvnSdkFormController;
 use App\Http\Controllers\Admin\BvnRetrievalController;
 use App\Http\Controllers\Admin\BvnSearchController;
 use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\UnattributedPaymentController;
 use App\Http\Controllers\Admin\WalletController;
 use App\Http\Controllers\Admin\AgentIdController;
 use App\Http\Controllers\Admin\IdCardController;
@@ -46,6 +47,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/wallet/fund', [WalletController::class, 'fund'])->name('wallet.fund');
     Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
     Route::post('/wallet/funding-settings', [WalletController::class, 'updateFundingSettings'])->name('wallet.funding-settings.update');
+
+    // Payments that arrived without a matching user (reconciliation queue)
+    Route::get('/wallet/unattributed', [UnattributedPaymentController::class, 'index'])->name('wallet.unattributed.index');
+    Route::post('/wallet/unattributed/{unattributedPayment}/resolve', [UnattributedPaymentController::class, 'resolve'])->name('wallet.unattributed.resolve');
+    Route::post('/wallet/unattributed/{unattributedPayment}/ignore', [UnattributedPaymentController::class, 'ignore'])->name('wallet.unattributed.ignore');
+    Route::post('/wallet/unattributed/{unattributedPayment}/reopen', [UnattributedPaymentController::class, 'reopen'])->name('wallet.unattributed.reopen');
 
     // Transaction Management
     Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');

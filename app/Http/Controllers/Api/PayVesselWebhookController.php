@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AccountKyc;
 use App\Models\FundingSetting;
+use App\Models\UnattributedPayment;
 use App\Models\User;
 use App\Models\WalletHistory;
 use Illuminate\Http\Request;
@@ -84,8 +85,19 @@ class PayVesselWebhookController extends Controller
         $user = $this->resolveUser($data);
 
         if (! $user) {
-            // Money has arrived that we cannot attribute. Loud, because it needs
-            // a human to reconcile.
+            // Money has arrived that we cannot attribute. Persist it for the
+            // admin Unattributed Payments screen -- we answer 200 below, so the
+            // provider will not retry and a log line would be the only record.
+            UnattributedPayment::record('payvessel', [
+                'reference' => $reference,
+                'account_number' => $data['order']['account_number'] ?? null,
+                'customer_email' => $data['customer']['email'] ?? null,
+                'customer_name' => $data['customer']['name'] ?? null,
+                'amount' => $gross,
+                'settlement_amount' => $settlement > 0 ? $settlement : null,
+                'payload' => $data,
+            ]);
+
             Log::error('PayVessel webhook: no user for payment', [
                 'reference' => $reference,
                 'account' => $data['order']['account_number'] ?? null,

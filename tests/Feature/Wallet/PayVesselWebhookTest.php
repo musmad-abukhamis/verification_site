@@ -4,6 +4,7 @@ namespace Tests\Feature\Wallet;
 
 use App\Models\AccountKyc;
 use App\Models\FundingSetting;
+use App\Models\UnattributedPayment;
 use App\Models\User;
 use App\Models\WalletHistory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -225,5 +226,47 @@ class PayVesselWebhookTest extends TestCase
 
         $this->assertSame(0.0, (float) $user->fresh()->balance);
         $this->assertNull(WalletHistory::whereKey('PV-REF-10')->first());
+
+        // ...but it is not lost: it lands in the reconciliation queue, because
+        // we answer 200 and PayVessel will never retry it.
+        $this->assertDatabaseHas('unattributed_payments', [
+            'reference' => 'PV-REF-10',
+            'provider' => 'payvessel',
+            'account_number' => '9999999999',
+            'status' => UnattributedPayment::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_a_redelivered_unattributable_payment_is_recorded_once(): void
+    {
+        $this->userWithAccount();
+
+        $payload = $this->payload('PV-REF-11', 1000, '9999999999');
+        unset($payload['customer']);
+
+        $this->postSigned($payload)->assertOk();
+        $this->postSigned($payload)->assertOk();
+
+        $this->assertSame(1, UnattributedPayment::where('reference', 'PV-REF-11')->count());
+    }
+
+    public function test_a_redelivery_does_not_undo_an_admin_decision_to_ignore(): void
+    {
+        $this->userWithAccount();
+
+        $payload = $this->payload('PV-REF-12', 1000, '9999999999');
+        unset($payload['customer']);
+
+        $this->postSigned($payload)->assertOk();
+
+        UnattributedPayment::where('reference', 'PV-REF-12')
+            ->update(['status' => UnattributedPayment::STATUS_IGNORED]);
+
+        $this->postSigned($payload)->assertOk();
+
+        $this->assertSame(
+            UnattributedPayment::STATUS_IGNORED,
+            UnattributedPayment::where('reference', 'PV-REF-12')->first()->status,
+        );
     }
 }

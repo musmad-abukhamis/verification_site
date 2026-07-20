@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AccountKyc;
+use App\Models\UnattributedPayment;
 use App\Models\WalletHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -73,6 +74,18 @@ class BillstackWebhookController extends Controller
             ->first();
 
         if (! $accountKyc || ! $accountKyc->user) {
+            // Persist for the admin Unattributed Payments screen -- we answer
+            // 200 below, so Billstack will not retry this payment.
+            UnattributedPayment::record('billstack', [
+                'reference' => $reference,
+                'account_number' => $accountNumber,
+                // Billstack's reserved-account payload carries no customer
+                // email; the account name is all we get.
+                'customer_name' => $data['account']['account_name'] ?? null,
+                'amount' => $amount,
+                'payload' => $data,
+            ]);
+
             Log::error('Billstack webhook: no user for account number', ['account' => $accountNumber]);
 
             return;
