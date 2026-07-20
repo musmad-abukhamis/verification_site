@@ -157,6 +157,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Enrollment Records (spreadsheet upload → upsert into Record)
     Route::get('/enrollment-records', [EnrollmentRecordController::class, 'index'])->name('enrollment-records.index');
     Route::post('/enrollment-records/upload', [EnrollmentRecordController::class, 'upload'])->name('enrollment-records.upload');
+    Route::get('/enrollment-records/status', [EnrollmentRecordController::class, 'status'])->name('enrollment-records.status');
 
     // Notification Management (global + user-specific announcements)
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
