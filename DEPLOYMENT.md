@@ -84,13 +84,31 @@ Tune PHP-FPM for production (edit `/etc/php/8.3/fpm/php.ini`):
 
 ```ini
 memory_limit = 256M
-upload_max_filesize = 20M
-post_max_size = 21M
+upload_max_filesize = 200M
+post_max_size = 205M
 max_execution_time = 60
 expose_php = Off
 ```
 
 Restart: `sudo systemctl restart php8.3-fpm`
+
+> **The upload limits are load-bearing.** Enrolment record exports
+> (Admin → Enrollment Records) run 50–100MB. If `upload_max_filesize` is left at
+> PHP's 2M default the upload fails with "The file failed to upload", because
+> PHP rejects the file before Laravel ever sees it. `post_max_size` must stay
+> *above* `upload_max_filesize` — when a POST exceeds it PHP discards the entire
+> request body, so the app cannot report the real reason.
+>
+> `max_execution_time` does **not** need raising for these imports: the upload
+> only stages the file, and the parsing happens in a queued job (which is a CLI
+> process and therefore not bound by it). That does mean **the queue worker must
+> be running** or uploads sit at "Queued" forever — see the Supervisor section.
+
+Verify what is actually live (not what this file says):
+
+```bash
+php -i | grep -E 'upload_max_filesize|post_max_size|memory_limit'
+```
 
 ---
 
@@ -328,7 +346,12 @@ server {
     index index.php;
     charset utf-8;
 
-    client_max_body_size 20M;
+    # Must be >= post_max_size, or nginx 413s the enrolment upload before PHP runs.
+    client_max_body_size 205M;
+
+    # A 100MB upload over a slow link takes a while to arrive; the default
+    # 60s body timeout cuts it off mid-transfer (UPLOAD_ERR_PARTIAL).
+    client_body_timeout 300s;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -419,7 +442,31 @@ stopasgroup=true
 killasgroup=true
 ```
 
-Load it:
+Enrolment spreadsheet imports run on their own `imports` queue, because a
+100MB file occupies a worker for minutes and must not stall customer data
+purchases on the default queue. Create
+`/etc/supervisor/conf.d/verification-imports.conf`:
+
+```ini
+[program:verification-imports]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/verification-site/artisan queue:work --queue=imports --sleep=5 --tries=1 --timeout=3600 --max-time=3600
+autostart=true
+autorestart=true
+stopwaitsecs=3600
+user=deploy
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/verification-site/storage/logs/imports.log
+stopasgroup=true
+killasgroup=true
+```
+
+`--tries=1` is deliberate: a failed import has already committed its earlier
+chunks, so retrying replays the whole file rather than resuming. Re-uploading is
+safe (rows upsert on `ticket_id`) and is the intended recovery.
+
+Load them:
 
 ```bash
 sudo supervisorctl reread
