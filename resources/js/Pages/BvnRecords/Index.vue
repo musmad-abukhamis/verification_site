@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
     records: Object,
@@ -32,6 +32,40 @@ const numberedLinks = computed(() => {
     if (!props.records?.links) return [];
     return props.records.links.filter((l) => !['&laquo; Previous', 'Next &raquo;'].includes(l.label));
 });
+
+/* -- expandable comments ------------------------------------------------- */
+
+// The comment holds the full validation message ("...Bad photo quality;
+// BatchID: 4245709..."), which is the part users actually need when an
+// enrolment failed — but it is far too long to sit untruncated in a table.
+const expanded = ref(new Set());
+
+const isExpanded = (id) => expanded.value.has(id);
+
+const toggle = (id) => {
+    if (expanded.value.has(id)) {
+        expanded.value.delete(id);
+    } else {
+        expanded.value.add(id);
+    }
+};
+
+const allExpanded = computed(() =>
+    (props.records?.data?.length ?? 0) > 0 &&
+    props.records.data.every((r) => !r.comment || expanded.value.has(r.ticket_id))
+);
+
+const toggleAll = () => {
+    if (allExpanded.value) {
+        expanded.value.clear();
+    } else {
+        props.records.data.forEach((r) => r.comment && expanded.value.add(r.ticket_id));
+    }
+};
+
+// A new search or page of results is a fresh set of rows — carrying expansion
+// state across them would leave arbitrary rows open.
+watch(() => props.records, () => expanded.value.clear());
 </script>
 
 <template>
@@ -83,19 +117,41 @@ const numberedLinks = computed(() => {
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Agent Name</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Agent ID</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Comment</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                    <span class="inline-flex items-center gap-2">
+                                        Comment
+                                        <button type="button" @click="toggleAll"
+                                            class="normal-case font-normal text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            {{ allExpanded ? 'Collapse all' : 'Expand all' }}
+                                        </button>
+                                    </span>
+                                </th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date Enrolled</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             <tr v-for="r in records.data" :key="r.ticket_id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{{ r.ticket_id }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{{ r.bvn }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.enrollee_name }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{{ r.enroller_id }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.status }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate">{{ r.comment }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ r.date_enrolled }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white align-top">{{ r.ticket_id }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300 align-top">{{ r.bvn }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-top">{{ r.enrollee_name }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300 align-top">{{ r.enroller_id }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-top">{{ r.status }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-[280px] align-top">
+                                    <button v-if="r.comment" type="button" @click="toggle(r.ticket_id)"
+                                        :aria-expanded="isExpanded(r.ticket_id)"
+                                        :title="isExpanded(r.ticket_id) ? 'Click to collapse' : 'Click to see the full message'"
+                                        class="w-full flex items-start gap-1.5 text-left rounded hover:text-gray-900 dark:hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                        <span class="flex-1 min-w-0"
+                                            :class="isExpanded(r.ticket_id) ? 'whitespace-pre-wrap break-words' : 'truncate'">{{ r.comment }}</span>
+                                        <svg class="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400 transition-transform"
+                                            :class="{ 'rotate-180': isExpanded(r.ticket_id) }"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                    <span v-else class="text-gray-400">—</span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 align-top">{{ r.date_enrolled }}</td>
                             </tr>
                         </tbody>
                     </table>

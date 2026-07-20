@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\ImportEnrollmentRecords;
 use App\Models\EnrollmentImport;
 use App\Models\Record;
+use App\Models\User;
 use App\Support\SpreadsheetReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -105,6 +106,38 @@ class EnrollmentImportTest extends TestCase
         $this->assertSame(1, $import->refresh()->skipped);
     }
 
+    /**
+     * Real exports head this column "TICKET_NUMBER", not "Ticket ID".
+     */
+    public function test_it_skips_a_header_row_whatever_the_column_is_called(): void
+    {
+        $csv = "TICKET_NUMBER,BVN,AGT_MGT_INST_NAME\n".$this->row('83938224260516115957');
+        $import = $this->stage($csv);
+
+        (new ImportEnrollmentRecords($import->id))->handle();
+
+        $this->assertSame(['83938224260516115957'], Record::pluck('ticket_id')->all());
+        $this->assertSame(0, Record::where('ticket_id', 'TICKET_NUMBER')->count());
+    }
+
+    /**
+     * The exporter writes JavaScript nulls literally, and quotes values with a
+     * leading apostrophe: a missing BVN arrives as the 5 characters 'null.
+     */
+    public function test_it_normalises_literal_null_cells_to_empty(): void
+    {
+        $csv = "'83938224260516115957,'null,KAYI MICROFINANCE BANK LTD,12590,NULL,,,,,,,FAILED,msg,100,,,,\n";
+        $import = $this->stage($csv);
+
+        (new ImportEnrollmentRecords($import->id))->handle();
+
+        $record = Record::first();
+        $this->assertSame('83938224260516115957', $record->ticket_id, 'leading apostrophe stripped');
+        $this->assertSame('', $record->bvn, "'null must not be stored as the word null");
+        $this->assertSame('', $record->enrollee_name, 'bare NULL is normalised too, case-insensitively');
+        $this->assertSame('FAILED', $record->status);
+    }
+
     public function test_it_strips_a_utf8_bom_from_the_first_ticket_id(): void
     {
         $import = $this->stage("\xEF\xBB\xBF".$this->row('TK-1'));
@@ -133,6 +166,35 @@ class EnrollmentImportTest extends TestCase
         (new ImportEnrollmentRecords($import->id))->handle();
 
         Storage::disk('local')->assertMissing($import->path);
+    }
+
+    /**
+     * ValidatePostSize throws from the global middleware stack before any
+     * controller runs, so this cannot be covered by the controller's own
+     * checks. Unhandled it renders Symfony's bare "413 Content Too Large" page.
+     */
+    public function test_a_post_over_post_max_size_redirects_back_with_a_useful_message(): void
+    {
+        // CONTENT_LENGTH has to go in the server bag, not the headers array —
+        // Laravel rewrites unknown headers to HTTP_*, which ValidatePostSize
+        // does not read.
+        $response = $this->actingAs(User::factory()->admin()->create())
+            ->from(route('admin.enrollment-records.index'))
+            ->call(
+                'POST',
+                route('admin.enrollment-records.upload'),
+                [], [], [],
+                ['CONTENT_LENGTH' => (string) (1024 * 1024 * 1024)]
+            );
+
+        $response->assertRedirect(route('admin.enrollment-records.index'));
+        $response->assertSessionHasErrors('file');
+
+        $this->assertStringContainsString(
+            'post_max_size',
+            session('errors')->first('file'),
+            'The admin must be told which limit blocked the upload'
+        );
     }
 
     /**

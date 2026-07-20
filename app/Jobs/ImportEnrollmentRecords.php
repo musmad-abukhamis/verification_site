@@ -235,26 +235,39 @@ class ImportEnrollmentRecords implements ShouldQueue
     }
 
     /**
-     * The UI says a header row is optional, but the old row-by-row import
-     * happily stored one as a Record with ticket_id "Ticket ID". Only the
-     * first row is tested, and only against the known first-column label.
+     * The UI says a header row is optional, but without this the label row is
+     * stored as a Record whose ticket_id is the column name.
+     *
+     * Matching against a list of known labels was too brittle — real exports
+     * head this column "TICKET_NUMBER", "Ticket ID", "TICKET_NO" and so on.
+     * Ticket numbers always contain digits and column labels never do, which
+     * holds regardless of what the exporter calls the column.
      *
      * @param  array<int, string>  $row
      */
     private static function looksLikeHeader(array $row): bool
     {
-        $first = strtolower(trim(self::clean($row[0] ?? '')));
+        $first = self::clean($row[0] ?? '');
 
-        return in_array(preg_replace('/[\s_-]+/', '', $first), ['ticketid', 'ticket'], true);
+        return $first !== '' && ! preg_match('/\d/', $first);
     }
 
     /**
      * Strip a leading apostrophe (Excel "text" marker) and coerce to string.
+     *
+     * Empty cells reach us as the literal string "null" — the exporter writes
+     * JavaScript nulls straight out, so ~38% of BVNs in a real export arrive as
+     * "null". Stored verbatim those would display as the word "null" to users
+     * checking their enrolment, and would match a search for "null".
      */
     private static function clean(mixed $value): string
     {
         $value = trim((string) $value);
 
-        return str_starts_with($value, "'") ? substr($value, 1) : $value;
+        if (str_starts_with($value, "'")) {
+            $value = substr($value, 1);
+        }
+
+        return strcasecmp($value, 'null') === 0 ? '' : $value;
     }
 }

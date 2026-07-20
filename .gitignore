@@ -19,6 +19,11 @@ yarn-error.log
 /auth.json
 /.fleet
 /.idea
+
+# Enrolment exports dropped in the repo root for testing uploads. These hold
+# real BVNs and enrollee names -- never commit them.
+/*.csv
+/*.xlsx
 /.nova
 /.vscode
 /.zed
