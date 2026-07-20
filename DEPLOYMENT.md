@@ -1,11 +1,11 @@
-# Deploying to an Ubuntu VPS
+﻿# Deploying to an Ubuntu VPS
 
 A step-by-step guide to host this application (Laravel 12 + Inertia 2 / Vue 3 + Vite,
 on **PostgreSQL**) on a fresh **Ubuntu 22.04 / 24.04** VPS, served by **Nginx + PHP-FPM**
 with HTTPS, a queue worker, the scheduler, and optional Inertia SSR.
 
 > Replace every placeholder: `your-domain.com`, `deploy` (the OS user), the database
-> name/user/password, and all third‑party API keys.
+> name/user/password, and all thirdâ€‘party API keys.
 
 ---
 
@@ -16,10 +16,10 @@ with HTTPS, a queue worker, the scheduler, and optional Inertia SSR.
 | PHP              | **8.2+** (this guide installs 8.3) with FPM |
 | PHP extensions   | `pgsql` (pdo_pgsql), `mbstring`, `xml`, `curl`, `zip`, `bcmath`, `gd`, `intl`, `opcache` |
 | Composer         | v2 |
-| Node.js          | **20 LTS** (Vite 6 needs Node 18+) — only for building front-end assets |
+| Node.js          | **20 LTS** (Vite 6 needs Node 18+) â€” only for building front-end assets |
 | Database         | **PostgreSQL 14+** (`DB_CONNECTION=pgsql`) |
 | Web server       | Nginx (reverse proxy to PHP-FPM) |
-| Process manager  | Supervisor — queue worker (**required**: data purchases are fulfilled by queued jobs) + optional SSR |
+| Process manager  | Supervisor â€” queue worker (**required**: data purchases are fulfilled by queued jobs) + optional SSR |
 | Queue / Cache / Session | **database**-backed by default (no Redis required) |
 | Outbound HTTPS   | App calls NIN / BVN / VTU / Paystack / Billstack APIs |
 | Inbound webhook  | `POST /api/webhooks/billstack` must be publicly reachable over HTTPS |
@@ -93,22 +93,51 @@ expose_php = Off
 Restart: `sudo systemctl restart php8.3-fpm`
 
 > **The upload limits are load-bearing.** Enrolment record exports
-> (Admin → Enrollment Records) run 50–100MB. If `upload_max_filesize` is left at
+> (Admin â†’ Enrollment Records) run 50â€“100MB. If `upload_max_filesize` is left at
 > PHP's 2M default the upload fails with "The file failed to upload", because
 > PHP rejects the file before Laravel ever sees it. `post_max_size` must stay
-> *above* `upload_max_filesize` — when a POST exceeds it PHP discards the entire
+> *above* `upload_max_filesize` â€” when a POST exceeds it PHP discards the entire
 > request body, so the app cannot report the real reason.
 >
 > `max_execution_time` does **not** need raising for these imports: the upload
 > only stages the file, and the parsing happens in a queued job (which is a CLI
 > process and therefore not bound by it). That does mean **the queue worker must
-> be running** or uploads sit at "Queued" forever — see the Supervisor section.
+> be running** or uploads sit at "Queued" forever â€” see the Supervisor section.
 
-Verify what is actually live (not what this file says):
+**Verify against FPM, not the CLI.** `php -i` reads `/etc/php/8.3/cli/php.ini`,
+which the site never uses â€” a giveaway is `memory_limit => -1`, the CLI default.
+Editing the FPM ini and then checking with `php -i` shows the old values forever
+and sends you round in circles. Check the SAPI that actually serves the site:
 
 ```bash
-php -i | grep -E 'upload_max_filesize|post_max_size|memory_limit'
+# Which ini does FPM load, and what does it end up with?
+php-fpm8.3 -i | grep -E 'Loaded Configuration|upload_max_filesize|post_max_size|memory_limit'
+
+# Which PHP version is nginx actually talking to? Whatever version this prints
+# is the ONLY one worth editing -- if it says php8.4-fpm.sock then every change
+# to 8.3's ini and pool config is inert, however many times you restart it.
+#
+# Note -R, capital: sites-enabled holds symlinks, and `grep -r` silently skips
+# symlinks when recursing, printing nothing at all and looking like a clean
+# config rather than a missed one.
+grep -RnE 'fastcgi_pass|client_max_body_size|root ' /etc/nginx/sites-enabled/
+
+# Anything in conf.d can override the main ini â€” later files win.
+grep -rn 'upload_max_filesize\|post_max_size' /etc/php/8.3/fpm/
 ```
+
+Most robust is to set them in the pool config rather than the main ini, where
+they are explicit and cannot be silently overridden â€” edit
+`/etc/php/8.3/fpm/pool.d/www.conf`:
+
+```ini
+php_admin_value[upload_max_filesize] = 200M
+php_admin_value[post_max_size] = 205M
+php_admin_value[memory_limit] = 512M
+```
+
+Then `sudo systemctl restart php8.3-fpm` (restart, not reload â€” reload does not
+re-read `php_admin_value`).
 
 ---
 
@@ -173,8 +202,8 @@ psql "postgresql://verification_user:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:5432/ve
 sudo mkdir -p /var/www
 sudo chown deploy:deploy /var/www
 cd /var/www
-git clone <YOUR_REPO_URL> verification-site
-cd verification-site
+git clone <YOUR_REPO_URL> verification_site
+cd verification_site
 ```
 
 ---
@@ -191,8 +220,8 @@ npm run build
 ```
 
 `npm run build` runs `vite build && vite build --ssr`, producing:
-- `public/build/` — client assets + `manifest.json`
-- `bootstrap/ssr/` — the SSR bundle (only used if you enable SSR in step 14)
+- `public/build/` â€” client assets + `manifest.json`
+- `bootstrap/ssr/` â€” the SSR bundle (only used if you enable SSR in step 14)
 
 ---
 
@@ -294,7 +323,7 @@ php artisan storage:link
 
 > If you only want specific seeders, run e.g.
 > `php artisan db:seed --class=DataPlanSeeder --force`. Re-running seeders may duplicate
-> rows — seed once on first deploy.
+> rows â€” seed once on first deploy.
 
 ---
 
@@ -304,7 +333,7 @@ Nginx/PHP-FPM run as `www-data`. The app code is owned by `deploy`, but
 `storage/` and `bootstrap/cache/` must be writable by `www-data`:
 
 ```bash
-cd /var/www/verification-site
+cd /var/www/verification_site
 sudo chown -R deploy:www-data storage bootstrap/cache
 sudo find storage bootstrap/cache -type d -exec chmod 2775 {} \;
 sudo find storage bootstrap/cache -type f -exec chmod 0664 {} \;
@@ -331,14 +360,14 @@ php artisan event:cache
 
 ## 13. Nginx server block
 
-Create `/etc/nginx/sites-available/verification-site`:
+Create `/etc/nginx/sites-available/verification_site`:
 
 ```nginx
 server {
     listen 80;
     listen [::]:80;
     server_name your-domain.com www.your-domain.com;
-    root /var/www/verification-site/public;
+    root /var/www/verification_site/public;
 
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
@@ -377,7 +406,7 @@ server {
 Enable it and reload:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/verification-site /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/verification_site /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -403,18 +432,18 @@ SESSION_SECURE_COOKIE=true
 then `php artisan config:cache && sudo systemctl reload nginx`.
 
 > **Behind a proxy/load balancer?** Laravel 12 trusts proxies via
-> `bootstrap/app.php` → `$middleware->trustProxies(at: '*')`. Add that if your TLS is
+> `bootstrap/app.php` â†’ `$middleware->trustProxies(at: '*')`. Add that if your TLS is
 > terminated upstream so generated URLs and the `https` scheme are correct.
 
 ---
 
-## 15. Queue worker (Supervisor) — **required for data purchases**
+## 15. Queue worker (Supervisor) â€” **required for data purchases**
 
 The app uses the **database** queue, and the buy-data (VTU) module depends on it:
 `DataPurchaseService` debits the user's wallet and dispatches a `ProcessDataPurchase`
-job — **only that job calls the vendor API**. With no worker running, customers are
+job â€” **only that job calls the vendor API**. With no worker running, customers are
 charged and their orders sit at `pending` forever; nothing ever reaches the vendor.
-This is not optional background polish — treat a dead worker as a full outage of
+This is not optional background polish â€” treat a dead worker as a full outage of
 data vending.
 
 > For **local development**, `composer run dev` already starts a worker
@@ -430,14 +459,14 @@ Create `/etc/supervisor/conf.d/verification-worker.conf`:
 ```ini
 [program:verification-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/verification-site/artisan queue:work --queue=default --sleep=1 --tries=3 --max-time=3600
+command=php /var/www/verification_site/artisan queue:work --queue=default --sleep=1 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 stopwaitsecs=3600
 user=deploy
 numprocs=1
 redirect_stderr=true
-stdout_logfile=/var/www/verification-site/storage/logs/worker.log
+stdout_logfile=/var/www/verification_site/storage/logs/worker.log
 stopasgroup=true
 killasgroup=true
 ```
@@ -450,14 +479,14 @@ purchases on the default queue. Create
 ```ini
 [program:verification-imports]
 process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/verification-site/artisan queue:work --queue=imports --sleep=5 --tries=1 --timeout=3600 --max-time=3600
+command=php /var/www/verification_site/artisan queue:work --queue=imports --sleep=5 --tries=1 --timeout=3600 --max-time=3600
 autostart=true
 autorestart=true
 stopwaitsecs=3600
 user=deploy
 numprocs=1
 redirect_stderr=true
-stdout_logfile=/var/www/verification-site/storage/logs/imports.log
+stdout_logfile=/var/www/verification_site/storage/logs/imports.log
 stopasgroup=true
 killasgroup=true
 ```
@@ -479,13 +508,13 @@ sudo supervisorctl status
 
 ---
 
-## 16. Scheduler (cron) — **required for data-purchase reconciliation**
+## 16. Scheduler (cron) â€” **required for data-purchase reconciliation**
 
 Run Laravel's scheduler every minute. The buy-data module relies on it:
 `ReconcilePendingTransactions` re-queries the vendor for any purchase left in
 `processing` (e.g. after a timeout or ambiguous response) and either confirms it
-as `success` or refunds the wallet. Without the scheduler, those transactions —
-and the customer's money — stay stuck until someone intervenes manually.
+as `success` or refunds the wallet. Without the scheduler, those transactions â€”
+and the customer's money â€” stay stuck until someone intervenes manually.
 
 ```bash
 crontab -e -u deploy
@@ -494,7 +523,7 @@ crontab -e -u deploy
 Add:
 
 ```cron
-* * * * * cd /var/www/verification-site && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /var/www/verification_site && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 ---
@@ -502,7 +531,7 @@ Add:
 ## 17. (Optional) Inertia SSR
 
 The build produces an SSR bundle. SSR improves first-paint/SEO for public pages
-(e.g. the landing page). It is **optional** — without the SSR process running,
+(e.g. the landing page). It is **optional** â€” without the SSR process running,
 Inertia renders on the client and the site works normally.
 
 To enable SSR, run the SSR server under Supervisor.
@@ -510,12 +539,12 @@ Create `/etc/supervisor/conf.d/verification-ssr.conf`:
 
 ```ini
 [program:verification-ssr]
-command=php /var/www/verification-site/artisan inertia:start-ssr
+command=php /var/www/verification_site/artisan inertia:start-ssr
 autostart=true
 autorestart=true
 user=deploy
 redirect_stderr=true
-stdout_logfile=/var/www/verification-site/storage/logs/ssr.log
+stdout_logfile=/var/www/verification_site/storage/logs/ssr.log
 stopwaitsecs=10
 ```
 
@@ -523,7 +552,7 @@ stopwaitsecs=10
 sudo supervisorctl reread && sudo supervisorctl update
 ```
 
-> The SSR server listens on `127.0.0.1:13714` and is called internally by Laravel —
+> The SSR server listens on `127.0.0.1:13714` and is called internally by Laravel â€”
 > it does **not** need a firewall rule. Rebuild (`npm run build`) and restart this
 > program (`sudo supervisorctl restart verification-ssr`) on every deploy.
 > If you do **not** want SSR, simply don't create this program.
@@ -540,7 +569,7 @@ https://your-domain.com/api/webhooks/billstack
 ```
 
 Notes:
-- The endpoint verifies the `x-wiaxy-signature` header — make sure
+- The endpoint verifies the `x-wiaxy-signature` header â€” make sure
   `BILLSTACK_API_TOKEN` in `.env` matches the account that sends the webhook.
 - It must be reachable over **public HTTPS** (no IP allowlist blocking the provider).
 - If you also use Paystack, configure its webhook/redirect URLs in the Paystack
@@ -587,7 +616,7 @@ Create `deploy.sh` in the project root:
 ```bash
 #!/usr/bin/env bash
 set -e
-cd /var/www/verification-site
+cd /var/www/verification_site
 
 php artisan down || true
 
@@ -638,16 +667,16 @@ chmod +x deploy.sh
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
-| **500 on every page** | Check `storage/logs/laravel.log`. Usually permissions on `storage`/`bootstrap/cache`, or a missing `APP_KEY` → `php artisan key:generate`. |
+| **500 on every page** | Check `storage/logs/laravel.log`. Usually permissions on `storage`/`bootstrap/cache`, or a missing `APP_KEY` â†’ `php artisan key:generate`. |
 | **419 Page Expired** on login/forms | Session cookie/domain mismatch. Set `SESSION_DOMAIN` to your domain, `APP_URL` to the `https://` URL, `SESSION_SECURE_COOKIE=true`, then `php artisan config:cache`. |
 | **"Vite manifest not found"** | Assets weren't built on the server. Run `npm ci && npm run build`; ensure `public/build/manifest.json` exists. |
 | **Blank page / 502** | PHP-FPM socket path wrong in Nginx (`/var/run/php/php8.3-fpm.sock`) or PHP-FPM not running: `sudo systemctl status php8.3-fpm`. |
-| **DB connection refused** | `php8.3-pgsql` missing, wrong `DB_*` creds, or Postgres not running. Test with the `psql "postgresql://…"` string from step 6. |
+| **DB connection refused** | `php8.3-pgsql` missing, wrong `DB_*` creds, or Postgres not running. Test with the `psql "postgresql://â€¦"` string from step 6. |
 | **Config changes ignored** | A cached config is stale: `php artisan optimize:clear` then re-cache. |
 | **Queued jobs never run** | Supervisor worker down: `sudo supervisorctl status`; after deploys run `php artisan queue:restart`. |
-| **Data purchases stuck at `pending`** (wallet debited, nothing sent) | The queue worker isn't running — see step 15. Check `SELECT COUNT(*) FROM jobs;` for a backlog. Once the worker starts, queued purchases are sent to the vendor **live**, so flush stale test jobs first if they shouldn't go through. |
-| **Data purchases stuck at `processing`** | The scheduler isn't running, so `ReconcilePendingTransactions` never requeries/refunds — see step 16. |
-| **Webhook returns 404** | Wrong URL — it's `/api/webhooks/billstack`. 419/422/405 means it's reachable (good); 404 means routing/Nginx issue. |
+| **Data purchases stuck at `pending`** (wallet debited, nothing sent) | The queue worker isn't running â€” see step 15. Check `SELECT COUNT(*) FROM jobs;` for a backlog. Once the worker starts, queued purchases are sent to the vendor **live**, so flush stale test jobs first if they shouldn't go through. |
+| **Data purchases stuck at `processing`** | The scheduler isn't running, so `ReconcilePendingTransactions` never requeries/refunds â€” see step 16. |
+| **Webhook returns 404** | Wrong URL â€” it's `/api/webhooks/billstack`. 419/422/405 means it's reachable (good); 404 means routing/Nginx issue. |
 | **SSR errors / hydration warnings** | Stop relying on SSR: don't run the `verification-ssr` program (the app falls back to client rendering). If using SSR, rebuild and restart it after each deploy. |
 
 ---
