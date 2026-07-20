@@ -25,6 +25,7 @@ const menuItems = [
         children: [
             { name: 'Account Funding', route: 'admin.wallet.index' },
             { name: 'Transactions', route: 'admin.wallet.transactions' },
+            { name: 'Unattributed Payments', route: 'admin.wallet.unattributed.index' },
         ]
     },
     {
