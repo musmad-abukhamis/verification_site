@@ -89,6 +89,64 @@ class DataAdminApiTest extends TestCase
     }
 
     /**
+     * The flat fields other data APIs return, so an integrator does not have to
+     * rewrite their response parsing either. The caller's own reference must
+     * come back verbatim -- that is how they match it to their order.
+     */
+    public function test_the_response_carries_the_compatible_flat_fields(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $response = $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 1,
+            'phone' => '08031234567',
+            'data_plan' => $plan->id,
+            'request-id' => 'Data_12345678900',
+        ])->assertStatus(201);
+
+        $response
+            ->assertJsonPath('request-id', 'Data_12345678900')
+            ->assertJsonPath('network', 'MTN')
+            ->assertJsonPath('dataplan', '1GB')
+            ->assertJsonPath('plan_type', 'SME')
+            ->assertJsonPath('phone_number', '08031234567')
+            ->assertJsonPath('amount', '600')
+            ->assertJsonPath('system', 'API')
+            ->assertJsonPath('wallet_vending', 'wallet')
+            ->assertJsonPath('newbal', 4400);
+
+        // The original envelope is untouched, so existing integrations keep working.
+        $response->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.reference', DataTransaction::first()->id);
+    }
+
+    public function test_the_status_lookup_returns_the_same_flat_fields(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 1,
+            'phone' => '08031234567',
+            'data_plan' => $plan->id,
+            'ref' => 'ORDER-55',
+        ])->assertStatus(201);
+
+        $reference = DataTransaction::first()->id;
+
+        $this->withToken('tok-api')->getJson("/api/v1/data/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('request-id', 'ORDER-55')
+            ->assertJsonPath('network', 'MTN')
+            ->assertJsonPath('transaction_status', 'success');
+    }
+
+    /**
      * The caller's own request id is the idempotency key, so replaying it must
      * not charge twice -- even though it is not a UUID.
      */

@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use Illuminate\Support\Str;
-use Ramsey\Uuid\Uuid;
 
 /**
  * Accepts the body shapes the common Nigerian data-vending APIs use and maps
@@ -135,10 +134,14 @@ class DataRequestNormalizer
     }
 
     /**
-     * The idempotency key. Callers send their own order id in whatever format
-     * they use, so anything that is not already a UUID is hashed into one
-     * deterministically -- the same order id maps to the same key, which is
-     * what makes a retry safe instead of double-charging.
+     * The idempotency key: the caller's own order id, stored verbatim so it can
+     * be echoed back on every response. Sending the same id again inside the
+     * dedupe window returns the original purchase rather than buying twice.
+     *
+     * Kept as-is rather than hashed into a UUID because the value has to survive
+     * the round trip -- callers match our response against their own order.
+     * Collisions between callers are not a concern: the lookup is scoped to the
+     * user (DataPurchaseService::initiate).
      */
     public static function clientRef(mixed $value): string
     {
@@ -146,10 +149,23 @@ class DataRequestNormalizer
             return (string) Str::uuid();
         }
 
-        $value = trim((string) $value);
+        return trim((string) $value);
+    }
 
-        return Uuid::isValid($value)
-            ? $value
-            : (string) Uuid::uuid5(Uuid::NAMESPACE_URL, 'client-ref:'.$value);
+    /**
+     * The reference exactly as the caller sent it, before any defaulting --
+     * null when they sent none.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public static function originalReference(array $input): ?string
+    {
+        foreach (self::ALIASES['client_ref'] as $alias) {
+            if (! empty($input[$alias])) {
+                return trim((string) $input[$alias]);
+            }
+        }
+
+        return null;
     }
 }

@@ -64,7 +64,7 @@ class DataRequestNormalizerTest extends TestCase
         $this->assertSame('07063523516', $out['phone']);
         $this->assertSame(1, $out['plan_id']);
         $this->assertFalse($out['ported']);
-        $this->assertTrue(\Ramsey\Uuid\Uuid::isValid($out['client_ref']));
+        $this->assertSame('Data_12345678900', $out['client_ref']);
     }
 
     /**
@@ -107,17 +107,13 @@ class DataRequestNormalizerTest extends TestCase
     }
 
     /**
-     * Idempotency is the whole point of the key: the same order id must always
-     * produce the same UUID, or a retry double-charges.
+     * The caller's own order id is stored verbatim: it is both the idempotency
+     * key and what we echo back, so they can match our response to their order.
      */
-    public function test_a_caller_reference_maps_to_a_stable_uuid(): void
+    public function test_a_caller_reference_is_kept_verbatim(): void
     {
-        $first = DataRequestNormalizer::clientRef('Data_12345678900');
-        $second = DataRequestNormalizer::clientRef('Data_12345678900');
-
-        $this->assertSame($first, $second);
-        $this->assertTrue(\Ramsey\Uuid\Uuid::isValid($first));
-        $this->assertNotSame($first, DataRequestNormalizer::clientRef('Data_99999999999'));
+        $this->assertSame('Data_12345678900', DataRequestNormalizer::clientRef('Data_12345678900'));
+        $this->assertSame('ORDER-77', DataRequestNormalizer::clientRef('  ORDER-77  '));
     }
 
     public function test_an_existing_uuid_is_kept_as_is(): void
@@ -125,6 +121,13 @@ class DataRequestNormalizerTest extends TestCase
         $uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
         $this->assertSame($uuid, DataRequestNormalizer::clientRef($uuid));
+    }
+
+    public function test_it_recovers_the_reference_the_caller_actually_sent(): void
+    {
+        $this->assertSame('Data_123', DataRequestNormalizer::originalReference(['request-id' => 'Data_123']));
+        $this->assertSame('ORDER-9', DataRequestNormalizer::originalReference(['ref' => 'ORDER-9']));
+        $this->assertNull(DataRequestNormalizer::originalReference(['phone' => '08012345678']));
     }
 
     public function test_a_missing_reference_gets_a_fresh_one(): void
