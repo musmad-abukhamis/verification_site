@@ -121,13 +121,15 @@ trait NinWalletTrait
     }
 
     /**
-     * The response for a service whose price no admin has set yet. Refusing is
-     * the only safe option: we cannot guess what to charge.
+     * The response for a service with no price. That means either no admin has
+     * set one yet, or one switched the service off in Admin > Service Prices --
+     * both are stored as a NULL column. Refusing is the only safe option: we
+     * cannot guess what to charge.
      */
     protected function unpricedService()
     {
         return back()->withErrors([
-            'message' => 'This service is not priced yet. Please contact support.',
+            'message' => 'This service is currently unavailable. Please contact support.',
         ]);
     }
 
