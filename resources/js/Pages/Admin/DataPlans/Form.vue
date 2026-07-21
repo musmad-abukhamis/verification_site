@@ -9,6 +9,7 @@ const props = defineProps({
 });
 
 const form = useForm({
+    code: props.plan?.code ?? '',
     network: props.plan?.network || 'mtn',
     type: props.plan?.type || 'SME',
     name: props.plan?.name || '',
@@ -45,6 +46,16 @@ const submit = () => {
 
             <div class="space-y-4 rounded-2xl bg-white p-6 shadow dark:bg-gray-800">
                 <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm text-gray-600 dark:text-gray-300">Plan ID (public)</label>
+                        <input v-model="form.code" type="number" min="1" max="999" placeholder="auto"
+                            class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+                        <p class="mt-1 text-xs text-gray-400">
+                            The id developers send as <code>plan_id</code>. Leave blank to allocate the next free number.
+                            Changing it breaks any integration already using the old one.
+                        </p>
+                        <p v-if="form.errors.code" class="mt-1 text-xs text-red-500">{{ form.errors.code }}</p>
+                    </div>
                     <div>
                         <label class="text-sm text-gray-600 dark:text-gray-300">Network</label>
                         <select v-model="form.network" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">

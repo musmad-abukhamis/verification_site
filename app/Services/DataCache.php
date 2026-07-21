@@ -31,9 +31,12 @@ class DataCache
             ->orderBy('network')
             ->orderBy('type')
             ->orderBy('price')
-            ->get(['id', 'network', 'type', 'name', 'price', 'agent_price', 'api_price', 'validity', 'status'])
+            ->get(['id', 'code', 'network', 'type', 'name', 'price', 'agent_price', 'api_price', 'validity', 'status'])
             ->map(fn (Plan $p) => [
-                'id' => $p->id,
+                // The public plan id integrators quote; the internal key is
+                // deliberately not published.
+                'id' => $p->code,
+                'code' => $p->code,
                 'network' => $p->network,
                 'type' => $p->type,
                 'name' => $p->name,

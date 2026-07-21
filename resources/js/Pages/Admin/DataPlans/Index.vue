@@ -57,7 +57,14 @@ const destroy = (p) => { if (confirm(`Delete plan "${p.name}"?`)) router.delete(
                     <tbody class="divide-y divide-gray-100 text-sm dark:divide-gray-700">
                         <tr v-for="p in plans.data" :key="p.id">
                             <td class="px-4 py-3">
-                                <p class="font-medium text-gray-900 dark:text-gray-100">{{ p.network.toUpperCase() }} · {{ p.name }}</p>
+                                <div class="flex items-center gap-2">
+                                    <!-- The plan id external integrators quote. -->
+                                    <span
+                                        class="rounded bg-indigo-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                                        title="Public plan id — this is what developers send as plan_id"
+                                    >{{ p.code }}</span>
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ p.network.toUpperCase() }} · {{ p.name }}</p>
+                                </div>
                                 <p class="text-xs text-gray-400">{{ p.type }} · {{ p.validity }}</p>
                             </td>
                             <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ money(p.price) }} / {{ money(p.agent_price) }} / {{ money(p.api_price) }}</td>

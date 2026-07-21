@@ -6,7 +6,10 @@ use App\Exceptions\InsufficientBalanceException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BuyDataRequest;
 use App\Models\DataTransaction;
+use App\Services\DataCache;
 use App\Services\DataPurchaseService;
+use App\Support\DataRequestNormalizer;
+use Illuminate\Http\Request;
 
 /**
  * API-role data purchases. Authenticated by the `api.token` middleware
@@ -27,6 +30,33 @@ class DataController extends Controller
             'message' => $this->humanMessage($txn),
             'data' => $this->present($txn),
         ] + $this->compat($txn), 201);
+    }
+
+    /**
+     * The plan catalogue: the plan_id to send, and what it costs this caller.
+     *
+     * Without this an integrator has no way to discover plan ids except being
+     * sent a spreadsheet, which goes stale the moment a plan is added.
+     */
+    public function plans(Request $request)
+    {
+        $plans = collect(DataCache::catalogForRole($request->user()->role))
+            ->filter(fn (array $p) => $p['available'])
+            ->map(fn (array $p) => [
+                'plan_id' => $p['id'],
+                'network' => strtoupper($p['network']),
+                'network_id' => array_search($p['network'], DataRequestNormalizer::NETWORK_IDS, true) ?: null,
+                'type' => $p['type'],
+                'name' => $p['name'],
+                'validity' => $p['validity'],
+                'price' => $p['price'],
+            ])
+            ->values();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => ['plans' => $plans],
+        ]);
     }
 
     public function show(string $reference)
