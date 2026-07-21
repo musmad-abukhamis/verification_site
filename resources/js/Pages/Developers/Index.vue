@@ -14,6 +14,7 @@ const sections = [
     { id: 'services', title: 'List services & prices' },
     { id: 'nin', title: 'Verify a NIN' },
     { id: 'bvn', title: 'Verify a BVN' },
+    { id: 'plans', title: 'Data plans' },
     { id: 'data', title: 'Buy data' },
     { id: 'recipes', title: 'Full example' },
 ];
@@ -61,6 +62,9 @@ const snippets = {
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{ "bvn": "22345678901", "slip_type": "premium" }'`,
+
+    curlPlans: `curl ${base}/plans \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"`,
 
     curlData: `curl -X POST ${base}/data \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
@@ -162,6 +166,32 @@ const ninError = `{
   "error": {
     "code": "insufficient_balance",
     "message": "Insufficient wallet balance. Please fund your wallet."
+  }
+}`;
+
+const plansSuccess = `{
+  "status": "success",
+  "data": {
+    "plans": [
+      {
+        "plan_id": 1,
+        "network": "MTN",
+        "network_id": 1,
+        "type": "SME",
+        "name": "1GB",
+        "validity": "30 Days",
+        "price": 600
+      },
+      {
+        "plan_id": 12,
+        "network": "AIRTEL",
+        "network_id": 2,
+        "type": "GIFTING",
+        "name": "2GB",
+        "validity": "30 Days",
+        "price": 1150
+      }
+    ]
   }
 }`;
 
@@ -425,6 +455,34 @@ Accept: application/json</code></pre>
                     <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ bvnSuccess }}</code></pre>
                 </section>
 
+                <!-- Plans -->
+                <section id="plans" class="scroll-mt-8">
+                    <div class="flex items-baseline gap-3">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Data plans</h2>
+                        <code class="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900 dark:text-green-200">GET /plans</code>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        Every plan you can sell, with the <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">plan_id</code>
+                        to send and the price <em>you</em> pay. Plan ids are short, stable numbers (1–999) — store them in
+                        your own plan table and call this endpoint to pick up new plans rather than hard-coding a list.
+                    </p>
+
+                    <div class="relative mt-3">
+                        <button @click="copy(snippets.curlPlans, 'plans')" class="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600">{{ copied === 'plans' ? 'Copied' : 'Copy' }}</button>
+                        <pre class="overflow-x-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100"><code>{{ snippets.curlPlans }}</code></pre>
+                    </div>
+
+                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ plansSuccess }}</code></pre>
+
+                    <div class="mt-4 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 dark:bg-amber-900/20">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">
+                            A <code>plan_id</code> always refers to the same bundle and is never reissued to a different
+                            one, so it is safe to store. A plan that is withdrawn simply stops appearing here — its id is
+                            retired rather than reused.
+                        </p>
+                    </div>
+                </section>
+
                 <!-- Data -->
                 <section id="data" class="scroll-mt-8">
                     <div class="flex items-baseline gap-3">
@@ -489,7 +547,7 @@ Accept: application/json</code></pre>
                             </thead>
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
                                 <tr><td class="px-4 py-2"><code>network</code></td><td class="px-4 py-2"><code>network_id</code>, <code>operator</code>, <code>service</code></td></tr>
-                                <tr><td class="px-4 py-2"><code>plan_id</code></td><td class="px-4 py-2"><code>data_plan</code>, <code>plan</code>, <code>dataplan</code>, <code>plan_code</code>, <code>variation_code</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>plan_id</code></td><td class="px-4 py-2"><code>data_plan</code>, <code>plan</code>, <code>dataplan</code>, <code>plan_code</code>, <code>variation_code</code> — the id from <code>GET /plans</code></td></tr>
                                 <tr><td class="px-4 py-2"><code>phone</code></td><td class="px-4 py-2"><code>mobile_number</code>, <code>phone_number</code>, <code>msisdn</code>, <code>mobile</code>, <code>recipient</code></td></tr>
                                 <tr><td class="px-4 py-2"><code>ported</code></td><td class="px-4 py-2"><code>ported_number</code>, <code>Ported_number</code>, <code>is_ported</code></td></tr>
                                 <tr><td class="px-4 py-2"><code>client_ref</code></td><td class="px-4 py-2"><code>ref</code>, <code>request-id</code>, <code>request_id</code>, <code>reference</code>, <code>order_id</code></td></tr>

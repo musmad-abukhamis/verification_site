@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Plan;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class DataPlanRequest extends FormRequest
 {
@@ -14,6 +16,13 @@ class DataPlanRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // The public plan id. Left blank on create it is allocated
+            // automatically; settable by hand so an operator can match the ids
+            // an integrator already uses with another provider.
+            'code' => [
+                'nullable', 'integer', 'min:1', 'max:'.Plan::MAX_CODE,
+                Rule::unique('plans', 'code')->ignore($this->route('dataplan')),
+            ],
             'network' => ['required', 'string', 'max:50'],
             'type' => ['required', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:100'],
@@ -33,6 +42,8 @@ class DataPlanRequest extends FormRequest
     {
         $this->merge([
             'network' => strtolower((string) $this->input('network')),
+            // Blank means "allocate one"; the model does that on create.
+            'code' => $this->input('code') === '' ? null : $this->input('code'),
         ]);
     }
 }

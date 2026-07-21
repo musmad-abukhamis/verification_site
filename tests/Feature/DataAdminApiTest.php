@@ -202,6 +202,129 @@ class DataAdminApiTest extends TestCase
         ])->assertStatus(422);
     }
 
+    /* ------------------------------------------------- public plan id (code) */
+
+    public function test_a_new_plan_gets_a_short_public_id(): void
+    {
+        $plan = Plan::create([
+            'network' => 'mtn', 'type' => 'SME', 'name' => '2GB', 'price' => 1400,
+            'agent_price' => 1300, 'api_price' => 1200, 'validity' => '30 Days',
+            'status' => 'on', 'plan_status' => 'on',
+        ]);
+
+        $this->assertNotNull($plan->code);
+        $this->assertGreaterThanOrEqual(1, $plan->code);
+        $this->assertLessThanOrEqual(Plan::MAX_CODE, $plan->code);
+    }
+
+    public function test_public_plan_ids_do_not_repeat(): void
+    {
+        $codes = collect(range(1, 5))->map(fn (int $i) => Plan::create([
+            'network' => 'mtn', 'type' => 'SME', 'name' => "plan {$i}", 'price' => 100,
+            'agent_price' => 100, 'api_price' => 100, 'status' => 'on', 'plan_status' => 'on',
+        ])->code);
+
+        $this->assertSame($codes->unique()->count(), $codes->count());
+    }
+
+    /**
+     * A code is stored in integrators' own systems, so handing a deleted plan's
+     * number to a new plan would silently start selling them a different bundle.
+     */
+    public function test_a_deleted_plans_public_id_is_not_reissued(): void
+    {
+        $first = Plan::create([
+            'network' => 'mtn', 'type' => 'SME', 'name' => 'gone', 'price' => 100,
+            'agent_price' => 100, 'api_price' => 100, 'status' => 'on', 'plan_status' => 'on',
+        ]);
+        $retired = $first->code;
+        $first->delete();
+
+        $second = Plan::create([
+            'network' => 'mtn', 'type' => 'SME', 'name' => 'new', 'price' => 100,
+            'agent_price' => 100, 'api_price' => 100, 'status' => 'on', 'plan_status' => 'on',
+        ]);
+
+        $this->assertNotSame($retired, $second->code);
+    }
+
+    public function test_an_admin_can_choose_the_public_plan_id(): void
+    {
+        $this->actingAs($this->admin())->post('/admin/dataplan', [
+            'code' => 250,
+            'network' => 'mtn', 'type' => 'SME', 'name' => '3GB', 'price' => 2000,
+            'agent_price' => 1900, 'api_price' => 1800, 'validity' => '30 Days',
+            'status' => 'on', 'plan_status' => 'on', 'mappings' => [],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(250, Plan::where('name', '3GB')->first()->code);
+    }
+
+    public function test_a_duplicate_public_plan_id_is_rejected(): void
+    {
+        [$plan] = $this->seedRouting();
+
+        $this->actingAs($this->admin())->post('/admin/dataplan', [
+            'code' => $plan->code,
+            'network' => 'mtn', 'type' => 'SME', 'name' => 'clash', 'price' => 100,
+            'agent_price' => 100, 'api_price' => 100,
+            'status' => 'on', 'plan_status' => 'on', 'mappings' => [],
+        ])->assertSessionHasErrors('code');
+    }
+
+    /**
+     * The purchase endpoint takes the PUBLIC id, so an internal primary key
+     * that happens to differ must not be accepted in its place.
+     */
+    public function test_the_api_buys_by_public_plan_id(): void
+    {
+        $plan = Plan::create([
+            'code' => 42,
+            'network' => 'mtn', 'type' => 'SME', 'name' => '1GB', 'price' => 700,
+            'agent_price' => 650, 'api_price' => 600, 'status' => 'on', 'plan_status' => 'on',
+        ]);
+
+        // The two identifiers must differ, or this proves nothing.
+        $this->assertNotSame($plan->code, $plan->id);
+        $vendor = Vendor::create([
+            'name' => 'va', 'base_url' => 'https://va.test/api/data', 'driver' => 'token_style_a',
+            'credentials' => ['key' => 'k'], 'is_active' => true, 'priority' => 1,
+        ]);
+        PlanVendorMapping::create(['plan_id' => $plan->id, 'vendor_id' => $vendor->id, 'external_plan_id' => '2']);
+        NetworkVendorMapping::create(['network' => 'mtn', 'vendor_id' => $vendor->id, 'external_network_code' => '1']);
+        VendorRoute::create(['network' => 'mtn', 'type' => 'SME', 'vendor_id' => $vendor->id, 'position' => 1]);
+        DataSetting::put('failover_enabled', false);
+
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        // The internal key is not a valid plan_id.
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'phone' => '08031234567', 'data_plan' => $plan->id, 'ref' => 'a',
+        ])->assertStatus(422);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'phone' => '08031234567', 'data_plan' => $plan->code, 'ref' => 'b',
+        ])->assertStatus(201);
+
+        // Stored against the internal key, addressed by the public one.
+        $this->assertSame($plan->id, DataTransaction::first()->plan_id);
+    }
+
+    public function test_the_plans_endpoint_lists_public_ids_and_api_prices(): void
+    {
+        [$plan] = $this->seedRouting();
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $response = $this->withToken('tok-api')->getJson('/api/v1/plans')->assertOk();
+
+        $row = collect($response->json('data.plans'))->firstWhere('plan_id', $plan->code);
+
+        $this->assertSame('MTN', $row['network']);
+        $this->assertSame(1, $row['network_id']);
+        $this->assertSame(600, $row['price']);   // API rate, not the retail 700
+    }
+
     public function test_api_purchase_succeeds(): void
     {
         [$plan] = $this->seedRouting();

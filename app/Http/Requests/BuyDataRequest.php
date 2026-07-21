@@ -33,7 +33,10 @@ class BuyDataRequest extends FormRequest
             // It is still checked against the known list: a caller sending
             // network 7 has a bug worth telling them about.
             'network' => ['nullable', Rule::in(array_values(DataRequestNormalizer::NETWORK_IDS))],
-            'plan_id' => ['required', 'integer', 'exists:plans,id'],
+            // The PUBLIC plan id (plans.code), not the internal primary key --
+            // that is the number quoted in the developer docs and stored in
+            // integrators' own plan tables.
+            'plan_id' => ['required', 'integer', 'exists:plans,code'],
             // The server NEVER validates the phone against network prefixes —
             // the user-selected network is authoritative (ported lines / new
             // NCC prefixes make prefix checks unreliable server-side).
@@ -53,7 +56,7 @@ class BuyDataRequest extends FormRequest
                 return;
             }
 
-            $plan = Plan::find($this->input('plan_id'));
+            $plan = Plan::byCode($this->input('plan_id'))->first();
 
             // Plan must be visible and its data type switched on.
             if (! $plan || $plan->plan_status !== 'on' || $plan->status !== 'on') {
@@ -70,7 +73,7 @@ class BuyDataRequest extends FormRequest
             if ($network && $plan->network !== $network) {
                 $validator->errors()->add(
                     'network',
-                    "Plan {$plan->id} is a {$plan->network} plan, but you sent network \"{$network}\"."
+                    "Plan {$plan->code} is a {$plan->network} plan, but you sent network \"{$network}\"."
                 );
             }
         });

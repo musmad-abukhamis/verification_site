@@ -87,6 +87,7 @@ Route::middleware('api.token')->prefix('v1')->group(function () {
     Route::get('/balance', [\App\Http\Controllers\Api\Reseller\AccountController::class, 'balance'])->name('api.balance');
     Route::get('/services', [\App\Http\Controllers\Api\Reseller\AccountController::class, 'services'])->name('api.services');
 
+    Route::get('/plans', [\App\Http\Controllers\Api\DataController::class, 'plans'])->name('api.data.plans');
     Route::post('/data', [\App\Http\Controllers\Api\DataController::class, 'store'])->name('api.data.store');
     Route::get('/data/{reference}', [\App\Http\Controllers\Api\DataController::class, 'show'])->name('api.data.show');
 

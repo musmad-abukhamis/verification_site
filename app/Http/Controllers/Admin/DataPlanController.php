@@ -31,6 +31,8 @@ class DataPlanController extends Controller
             ->paginate(20)
             ->through(fn (Plan $p) => [
                 'id' => $p->id,
+                // The number external integrators quote in their plan_id.
+                'code' => $p->code,
                 'network' => $p->network,
                 'type' => $p->type,
                 'name' => $p->name,
@@ -68,6 +70,7 @@ class DataPlanController extends Controller
         return Inertia::render('Admin/DataPlans/Form', [
             'plan' => [
                 'id' => $dataplan->id,
+                'code' => $dataplan->code,
                 'network' => $dataplan->network,
                 'type' => $dataplan->type,
                 'name' => $dataplan->name,
@@ -98,7 +101,15 @@ class DataPlanController extends Controller
     public function update(DataPlanRequest $request, Plan $dataplan)
     {
         DB::transaction(function () use ($request, $dataplan) {
-            $dataplan->update($request->safe()->except('mappings'));
+            $data = $request->safe()->except('mappings');
+
+            // A blank code on edit means "leave it alone" -- never null out a
+            // number integrators have already stored.
+            if (blank($data['code'] ?? null)) {
+                unset($data['code']);
+            }
+
+            $dataplan->update($data);
             $this->syncMappings($dataplan, $request->input('mappings', []));
         });
 

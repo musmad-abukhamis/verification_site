@@ -41,7 +41,8 @@ class DataPurchaseService
             }
         }
 
-        $plan = Plan::active()->findOrFail($data['plan_id']);
+        // plan_id from the caller is the PUBLIC code, not the primary key.
+        $plan = Plan::active()->byCode($data['plan_id'])->firstOrFail();
 
         // Never trust a client-supplied price — resolve it from the plan + role.
         $price = $plan->priceForRole($user->role);
