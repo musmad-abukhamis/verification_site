@@ -2,210 +2,118 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
-use App\Models\NinServicePrice;
-use App\Models\VerifyApiConfig;
+use App\Models\ServicePrice;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 /**
- * Pricing is now stored in the single-row config tables verifyapiconfiq
- * (slip + verification prices) and ninServicePrices (per-service prices),
- * replacing the old ServicePrice / SlipType row tables.
+ * Admin > Service Prices.
+ *
+ * Every service has one base price plus optional per-role overrides, stored one
+ * row per (service, role) in service_prices. This replaced the single-row
+ * ninServicePrices / verifyapiconfiq layout, which had exactly one price per
+ * service and so could not express "agents pay less".
  */
 class ServicePriceController extends Controller
 {
-    /** Map a slip code to its verifyapiconfiq column. */
-    private array $slipColumns = [
-        'regular' => 'regslipprice',
-        'standard' => 'standardslipsprice',
-        'premium' => 'premiumslipprice',
-        'nvs' => 'nvsslipprice',
-        'advanced' => 'advslipprice',
+    /**
+     * Roles that can carry an override. ADMIN is excluded: it is a staff role,
+     * not a price tier, and pricing it invites charging your own operators.
+     */
+    private const OVERRIDABLE_ROLES = [
+        UserRole::AGENT,
+        UserRole::API,
+        UserRole::SMART,
+        UserRole::USER,
     ];
 
-    /**
-     * Friendlier names for the ninServicePrices columns that drive live NIN
-     * pricing, so an admin can tell which field bills which service. Anything
-     * not listed keeps the humanised column name.
-     */
-    private array $serviceLabels = [
-        'searchslip1' => 'NIN Verification',
-        'phone_verify' => 'Phone Verification',
-        'demo_verify' => 'Demographic Verification',
-        'ipe' => 'IPE Clearance',
-        'validation' => 'NIN Validation',
-    ];
-
-    private function verifyConfig(): VerifyApiConfig
+    private function roleValues(): array
     {
-        return VerifyApiConfig::firstOrCreate(['id' => 'API1']);
+        return array_map(fn (UserRole $role) => $role->value, self::OVERRIDABLE_ROLES);
     }
 
-    private function ninPrices(): NinServicePrice
-    {
-        return NinServicePrice::firstOrCreate(['id' => 'API1']);
-    }
-
-    private function forgetCache(): void
-    {
-        Cache::forget('verifyapiconfiq.API1');
-        NinServicePrice::forgetCache();
-    }
-
-    /**
-     * Display the service prices management page
-     */
     public function index()
     {
-        $config = $this->verifyConfig();
-        $nin = $this->ninPrices();
+        $rows = ServicePrice::indexed();
 
-        // Slip types: one entry per verifyapiconfiq slip column.
-        $slipTypes = collect($this->slipColumns)->values()->map(function ($column, $i) use ($config) {
-            $code = array_search($column, $this->slipColumns, true);
+        $services = collect(ServicePrice::SERVICES)->map(function (array $meta, string $service) use ($rows) {
+            $base = $rows[$service][ServicePrice::BASE] ?? null;
+
+            $overrides = [];
+            foreach ($this->roleValues() as $role) {
+                $row = $rows[$service][$role] ?? null;
+                $overrides[$role] = $row && $row->is_active ? (float) $row->price : null;
+            }
 
             return [
-                'id' => $code,
-                'code' => $code,
-                'name' => ucfirst($code).' Slip',
-                'description' => '',
-                'price' => (float) ($config->{$column} ?? 0),
-                'is_active' => ! is_null($config->{$column}),
-                'sort_order' => $i,
+                'service' => $service,
+                'label' => $meta['label'],
+                'group' => $meta['group'],
+                'price' => $base ? (float) $base->price : 0.0,
+                'is_active' => (bool) $base?->is_active,
+                'overrides' => $overrides,
             ];
-        });
-
-        // Service prices: one entry per ninServicePrices column (id = column name).
-        $servicePrices = collect($nin->getAttributes())
-            ->except(['id'])
-            ->map(fn ($value, $column) => [
-                'id' => $column,
-                'service_type' => $column,
-                'name' => $this->serviceLabels[$column] ?? ucwords(str_replace('_', ' ', $column)),
-                'price' => (float) $value,
-                'is_active' => ! is_null($value),
-            ])
-            ->values();
+        })->values();
 
         return Inertia::render('Admin/ServicePrices/Index', [
-            'servicePrices' => $servicePrices,
-            'config' => $config->toArray(),
-            'slipTypes' => $slipTypes,
+            'services' => $services,
+            'roles' => $this->roleValues(),
         ]);
     }
 
     /**
-     * Update a per-service price (ninServicePrices column).
+     * Save one service: its base price, its on/off state, and its overrides.
+     *
+     * A null override means "no override" and deletes the row, so a role falls
+     * back to the base price. That is different from an override of 0, which is
+     * a real price meaning free.
      */
-    public function updateServicePrice(Request $request, string $servicePrice)
+    public function update(Request $request, string $service)
     {
-        $validated = $request->validate([
-            'price' => 'required|numeric|min:0',
-            'is_active' => 'sometimes|boolean',
-        ]);
-
-        // $servicePrice is a column name straight off the URL. Without this it
-        // would happily write any column on the row -- including `id`, which
-        // would detach the config row the whole NIN section reads.
-        if (! in_array($servicePrice, $this->serviceColumns(), true)) {
+        if (! array_key_exists($service, ServicePrice::SERVICES)) {
             return back()->withErrors(['price' => 'Unknown service.']);
         }
 
-        $this->ninPrices()->update([
-            $servicePrice => $this->columnValue($validated, fn ($price) => (string) $price),
-        ]);
-        // The NIN services read this row through a 5-minute cache, so without
-        // this the admin sees the new price but users keep paying the old one.
-        $this->forgetCache();
-
-        return back()->with('success', 'Service price updated successfully.');
-    }
-
-    /**
-     * Update a slip price (verifyapiconfiq column).
-     */
-    public function updateSlipType(Request $request, string $slipType)
-    {
         $validated = $request->validate([
             'price' => 'required|numeric|min:0',
-            'is_active' => 'sometimes|boolean',
-        ]);
+            'is_active' => 'required|boolean',
+            'overrides' => 'array',
+            // Keys are role names, so whitelist them: without this any string
+            // becomes a row that no lookup will ever match.
+            'overrides.*' => 'nullable|numeric|min:0',
+        ] + collect($this->roleValues())->mapWithKeys(
+            fn (string $role) => ["overrides.{$role}" => 'nullable|numeric|min:0']
+        )->all());
 
-        $column = $this->slipColumns[strtolower($slipType)] ?? 'standardslipsprice';
-        $this->verifyConfig()->update([
-            $column => $this->columnValue($validated, fn ($price) => (int) $price),
-        ]);
-        $this->forgetCache();
+        $unknown = array_diff(array_keys($request->input('overrides', [])), $this->roleValues());
 
-        return back()->with('success', 'Slip price updated successfully.');
-    }
-
-    /**
-     * The editable columns on the ninServicePrices row.
-     *
-     * @return array<int, string>
-     */
-    private function serviceColumns(): array
-    {
-        return array_values(array_diff(array_keys($this->ninPrices()->getAttributes()), ['id']));
-    }
-
-    /**
-     * What to write for a price column, honouring the Active checkbox.
-     *
-     * These single-row config tables have no separate enabled flag -- one
-     * nullable column per service is all there is -- so "inactive" is stored as
-     * NULL. That is also exactly what the services already treat as unpriced, so
-     * they refuse the request instead of charging. The trade-off: switching a
-     * service off discards its price, and you re-enter it to switch it back on.
-     * This is how clearing a slip type has always behaved.
-     */
-    private function columnValue(array $validated, callable $cast)
-    {
-        return ($validated['is_active'] ?? true)
-            ? $cast($validated['price'])
-            : null;
-    }
-
-    /**
-     * Set/create a slip price by code.
-     */
-    public function storeSlipType(Request $request)
-    {
-        $validated = $request->validate([
-            'code' => 'required|string',
-            'price' => 'required|numeric|min:0',
-            'is_active' => 'sometimes|boolean',
-        ]);
-
-        $column = $this->slipColumns[strtolower($validated['code'])] ?? null;
-
-        if (! $column) {
-            return back()->withErrors(['code' => 'Unknown slip type. Allowed: '.implode(', ', array_keys($this->slipColumns))]);
+        if ($unknown) {
+            return back()->withErrors(['overrides' => implode(', ', $unknown).' cannot have their own price.']);
         }
 
-        $this->verifyConfig()->update([
-            $column => $this->columnValue($validated, fn ($price) => (int) $price),
-        ]);
-        $this->forgetCache();
+        ServicePrice::updateOrCreate(
+            ['service' => $service, 'role' => ServicePrice::BASE],
+            ['price' => $validated['price'], 'is_active' => $validated['is_active']],
+        );
 
-        return back()->with('success', 'Slip price saved successfully.');
-    }
+        foreach ($validated['overrides'] ?? [] as $role => $price) {
+            if ($price === null || $price === '') {
+                ServicePrice::where('service', $service)->where('role', $role)->delete();
 
-    /**
-     * Clear a slip price (set the column to null).
-     */
-    public function destroySlipType(string $slipType)
-    {
-        $column = $this->slipColumns[strtolower($slipType)] ?? null;
+                continue;
+            }
 
-        if ($column) {
-            $this->verifyConfig()->update([$column => null]);
-            $this->forgetCache();
+            ServicePrice::updateOrCreate(
+                ['service' => $service, 'role' => $role],
+                ['price' => $price, 'is_active' => true],
+            );
         }
 
-        return back()->with('success', 'Slip price cleared successfully.');
+        ServicePrice::forgetCache();
+
+        return back()->with('success', ServicePrice::label($service).' pricing updated.');
     }
 }

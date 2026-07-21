@@ -27,7 +27,7 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
             DataRoutingSeeder::class,
             DataSettingSeeder::class,
-            VerifyApiConfigSeeder::class,
+            ServicePriceSeeder::class,
         ]);
     }
 }

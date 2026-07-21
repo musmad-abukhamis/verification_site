@@ -117,7 +117,7 @@ class ValidationController extends Controller
         ]);
 
         $user = Auth::user();
-        $price = $this->getValidationPrice();
+        $price = $this->getValidationPrice($user);
 
         if ($price === null) {
             return $this->unpricedService();

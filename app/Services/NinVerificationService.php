@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\NinServicePrice;
+use App\Models\ServicePrice;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -209,39 +211,40 @@ class NinVerificationService
     }
 
     /**
-     * NIN verification price. Both provider versions share one fee.
+     * NIN verification price for a user. Both provider versions share one fee.
      *
      * These used to read config('services.nin.prices.*'), which meant the API
      * resellers were billed from a config file while the web UI billed from the
-     * database -- two prices for the same service. Everything is now the one row
-     * Admin > Service Prices edits.
+     * database -- two prices for the same service. Everything is now
+     * service_prices, which Admin > Service Prices edits, and it is role-aware:
+     * an API reseller can be charged a different rate from a retail user.
      */
-    public function getVerificationPrice(): ?float
+    public function getVerificationPrice(?User $user = null): ?float
     {
-        return NinServicePrice::priceFor('searchslip1');
+        return ServicePrice::priceForUser('nin.verify', $user ?? Auth::user());
     }
 
     /**
      * Verification by phone number.
      */
-    public function getPhoneVerifyPrice(): ?float
+    public function getPhoneVerifyPrice(?User $user = null): ?float
     {
-        return NinServicePrice::priceFor('phone_verify');
+        return ServicePrice::priceForUser('nin.phone', $user ?? Auth::user());
     }
 
     /**
      * Verification by demographic details.
      */
-    public function getDemoVerifyPrice(): ?float
+    public function getDemoVerifyPrice(?User $user = null): ?float
     {
-        return NinServicePrice::priceFor('demo_verify');
+        return ServicePrice::priceForUser('nin.demographic', $user ?? Auth::user());
     }
 
     /**
      * Get IPE submission price
      */
-    public function getIpePrice(): ?float
+    public function getIpePrice(?User $user = null): ?float
     {
-        return NinServicePrice::priceFor('ipe');
+        return ServicePrice::priceForUser('nin.ipe', $user ?? Auth::user());
     }
 }

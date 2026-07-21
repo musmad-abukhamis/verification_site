@@ -112,7 +112,7 @@ class VerifyController extends Controller
         $user = Auth::user();
 
         // Get VERIFICATION price only (not slip price)
-        $verificationPrice = $this->getVerificationPrice();
+        $verificationPrice = $this->getVerificationPrice($user);
 
         if ($verificationPrice === null) {
             return $this->unpricedService();

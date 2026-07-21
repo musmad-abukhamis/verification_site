@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\ServicePrice;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Validation;
-use App\Models\VerifyApiConfig;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -31,11 +31,14 @@ class SlipDownloadService
             ];
         }
 
-        $price = $this->getSlipPrice($slipTypeCode);
-        if ($price <= 0) {
+        // Priced for this user's role, not the logged-in one -- they are the
+        // same today, but the caller supplies the user being charged.
+        $price = $this->getSlipPrice($slipTypeCode, $user);
+
+        if ($price === null) {
             return [
                 'success' => false,
-                'message' => 'Invalid slip type.',
+                'message' => 'This slip type is currently unavailable.',
             ];
         }
 
@@ -113,38 +116,31 @@ class SlipDownloadService
     }
 
     /**
-     * Single-row verifyapiconfiq pricing.
+     * Map a slip-type code to its service key.
      */
-    protected function verifyConfig(): VerifyApiConfig
+    protected function slipService(string $slipType): string
     {
-        return Cache::remember('verifyapiconfiq.API1', 300, function () {
-            return VerifyApiConfig::firstOrCreate(['id' => 'API1']);
-        });
-    }
-
-    protected function slipPriceColumn(string $slipType): string
-    {
-        return match (strtolower($slipType)) {
-            'regular', 'reg', 'regslip' => 'regslipprice',
-            'premium' => 'premiumslipprice',
-            'nvs' => 'nvsslipprice',
-            'advanced', 'adv' => 'advslipprice',
-            default => 'standardslipsprice',
+        return 'slip.'.match (strtolower($slipType)) {
+            'regular', 'reg', 'regslip' => 'regular',
+            'premium' => 'premium',
+            'nvs' => 'nvs',
+            'advanced', 'adv' => 'advanced',
+            default => 'standard',
         };
     }
 
     /**
-     * Get the price for a slip type.
+     * What this user pays for a slip type, or null when it is unavailable.
      */
-    public function getSlipPrice(string $slipTypeCode): float
+    public function getSlipPrice(string $slipTypeCode, ?User $user = null): ?float
     {
-        return (float) ($this->verifyConfig()->{$this->slipPriceColumn($slipTypeCode)} ?? 100);
+        return ServicePrice::priceForUser($this->slipService($slipTypeCode), $user ?? Auth::user());
     }
 
     /**
-     * Get all active slip types for frontend.
+     * Slip types the user can buy, at the price they would pay.
      */
-    public function getActiveSlipTypes(): array
+    public function getActiveSlipTypes(?User $user = null): array
     {
         $types = [
             ['code' => 'regular', 'name' => 'Regular Slip', 'component_name' => 'RegularSlip'],
@@ -154,10 +150,12 @@ class SlipDownloadService
             ['code' => 'advanced', 'name' => 'Advanced Slip', 'component_name' => 'AdvancedSlip'],
         ];
 
-        return array_values(array_filter(array_map(function (array $type) {
-            $price = (float) ($this->verifyConfig()->{$this->slipPriceColumn($type['code'])} ?? 0);
+        $user ??= Auth::user();
 
-            return $price > 0 ? [...$type, 'price' => $price] : null;
+        return array_values(array_filter(array_map(function (array $type) use ($user) {
+            $price = $this->getSlipPrice($type['code'], $user);
+
+            return $price !== null ? [...$type, 'price' => $price] : null;
         }, $types)));
     }
 }
