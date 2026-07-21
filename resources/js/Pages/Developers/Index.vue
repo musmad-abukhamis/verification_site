@@ -65,7 +65,24 @@ const snippets = {
     curlData: `curl -X POST ${base}/data \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{ "network": "MTN", "plan_id": 12, "phone": "08012345678" }'`,
+  -d '{
+    "network": 1,
+    "plan_id": 12,
+    "phone": "08012345678",
+    "ref": "ORDER-4417"
+  }'`,
+
+    curlDataAlias: `# Already wired to another data API? Send its body as-is.
+curl -X POST ${base}/data \\
+  -H "Authorization: Bearer YOUR_API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "network": 1,
+    "mobile_number": "+2348012345678",
+    "data_plan": 12,
+    "Ported_number": true,
+    "request-id": "Data_12345678900"
+  }'`,
 
     php: `<?php
 
@@ -394,9 +411,85 @@ Accept: application/json</code></pre>
                         until <code>status</code> is <code>success</code> or <code>failed</code>. A failed purchase is refunded.
                     </p>
 
-                    <div class="relative mt-3">
+                    <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">Networks</h3>
+                    <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                        Send <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">network</code> as the id or the name —
+                        both are accepted, in any case.
+                    </p>
+
+                    <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">ID</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Network</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Also accepted</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
+                                <tr><td class="px-4 py-2"><code>1</code></td><td class="px-4 py-2">MTN</td><td class="px-4 py-2"><code>mtn</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>2</code></td><td class="px-4 py-2">Airtel</td><td class="px-4 py-2"><code>airtel</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>3</code></td><td class="px-4 py-2">Glo</td><td class="px-4 py-2"><code>glo</code>, <code>globacom</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>4</code></td><td class="px-4 py-2">9mobile</td><td class="px-4 py-2"><code>9mobile</code>, <code>etisalat</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="mt-3 text-sm text-gray-700 dark:text-gray-300">
+                        The <strong>plan decides the network</strong> — <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">network</code>
+                        is a cross-check. If it disagrees with the plan you get a <code>422</code> naming both, which
+                        catches a mis-mapped plan table before it sells the wrong bundle.
+                    </p>
+
+                    <div class="relative mt-4">
                         <button @click="copy(snippets.curlData, 'data')" class="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600">{{ copied === 'data' ? 'Copied' : 'Copy' }}</button>
                         <pre class="overflow-x-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100"><code>{{ snippets.curlData }}</code></pre>
+                    </div>
+
+                    <h3 class="mt-6 text-sm font-semibold text-gray-900 dark:text-white">Migrating from another provider</h3>
+                    <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                        You do not have to rename your fields. We accept the spellings the common data APIs use and
+                        normalize them, so in most cases switching over is a change of URL and token only.
+                    </p>
+
+                    <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Field</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Also accepted as</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
+                                <tr><td class="px-4 py-2"><code>network</code></td><td class="px-4 py-2"><code>network_id</code>, <code>operator</code>, <code>service</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>plan_id</code></td><td class="px-4 py-2"><code>data_plan</code>, <code>plan</code>, <code>dataplan</code>, <code>plan_code</code>, <code>variation_code</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>phone</code></td><td class="px-4 py-2"><code>mobile_number</code>, <code>phone_number</code>, <code>msisdn</code>, <code>mobile</code>, <code>recipient</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>ported</code></td><td class="px-4 py-2"><code>ported_number</code>, <code>Ported_number</code>, <code>is_ported</code></td></tr>
+                                <tr><td class="px-4 py-2"><code>client_ref</code></td><td class="px-4 py-2"><code>ref</code>, <code>request-id</code>, <code>request_id</code>, <code>reference</code>, <code>order_id</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="mt-3 text-sm text-gray-700 dark:text-gray-300">
+                        Phone numbers are accepted as <code>08012345678</code>, <code>2348012345678</code>,
+                        <code>+2348012345678</code> or <code>8012345678</code>.
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">bypass</code> and
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">payment_medium</code> are accepted and
+                        ignored — we never validate prefixes, and there is only one wallet.
+                    </p>
+
+                    <div class="relative mt-4">
+                        <button @click="copy(snippets.curlDataAlias, 'dataAlias')" class="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600">{{ copied === 'dataAlias' ? 'Copied' : 'Copy' }}</button>
+                        <pre class="overflow-x-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100"><code>{{ snippets.curlDataAlias }}</code></pre>
+                    </div>
+
+                    <div class="mt-4 rounded-lg border-l-4 border-green-400 bg-green-50 p-4 dark:bg-green-900/20">
+                        <p class="text-sm text-green-800 dark:text-green-200">
+                            <strong>Your reference is the idempotency key.</strong> Send your own order id as
+                            <code>ref</code> (any format). Replaying the same id inside 10 minutes returns the original
+                            purchase instead of buying twice — so a timeout is safe to retry. Omit it and we generate
+                            one, which means a retry <em>will</em> buy again.
+                        </p>
                     </div>
                 </section>
 
