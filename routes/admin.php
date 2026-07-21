@@ -125,7 +125,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // BVN Service Prices
     Route::get('/bvn-prices', [BvnPriceController::class, 'index'])->name('bvn-prices.index');
-    Route::put('/bvn-prices', [BvnPriceController::class, 'update'])->name('bvn-prices.update');
+    // One service at a time now, saving its base price, on/off state and role
+    // overrides together -- same shape as admin.service-prices.update.
+    Route::put('/bvn-prices/{service}', [BvnPriceController::class, 'update'])->name('bvn-prices.update');
 
     // BVN Modification Management
     Route::get('/bvn-modifications', [BvnModificationController::class, 'index'])->name('bvn-modifications.index');

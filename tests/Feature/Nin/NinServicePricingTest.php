@@ -224,6 +224,56 @@ class NinServicePricingTest extends TestCase
         $this->assertSame(0.0, ServicePrice::priceForUser('nin.verify', $api));
     }
 
+    /**
+     * BVN services moved onto the same table, so they get role pricing too.
+     */
+    public function test_bvn_services_are_role_aware(): void
+    {
+        $this->price('bvn.mod.name', 3000);
+        $this->price('bvn.mod.name', 1800, UserRole::AGENT->value);
+
+        $agent = User::factory()->create(['role' => UserRole::AGENT]);
+        $retail = User::factory()->create(['role' => UserRole::USER]);
+
+        $this->assertSame(1800.0, ServicePrice::priceForUser('bvn.mod.name', $agent));
+        $this->assertSame(3000.0, ServicePrice::priceForUser('bvn.mod.name', $retail));
+    }
+
+    /**
+     * Each admin page edits only its own services, so the BVN screen cannot be
+     * used to rewrite NIN pricing.
+     */
+    public function test_the_bvn_page_cannot_edit_a_nin_service(): void
+    {
+        $this->price('nin.verify', 75);
+
+        $admin = User::factory()->create(['role' => UserRole::ADMIN]);
+
+        $this->actingAs($admin)
+            ->put('/admin/bvn-prices/nin.verify', ['price' => 1, 'is_active' => true])
+            ->assertSessionHasErrors('price');
+
+        $this->assertSame(75.0, ServicePrice::priceFor('nin.verify'));
+    }
+
+    public function test_the_bvn_page_saves_a_bvn_service(): void
+    {
+        $this->price('bvn.retrieve.id', 500);
+
+        $admin = User::factory()->create(['role' => UserRole::ADMIN]);
+
+        $this->actingAs($admin)->put('/admin/bvn-prices/bvn.retrieve.id', [
+            'price' => 750,
+            'is_active' => true,
+            'overrides' => ['API' => 400],
+        ])->assertSessionHasNoErrors();
+
+        $api = User::factory()->create(['role' => UserRole::API]);
+
+        $this->assertSame(750.0, ServicePrice::priceFor('bvn.retrieve.id'));
+        $this->assertSame(400.0, ServicePrice::priceForUser('bvn.retrieve.id', $api));
+    }
+
     public function test_an_unknown_service_is_rejected(): void
     {
         $admin = User::factory()->create(['role' => UserRole::ADMIN]);

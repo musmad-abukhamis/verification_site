@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BvnRetrieval;
-use App\Models\BvnServicePrice;
+use App\Models\ServicePrice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -33,9 +33,7 @@ class BvnRetrievalController extends Controller
     /** The configured ID-retrieval fee, or null when not set. */
     private function retrievalPrice(): ?float
     {
-        $value = BvnServicePrice::firstOrCreate(['id' => 'API1'])->retrieve_with_Id;
-
-        return ($value === null || $value === '' || ! is_numeric($value)) ? null : (float) $value;
+        return ServicePrice::priceForUser('bvn.retrieve.id', Auth::user());
     }
 
     private function present(BvnRetrieval $r): array

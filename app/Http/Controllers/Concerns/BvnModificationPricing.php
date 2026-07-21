@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Concerns;
 
 use App\Models\BvnModification;
-use App\Models\BvnServicePrice;
+use App\Models\ServicePrice;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Shared BVN-modification service-type metadata and pricing helpers.
  *
- * Mirrors the serviceType → price column mapping from the nimcweb source
- * (bvnserviceprices) and the labels used across its pages.
+ * Prices come from service_prices and depend on the user's role, the same as
+ * the NIN services. They were previously read straight off the single-row
+ * bvnserviceprices config, which had exactly one price per service.
  */
 trait BvnModificationPricing
 {
@@ -28,18 +31,18 @@ trait BvnModificationPricing
     }
 
     /**
-     * serviceType → bvnserviceprices column.
+     * serviceType → service_prices key.
      */
     protected function priceColumn(string $serviceType): ?string
     {
         return match ($serviceType) {
-            'modify-name' => 'name_mod',
-            'modify-phone' => 'phone_mod',
-            'modify-dob' => 'dob_mod',
-            'modify-email' => 'email_mod',
-            'modify-name-dob' => 'namedob_mod',
-            'modify-name-phone' => 'namephone_mod',
-            'modify-name-dob-phone' => 'namephonedob_mod',
+            'modify-name' => 'bvn.mod.name',
+            'modify-phone' => 'bvn.mod.phone',
+            'modify-dob' => 'bvn.mod.dob',
+            'modify-email' => 'bvn.mod.email',
+            'modify-name-dob' => 'bvn.mod.name_dob',
+            'modify-name-phone' => 'bvn.mod.name_phone',
+            'modify-name-dob-phone' => 'bvn.mod.name_dob_phone',
             default => null,
         };
     }
@@ -77,47 +80,41 @@ trait BvnModificationPricing
     }
 
     /**
-     * The single-row pricing config (string id "API1").
+     * What this user pays for a service type, or null when it is unavailable.
+     * Defaults to the logged-in user, whose role selects the price.
      */
-    protected function bvnPrices(): BvnServicePrice
+    protected function servicePrice(string $serviceType, ?User $user = null): ?float
     {
-        return BvnServicePrice::firstOrCreate(['id' => 'API1']);
+        $service = $this->priceColumn($serviceType);
+
+        return $service
+            ? ServicePrice::priceForUser($service, $user ?? Auth::user())
+            : null;
     }
 
     /**
-     * Numeric price for a service type, or null when not configured.
+     * Price map keyed by the raw column names the frontend reads, priced for
+     * the current user. The keys are kept as-is so the Vue pages do not have to
+     * change; only where the numbers come from has.
      */
-    protected function servicePrice(string $serviceType): ?float
+    protected function pricePayload(?User $user = null): array
     {
-        $column = $this->priceColumn($serviceType);
-        if (! $column) {
-            return null;
-        }
+        $user ??= Auth::user();
 
-        $value = $this->bvnPrices()->{$column};
-        if ($value === null || $value === '' || ! is_numeric($value)) {
-            return null;
-        }
-
-        return (float) $value;
-    }
-
-    /**
-     * Price map keyed by the raw bvnserviceprices columns the frontend reads.
-     */
-    protected function pricePayload(): array
-    {
-        $prices = $this->bvnPrices();
-
-        return [
-            'name_mod' => $prices->name_mod,
-            'dob_mod' => $prices->dob_mod,
-            'phone_mod' => $prices->phone_mod,
-            'email_mod' => $prices->email_mod,
-            'namedob_mod' => $prices->namedob_mod,
-            'namephone_mod' => $prices->namephone_mod,
-            'namephonedob_mod' => $prices->namephonedob_mod,
+        $columns = [
+            'name_mod' => 'modify-name',
+            'dob_mod' => 'modify-dob',
+            'phone_mod' => 'modify-phone',
+            'email_mod' => 'modify-email',
+            'namedob_mod' => 'modify-name-dob',
+            'namephone_mod' => 'modify-name-phone',
+            'namephonedob_mod' => 'modify-name-dob-phone',
         ];
+
+        return array_map(
+            fn (string $serviceType) => $this->servicePrice($serviceType, $user),
+            $columns,
+        );
     }
 
     /**

@@ -28,6 +28,21 @@ class ServicePriceSeeder extends Seeder
         'slip.premium' => 150,
         'slip.nvs' => 200,
         'slip.advanced' => 250,
+        'bvn.mod.name' => 2000,
+        'bvn.mod.dob' => 2000,
+        'bvn.mod.phone' => 2000,
+        'bvn.mod.email' => 2000,
+        'bvn.mod.name_dob' => 3000,
+        'bvn.mod.name_phone' => 3000,
+        'bvn.mod.name_dob_phone' => 4000,
+        'bvn.search.premium' => 150,
+        'bvn.search.standard' => 100,
+        'bvn.search.regular' => 50,
+        'bvn.retrieve.phone' => 500,
+        'bvn.retrieve.id' => 500,
+        'bvn.onboarding1' => 1000,
+        'bvn.onboarding2' => 1000,
+        'bvn.idcard' => 1000,
     ];
 
     public function run(): void

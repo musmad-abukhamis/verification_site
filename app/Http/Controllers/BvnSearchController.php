@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BvnServicePrice;
+use App\Models\ServicePrice;
 use App\Models\NinDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,11 +21,11 @@ use Inertia\Inertia;
  */
 class BvnSearchController extends Controller
 {
-    /** slipType -> bvnserviceprices column (premium = BVN Slip). */
+    /** slipType -> service_prices key (premium = BVN Slip). */
     private array $slipColumns = [
-        'premium' => 'searchslip1',
-        'standard' => 'searchslip2',
-        'regular' => 'searchslip3',
+        'premium' => 'bvn.search.premium',
+        'standard' => 'bvn.search.standard',
+        'regular' => 'bvn.search.regular',
     ];
 
     private function walletPayload($user): array
@@ -39,21 +39,14 @@ class BvnSearchController extends Controller
         ];
     }
 
-    private function prices(): BvnServicePrice
-    {
-        return BvnServicePrice::firstOrCreate(['id' => 'API1']);
-    }
-
+    /**
+     * What the current user pays for a slip type, or null when unavailable.
+     */
     private function slipPrice(string $slipType): ?float
     {
-        $column = $this->slipColumns[$slipType] ?? null;
-        if (! $column) {
-            return null;
-        }
+        $service = $this->slipColumns[$slipType] ?? null;
 
-        $value = $this->prices()->{$column};
-
-        return ($value === null || $value === '' || ! is_numeric($value)) ? null : (float) $value;
+        return $service ? ServicePrice::priceForUser($service, Auth::user()) : null;
     }
 
     /**

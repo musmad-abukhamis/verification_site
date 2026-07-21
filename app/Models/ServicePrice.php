@@ -48,7 +48,38 @@ class ServicePrice extends Model
         'slip.premium' => ['label' => 'Premium Slip', 'group' => 'slip'],
         'slip.nvs' => ['label' => 'NVS Slip', 'group' => 'slip'],
         'slip.advanced' => ['label' => 'Advanced Slip', 'group' => 'slip'],
+
+        'bvn.mod.name' => ['label' => 'Name Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.dob' => ['label' => 'DOB Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.phone' => ['label' => 'Phone Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.email' => ['label' => 'Email Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.name_dob' => ['label' => 'Name & DOB Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.name_phone' => ['label' => 'Name & Phone Modification', 'group' => 'bvn_modification'],
+        'bvn.mod.name_dob_phone' => ['label' => 'Name, DOB & Phone Modification', 'group' => 'bvn_modification'],
+
+        'bvn.search.premium' => ['label' => 'BVN Slip', 'group' => 'bvn_search'],
+        'bvn.search.standard' => ['label' => 'Standard Slip', 'group' => 'bvn_search'],
+        'bvn.search.regular' => ['label' => 'Regular Slip', 'group' => 'bvn_search'],
+        'bvn.retrieve.phone' => ['label' => 'Retrieve With Phone', 'group' => 'bvn_search'],
+        'bvn.retrieve.id' => ['label' => 'Retrieve With ID', 'group' => 'bvn_search'],
+
+        'bvn.onboarding1' => ['label' => 'BVN SDK Onboarding', 'group' => 'bvn_other'],
+        'bvn.onboarding2' => ['label' => 'Onboarding 2', 'group' => 'bvn_other'],
+        'bvn.idcard' => ['label' => 'ID Card Fee', 'group' => 'bvn_other'],
     ];
+
+    /**
+     * Service keys belonging to a display group.
+     *
+     * @return array<int, string>
+     */
+    public static function inGroups(array $groups): array
+    {
+        return array_keys(array_filter(
+            self::SERVICES,
+            fn (array $meta) => in_array($meta['group'], $groups, true),
+        ));
+    }
 
     /**
      * Every row, indexed [service][role]. One query per request at most.
