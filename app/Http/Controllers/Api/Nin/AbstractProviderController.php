@@ -54,6 +54,10 @@ abstract class AbstractProviderController extends Controller
         $user = Auth::user();
         $price = $provider->priceFor($method);
 
+        if ($price === null) {
+            return $this->error('service_unpriced', 'This service is not priced yet. Please contact support.', 503);
+        }
+
         if ((float) $user->balance < $price) {
             return $this->error('insufficient_balance', 'Insufficient wallet balance. Please fund your wallet.', 402);
         }

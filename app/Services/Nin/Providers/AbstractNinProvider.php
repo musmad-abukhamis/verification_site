@@ -2,6 +2,7 @@
 
 namespace App\Services\Nin\Providers;
 
+use App\Models\NinServicePrice;
 use App\Services\Nin\Contracts\NinProvider;
 use App\Services\Nin\VerificationResult;
 use Illuminate\Http\Client\PendingRequest;
@@ -41,9 +42,22 @@ abstract class AbstractNinProvider implements NinProvider
         return $this->config('methods', ['nin', 'phone', 'demographic']);
     }
 
-    public function priceFor(string $method): float
+    /**
+     * Verification methods are priced once, in Admin > Service Prices, and every
+     * provider charges the same fee for the same method. They used to be priced
+     * per provider from config('services.nin.providers.*.prices.*'), which meant
+     * changing a price needed a deploy and the admin page had no effect.
+     *
+     * Null means no admin has set a price yet -- callers must refuse rather than
+     * invent one.
+     */
+    public function priceFor(string $method): ?float
     {
-        return (float) $this->config("prices.{$method}", 0);
+        return NinServicePrice::priceFor(match ($method) {
+            'phone' => 'phone_verify',
+            'demographic' => 'demo_verify',
+            default => 'searchslip1',
+        });
     }
 
     protected function baseUrl(): string

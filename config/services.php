@@ -48,20 +48,18 @@ return [
         'provider' => env('NIN_PROVIDER', 'prembly'),
         'base_url' => env('NIN_BASE_URL', 'https://api.prembly.com'),
         'api_key' => env('NIN_API_KEY'),
-        'prices' => [
-            'premium' => env('NIN_PREMIUM_PRICE', 150),
-            'standard' => env('NIN_STANDARD_PRICE', 100),
-            'regular' => env('NIN_REGULAR_PRICE', 50),
-            'ipe' => env('NIN_IPE_PRICE', 50),
-        ],
 
         /*
         |----------------------------------------------------------------------
         | NIN Verification Providers (modular, multi-provider)
         |----------------------------------------------------------------------
-        | Each provider is self-contained: base_url, api_key, the methods it
-        | supports, and a per-method price. The frontend reads `label`,
-        | `active` and `methods` to build the dynamic UI. To add a provider:
+        | Each provider is self-contained: base_url, api_key and the methods it
+        | supports. PRICES ARE NOT HERE -- every NIN service is priced in
+        | Admin > Service Prices (the ninServicePrices table), the same fee for
+        | every provider. The per-provider `prices` keys that used to live here
+        | were removed because nothing read them once the admin page became the
+        | source of truth. The frontend reads `label`, `active` and `methods` to
+        | build the dynamic UI. To add a provider:
         |   1. Add a block here.
         |   2. Create a matching service class in App\Services\Nin\Providers.
         |   3. Register it in App\Services\Nin\NinProviderManager.
@@ -76,11 +74,6 @@ return [
                 'base_url' => env('NIN_BASE_URL', 'https://api.prembly.com'),
                 'api_key'  => env('NIN_API_KEY'),
                 'methods'  => ['nin', 'phone', 'demographic'],
-                'prices'   => [
-                    'nin'         => env('PREMBLY_NIN_PRICE', 50),
-                    'phone'       => env('PREMBLY_PHONE_PRICE', 150),
-                    'demographic' => env('PREMBLY_DEMO_PRICE', 150),
-                ],
             ],
 
             'arewasmart' => [
@@ -89,11 +82,6 @@ return [
                 'base_url' => env('AREWASMART_BASE_URL', env('NIN_BASE_URL', 'https://api.prembly.com')),
                 'api_key'  => env('AREWASMART_API_KEY', env('NIN_API_KEY')),
                 'methods'  => ['nin', 'phone', 'demographic'],
-                'prices'   => [
-                    'nin'         => env('AREWASMART_NIN_PRICE', 50),
-                    'phone'       => env('AREWASMART_PHONE_PRICE', 150),
-                    'demographic' => env('AREWASMART_DEMO_PRICE', 150),
-                ],
             ],
 
             'provider3' => [
@@ -102,11 +90,6 @@ return [
                 'base_url' => env('PROVIDER3_BASE_URL'),
                 'api_key'  => env('PROVIDER3_API_KEY'),
                 'methods'  => ['nin', 'phone', 'demographic'],
-                'prices'   => [
-                    'nin'         => env('PROVIDER3_NIN_PRICE', 50),
-                    'phone'       => env('PROVIDER3_PHONE_PRICE', 150),
-                    'demographic' => env('PROVIDER3_DEMO_PRICE', 150),
-                ],
             ],
 
             'provider4' => [
@@ -115,11 +98,6 @@ return [
                 'base_url' => env('PROVIDER4_BASE_URL'),
                 'api_key'  => env('PROVIDER4_API_KEY'),
                 'methods'  => ['nin', 'phone', 'demographic'],
-                'prices'   => [
-                    'nin'         => env('PROVIDER4_NIN_PRICE', 50),
-                    'phone'       => env('PROVIDER4_PHONE_PRICE', 150),
-                    'demographic' => env('PROVIDER4_DEMO_PRICE', 150),
-                ],
             ],
 
             'provider5' => [
@@ -128,11 +106,6 @@ return [
                 'base_url' => env('PROVIDER5_BASE_URL'),
                 'api_key'  => env('PROVIDER5_API_KEY'),
                 'methods'  => ['nin', 'phone', 'demographic'],
-                'prices'   => [
-                    'nin'         => env('PROVIDER5_NIN_PRICE', 50),
-                    'phone'       => env('PROVIDER5_PHONE_PRICE', 150),
-                    'demographic' => env('PROVIDER5_DEMO_PRICE', 150),
-                ],
             ],
         ],
     ],

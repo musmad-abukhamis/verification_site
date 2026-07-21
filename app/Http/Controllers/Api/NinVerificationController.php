@@ -24,6 +24,15 @@ class NinVerificationController extends Controller
     }
 
     /**
+     * A service no admin has priced yet. 503 rather than 500: nothing is broken,
+     * the operator just has to set a price in Admin > Service Prices.
+     */
+    protected function unpricedService()
+    {
+        return response()->json(['error' => 'This service is not priced yet. Please contact support.'], 503);
+    }
+
+    /**
      * NIN Verify - Provider 1 (Prembly)
      */
     public function verifyProvider1(NinVerificationRequest $request)
@@ -45,7 +54,11 @@ class NinVerificationController extends Controller
     public function verifyDemo(NinDemoVerificationRequest $request)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getPrice('premium');
+        $price = $this->verificationService->getDemoVerifyPrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
@@ -97,7 +110,11 @@ class NinVerificationController extends Controller
     public function verifyPhone(NinPhoneVerificationRequest $request)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getPrice('premium');
+        $price = $this->verificationService->getPhoneVerifyPrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
@@ -195,7 +212,13 @@ class NinVerificationController extends Controller
     protected function processVerification(NinVerificationRequest $request, string $provider)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getPrice($request->slipType);
+        // One verification fee regardless of the slip type requested -- the slip
+        // itself is charged separately, by SlipDownloadService.
+        $price = $this->verificationService->getVerificationPrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);
@@ -249,6 +272,10 @@ class NinVerificationController extends Controller
     {
         $user = Auth::user();
         $price = $this->verificationService->getIpePrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return response()->json(['error' => 'Insufficient balance'], 402);

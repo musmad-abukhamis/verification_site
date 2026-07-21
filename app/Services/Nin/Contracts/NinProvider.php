@@ -30,8 +30,11 @@ interface NinProvider
     /** Methods this provider supports: subset of ['nin','phone','demographic']. */
     public function supportedMethods(): array;
 
-    /** Price for a given method (nin|phone|demographic). */
-    public function priceFor(string $method): float;
+    /**
+     * Price for a given method (nin|phone|demographic), from Admin > Service
+     * Prices. Null when no price has been configured for it.
+     */
+    public function priceFor(string $method): ?float;
 
     public function verifyByNin(string $nin): VerificationResult;
 
