@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataPricingController;
 use App\Http\Controllers\DataPurchaseController;
 use App\Http\Controllers\DataTransactionController;
 use App\Http\Controllers\ProfileController;
@@ -166,3 +167,8 @@ require __DIR__.'/auth.php';
 Route::get('/developers', fn () => Inertia::render('Developers/Index', [
     'endpoint' => url('/api/v1'),
 ]))->name('developers');
+
+// Public data price list. Outside the auth group so it can be shared and
+// linked to, but priced for the viewer when they are signed in -- an agent
+// sees agent rates, a visitor sees retail.
+Route::get('/data-pricing', [DataPricingController::class, 'index'])->name('data-pricing');
