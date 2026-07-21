@@ -9,8 +9,6 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\NIN\VerifyController as NinVerifyController;
-use App\Http\Controllers\NIN\PhoneVerifyController as NinPhoneVerifyController;
-use App\Http\Controllers\NIN\DemoVerifyController as NinDemoVerifyController;
 use App\Http\Controllers\NIN\IpeController as NinIpeController;
 use App\Http\Controllers\NIN\ValidationController as NinValidationController;
 use App\Http\Controllers\NIN\SlipDownloadController;
@@ -76,10 +74,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/nin/slip/types', [SlipDownloadController::class, 'types'])->name('nin.slip.types');
     Route::post('/nin/slip/download', [SlipDownloadController::class, 'download'])->name('nin.slip.download');
 
-    // Phone & Demographic verification are now consolidated into the single
-    // dynamic NIN Verification page (provider + method selector). The old
-    // standalone pages redirect there; verification itself goes through the
-    // modular /api/v1/nin/providers/* JSON endpoints.
+    // Phone & Demographic verification are consolidated into the single dynamic
+    // NIN Verification page (provider + method selector), which verifies through
+    // the modular /api/v1/nin/providers/* JSON endpoints. Their standalone
+    // controllers and pages have been deleted; these redirects are kept only so
+    // existing links and bookmarks still land somewhere useful.
     Route::get('/nin/phone', fn () => redirect()->route('nin.verify.index'))->name('nin.phone.index');
     Route::get('/nin/demo', fn () => redirect()->route('nin.verify.index'))->name('nin.demo.index');
 
