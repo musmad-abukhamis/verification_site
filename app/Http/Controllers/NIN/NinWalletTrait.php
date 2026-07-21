@@ -53,21 +53,10 @@ trait NinWalletTrait
         return NinServicePrice::priceFor('searchslip1');
     }
 
-    /**
-     * Verification by phone number.
-     */
-    protected function getPhoneVerifyPrice(): ?float
-    {
-        return NinServicePrice::priceFor('phone_verify');
-    }
-
-    /**
-     * Verification by demographic details (name / DOB / gender).
-     */
-    protected function getDemoVerifyPrice(): ?float
-    {
-        return NinServicePrice::priceFor('demo_verify');
-    }
+    // Phone and demographic verification are priced here too, but nothing in
+    // this trait reads them: those methods run through the provider selector
+    // (AbstractNinProvider::priceFor) and the reseller API
+    // (NinVerificationService), which read phone_verify / demo_verify directly.
 
     /**
      * Slip price by type from the config row.
