@@ -90,7 +90,7 @@ class PayVesselWebhookController extends Controller
             // provider will not retry and a log line would be the only record.
             UnattributedPayment::record('payvessel', [
                 'reference' => $reference,
-                'account_number' => $data['order']['account_number'] ?? null,
+                'account_number' => $this->accountNumber($data),
                 'customer_email' => $data['customer']['email'] ?? null,
                 'customer_name' => $data['customer']['name'] ?? null,
                 'amount' => $gross,
@@ -100,7 +100,7 @@ class PayVesselWebhookController extends Controller
 
             Log::error('PayVessel webhook: no user for payment', [
                 'reference' => $reference,
-                'account' => $data['order']['account_number'] ?? null,
+                'account' => $this->accountNumber($data),
                 'email' => $data['customer']['email'] ?? null,
             ]);
 
@@ -133,9 +133,7 @@ class PayVesselWebhookController extends Controller
      */
     private function resolveUser(array $data): ?User
     {
-        $accountNumber = $data['order']['account_number']
-            ?? $data['account']['account_number']
-            ?? null;
+        $accountNumber = $this->accountNumber($data);
 
         if ($accountNumber) {
             $columns = ['palmpay', 'palmpay2', 'Ninesp', 'moniepoint', 'wema', 'providus', 'sterling', 'opay', 'fidelity'];
@@ -158,5 +156,22 @@ class PayVesselWebhookController extends Controller
         return $email
             ? User::whereRaw('lower(email) = ?', [mb_strtolower($email)])->first()
             : null;
+    }
+
+    /**
+     * Live deliveries put the credited account under virtualAccount, not order:
+     * {"virtualAccount":{"virtualAccountNumber":"6612056167","virtualBank":"999991"}}.
+     * The order.* spellings are kept as fallbacks in case the shape varies by
+     * event type -- reading only one of them is what silently pushed every real
+     * payment onto the weaker email fallback.
+     */
+    private function accountNumber(array $data): ?string
+    {
+        $candidate = $data['virtualAccount']['virtualAccountNumber']
+            ?? $data['order']['account_number']
+            ?? $data['account']['account_number']
+            ?? null;
+
+        return $candidate ? (string) $candidate : null;
     }
 }

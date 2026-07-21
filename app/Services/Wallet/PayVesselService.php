@@ -4,6 +4,7 @@ namespace App\Services\Wallet;
 
 use App\Models\AccountKyc;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -51,6 +52,25 @@ class PayVesselService
 
         if (! $user->email) {
             return ['success' => false, 'message' => 'A valid email is required on your account.'];
+        }
+
+        // accountkyc.bvn is UNIQUE, so a BVN already held by someone else can
+        // never be stored. Checking before the API call matters: PayVessel would
+        // otherwise issue real accounts we then fail to persist, leaving numbers
+        // live at the provider that no webhook could ever attribute.
+        $bvnTaken = AccountKyc::where('bvn', $bvn)
+            ->where('userId', '!=', $user->id)
+            ->exists();
+
+        if ($bvnTaken) {
+            Log::warning('PayVessel: BVN already registered to another account', [
+                'userId' => $user->id,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'That BVN is already registered to another account. Please contact support if this is yours.',
+            ];
         }
 
         $payload = [
@@ -163,17 +183,41 @@ class PayVesselService
 
         $tracking = $banks[0]['trackingReference'] ?? null;
 
-        AccountKyc::updateOrCreate(
-            ['userId' => $user->id],
-            array_filter([
-                'id' => $user->id,
-                'payvessel_id' => $tracking,
-                'bvn' => $bvn,
-                'nin' => $nin,
-                'status' => 'generated',
-                'firstname' => $user->name ?: $user->username,
-            ] + $columns, fn ($value) => $value !== null)
-        );
+        $kyc = AccountKyc::firstOrNew(['userId' => $user->id]);
+
+        // The primary key is ours to set on insert only. Passing 'id' through
+        // updateOrCreate put it in the UPDATE too, rewriting the key of an
+        // existing row -- which orphans anything referencing it and, on rows
+        // whose id was assigned by an earlier version of this code, produced the
+        // UPDATE ... WHERE id = <payvessel tracking ref> seen in production.
+        if (! $kyc->exists) {
+            $kyc->id = $user->id;
+        }
+
+        $kyc->fill(array_filter([
+            'payvessel_id' => $tracking,
+            'bvn' => $bvn,
+            'nin' => $nin,
+            'status' => 'generated',
+            'firstname' => $user->name ?: $user->username,
+        ] + $columns, fn ($value) => $value !== null));
+
+        try {
+            $kyc->save();
+        } catch (UniqueConstraintViolationException $e) {
+            // bvn and payvessel_id are both UNIQUE. The bvn pre-check above
+            // closes the common case, so reaching here means either a race or a
+            // trackingReference PayVessel has already issued to another user.
+            Log::error('PayVessel: could not persist accounts', [
+                'userId' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Your details conflict with an existing account. Please contact support.',
+            ];
+        }
 
         return [
             'success' => true,
