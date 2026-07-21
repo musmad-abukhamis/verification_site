@@ -248,9 +248,14 @@ const bvnSuccess = `{
                     <h1 class="text-lg font-bold text-gray-900 dark:text-white">API Documentation</h1>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Integrate identity verification and data top-ups into your own site</p>
                 </div>
-                <Link :href="route('api-access.index')" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                    Get your token
-                </Link>
+                <div class="flex items-center gap-4">
+                    <Link :href="route('data-pricing')" class="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                        Data Pricing
+                    </Link>
+                    <Link :href="route('api-access.index')" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                        Get your token
+                    </Link>
+                </div>
             </div>
         </header>
 
@@ -465,6 +470,13 @@ Accept: application/json</code></pre>
                         Every plan you can sell, with the <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">plan_id</code>
                         to send and the price <em>you</em> pay. Plan ids are short, stable numbers (1–999) — store them in
                         your own plan table and call this endpoint to pick up new plans rather than hard-coding a list.
+                    </p>
+                    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        Prefer to read them rather than call them? The same list is on the
+                        <Link :href="route('data-pricing')" class="text-indigo-600 hover:underline dark:text-indigo-400">Data Pricing</Link>
+                        page — signed in, it shows your rates rather than retail. Build against
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">GET /plans</code> though: prices and plans
+                        change, and that page is for people, not code.
                     </p>
 
                     <div class="relative mt-3">
