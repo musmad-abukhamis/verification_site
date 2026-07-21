@@ -61,6 +61,89 @@ class DataAdminApiTest extends TestCase
             ->assertStatus(401);
     }
 
+    /**
+     * An integrator wired to another data API should be able to point it at us
+     * without renaming a single field: network as a numeric id, plan as
+     * data_plan, phone as mobile_number, and their own non-UUID request id.
+     */
+    public function test_api_accepts_another_providers_body_shape(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 1,
+            'mobile_number' => '+2348031234567',
+            'data_plan' => $plan->id,
+            'bypass' => false,
+            'request-id' => 'Data_12345678900',
+        ])->assertStatus(201)->assertJsonPath('status', 'success');
+
+        $txn = DataTransaction::first();
+
+        $this->assertSame('08031234567', $txn->phone);
+        $this->assertSame('mtn', $txn->network);
+        $this->assertSame(4400.0, (float) $user->fresh()->balance);
+    }
+
+    /**
+     * The caller's own request id is the idempotency key, so replaying it must
+     * not charge twice -- even though it is not a UUID.
+     */
+    public function test_a_repeated_request_id_does_not_charge_twice(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $body = [
+            'network' => 1,
+            'phone' => '08031234567',
+            'data_plan' => $plan->id,
+            'ref' => 'ORDER-77',
+        ];
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', $body)->assertStatus(201);
+        $this->withToken('tok-api')->postJson('/api/v1/data', $body);
+
+        $this->assertSame(1, DataTransaction::count());
+        $this->assertSame(4400.0, (float) $user->fresh()->balance);
+    }
+
+    public function test_a_network_that_disagrees_with_the_plan_is_rejected(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake();
+
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        // Plan 1 is MTN; 3 is Glo.
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 3,
+            'phone' => '08031234567',
+            'data_plan' => $plan->id,
+        ])->assertStatus(422);
+
+        $this->assertSame(0, DataTransaction::count());
+    }
+
+    public function test_an_unknown_network_id_is_rejected(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake();
+
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 7,
+            'phone' => '08031234567',
+            'data_plan' => $plan->id,
+        ])->assertStatus(422);
+    }
+
     public function test_api_purchase_succeeds(): void
     {
         [$plan] = $this->seedRouting();
