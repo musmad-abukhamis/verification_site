@@ -201,6 +201,38 @@ class PayVesselWebhookTest extends TestCase
     }
 
     /**
+     * The shape above was written from the docs; live deliveries carry the
+     * account under virtualAccount.virtualAccountNumber instead. This is the
+     * body PayVessel actually posted, trimmed to the fields we read.
+     */
+    public function test_the_live_payload_shape_resolves_the_account(): void
+    {
+        $owner = $this->userWithAccount('6612056167');
+        $other = User::factory()->create(['email' => 'someone-else@example.com']);
+
+        $this->postSigned([
+            'transaction' => [
+                'date' => '2026-07-21T00:00:00',
+                'reference' => '100033260721083116040038468593PP',
+                'sessionid' => '100033260721083116040038468593PP',
+            ],
+            'order' => [
+                'currency' => 'NGN',
+                'amount' => '100',
+                'fee' => '1.00',
+                'settlement_amount' => '99.00',
+            ],
+            'customer' => ['email' => 'someone-else@example.com', 'phone' => '07063523516'],
+            'virtualAccount' => ['virtualAccountNumber' => '6612056167', 'virtualBank' => '999991'],
+            'message' => 'Success',
+            'code' => '00',
+        ])->assertOk();
+
+        $this->assertSame(100.0, (float) $owner->fresh()->balance);
+        $this->assertSame(0.0, (float) $other->fresh()->balance);
+    }
+
+    /**
      * With no account number on the payload, email is all we have.
      */
     public function test_payment_falls_back_to_email_when_no_account_number(): void

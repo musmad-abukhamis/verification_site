@@ -110,6 +110,62 @@ class PayVesselAccountTest extends TestCase
         $this->assertNull(AccountKyc::where('userId', $user->id)->first());
     }
 
+    /**
+     * accountkyc.bvn is UNIQUE. Before this was checked, submitting a BVN held
+     * by another row threw UniqueConstraintViolationException out of the
+     * controller as a 500 -- after PayVessel had already issued live accounts.
+     */
+    public function test_a_bvn_held_by_another_account_is_refused_without_calling_out(): void
+    {
+        Http::fake();
+
+        $other = User::factory()->create();
+        AccountKyc::create([
+            'id' => $other->id,
+            'userId' => $other->id,
+            'bvn' => '22345678901',
+            'status' => 'generated',
+        ]);
+
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->post('/wallet/virtual-account', ['bvn' => '22345678901'])
+            ->assertSessionHasErrors('bvn');
+
+        Http::assertNothingSent();
+        $this->assertNull(AccountKyc::where('userId', $user->id)->first());
+    }
+
+    /**
+     * Re-running against an existing row must update it in place. The previous
+     * version passed 'id' through updateOrCreate, so the UPDATE rewrote the
+     * primary key -- orphaning anything that referenced it.
+     */
+    public function test_regenerating_keeps_the_existing_primary_key(): void
+    {
+        $this->fakeSuccess();
+
+        $user = User::factory()->create();
+
+        AccountKyc::create([
+            'id' => 'existing-kyc-id',
+            'userId' => $user->id,
+            'bvn' => '22345678901',
+            'status' => 'generated',
+        ]);
+
+        $this->actingAs($user)
+            ->post('/wallet/virtual-account', ['bvn' => '22345678901'])
+            ->assertSessionHasNoErrors();
+
+        $kyc = AccountKyc::where('userId', $user->id)->firstOrFail();
+
+        $this->assertSame('existing-kyc-id', $kyc->id);
+        $this->assertSame('6030200545', $kyc->palmpay2);
+        $this->assertSame(1, AccountKyc::where('userId', $user->id)->count());
+    }
+
     public function test_an_unconfigured_provider_does_not_call_out(): void
     {
         config()->set('services.payvessel.key', null);
