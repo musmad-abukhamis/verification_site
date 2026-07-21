@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BvnServicePrice;
+use App\Models\ServicePrice;
 use App\Models\IdCard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,10 +33,7 @@ class IdCardController extends Controller
 
     private function price(): ?float
     {
-        $prices = BvnServicePrice::first();
-        $fee = (float) ($prices?->idcardfee ?? 0);
-
-        return $fee > 0 ? $fee : null;
+        return ServicePrice::priceForUser('bvn.idcard', Auth::user());
     }
 
     /**

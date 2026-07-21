@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BvnSdkForm;
-use App\Models\BvnServicePrice;
+use App\Models\ServicePrice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -36,9 +36,7 @@ class BvnSdkFormController extends Controller
     /** The configured onboarding fee, or null when not set. */
     private function onboardingPrice(): ?float
     {
-        $value = BvnServicePrice::firstOrCreate(['id' => 'API1'])->onboarding1;
-
-        return ($value === null || $value === '' || ! is_numeric($value)) ? null : (float) $value;
+        return ServicePrice::priceForUser('bvn.onboarding1', Auth::user());
     }
 
     private function present(BvnSdkForm $f): array
