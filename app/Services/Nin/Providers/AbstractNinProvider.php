@@ -2,10 +2,12 @@
 
 namespace App\Services\Nin\Providers;
 
-use App\Models\NinServicePrice;
+use App\Models\ServicePrice;
+use App\Models\User;
 use App\Services\Nin\Contracts\NinProvider;
 use App\Services\Nin\VerificationResult;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -44,20 +46,22 @@ abstract class AbstractNinProvider implements NinProvider
 
     /**
      * Verification methods are priced once, in Admin > Service Prices, and every
-     * provider charges the same fee for the same method. They used to be priced
-     * per provider from config('services.nin.providers.*.prices.*'), which meant
-     * changing a price needed a deploy and the admin page had no effect.
+     * provider charges the same fee for the same method -- but the fee depends
+     * on the caller's role, so an AGENT or API reseller can pay a different
+     * rate. They used to be priced per provider from
+     * config('services.nin.providers.*.prices.*'), which meant changing a price
+     * needed a deploy and the admin page had no effect.
      *
-     * Null means no admin has set a price yet -- callers must refuse rather than
-     * invent one.
+     * Null means unpriced or switched off -- callers must refuse rather than
+     * invent a price.
      */
-    public function priceFor(string $method): ?float
+    public function priceFor(string $method, ?User $user = null): ?float
     {
-        return NinServicePrice::priceFor(match ($method) {
-            'phone' => 'phone_verify',
-            'demographic' => 'demo_verify',
-            default => 'searchslip1',
-        });
+        return ServicePrice::priceForUser(match ($method) {
+            'phone' => 'nin.phone',
+            'demographic' => 'nin.demographic',
+            default => 'nin.verify',
+        }, $user ?? Auth::user());
     }
 
     protected function baseUrl(): string

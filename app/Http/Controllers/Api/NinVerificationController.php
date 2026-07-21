@@ -55,7 +55,7 @@ class NinVerificationController extends Controller
     public function verifyDemo(NinDemoVerificationRequest $request)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getDemoVerifyPrice();
+        $price = $this->verificationService->getDemoVerifyPrice($user);
 
         if ($price === null) {
             return $this->unpricedService();
@@ -111,7 +111,7 @@ class NinVerificationController extends Controller
     public function verifyPhone(NinPhoneVerificationRequest $request)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getPhoneVerifyPrice();
+        $price = $this->verificationService->getPhoneVerifyPrice($user);
 
         if ($price === null) {
             return $this->unpricedService();
@@ -215,7 +215,7 @@ class NinVerificationController extends Controller
         $user = Auth::user();
         // One verification fee regardless of the slip type requested -- the slip
         // itself is charged separately, by SlipDownloadService.
-        $price = $this->verificationService->getVerificationPrice();
+        $price = $this->verificationService->getVerificationPrice($user);
 
         if ($price === null) {
             return $this->unpricedService();
@@ -272,7 +272,7 @@ class NinVerificationController extends Controller
     protected function processIpeSubmission(NinIpeSubmissionRequest $request, string $provider)
     {
         $user = Auth::user();
-        $price = $this->verificationService->getIpePrice();
+        $price = $this->verificationService->getIpePrice($user);
 
         if ($price === null) {
             return $this->unpricedService();

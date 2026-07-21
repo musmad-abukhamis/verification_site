@@ -112,11 +112,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/data-wallet/{user}/debit', [DataWalletController::class, 'debit'])->name('data-wallet.debit');
 
     // Service Prices & Slip Types Management
+    // Service prices: one endpoint per service, saving its base price, its
+    // on/off state and its per-role overrides together. The separate slip-type
+    // routes are gone -- slips are just services in service_prices now.
     Route::get('/service-prices', [ServicePriceController::class, 'index'])->name('service-prices.index');
-    Route::put('/service-prices/{servicePrice}', [ServicePriceController::class, 'updateServicePrice'])->name('service-prices.update');
-    Route::post('/slip-types', [ServicePriceController::class, 'storeSlipType'])->name('slip-types.store');
-    Route::put('/slip-types/{slipType}', [ServicePriceController::class, 'updateSlipType'])->name('slip-types.update');
-    Route::delete('/slip-types/{slipType}', [ServicePriceController::class, 'destroySlipType'])->name('slip-types.destroy');
+    Route::put('/service-prices/{service}', [ServicePriceController::class, 'update'])->name('service-prices.update');
     
     // NIN Validation Management
     Route::get('/nin-validations', [NinValidationController::class, 'index'])->name('nin-validations.index');

@@ -156,7 +156,7 @@ class IpeController extends Controller
     protected function processIpeSubmission(string $trackingId, string $version, string $description)
     {
         $user = Auth::user();
-        $price = $this->getIpePrice();
+        $price = $this->getIpePrice($user);
 
         if ($price === null) {
             return $this->unpricedService();

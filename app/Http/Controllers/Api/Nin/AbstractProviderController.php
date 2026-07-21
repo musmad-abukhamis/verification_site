@@ -52,7 +52,7 @@ abstract class AbstractProviderController extends Controller
         }
 
         $user = Auth::user();
-        $price = $provider->priceFor($method);
+        $price = $provider->priceFor($method, $user);
 
         if ($price === null) {
             return $this->error('service_unpriced', 'This service is currently unavailable. Please contact support.', 503);

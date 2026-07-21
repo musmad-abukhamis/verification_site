@@ -31,10 +31,11 @@ interface NinProvider
     public function supportedMethods(): array;
 
     /**
-     * Price for a given method (nin|phone|demographic), from Admin > Service
-     * Prices. Null when no price has been configured for it.
+     * What the given user pays for a method (nin|phone|demographic), from
+     * Admin > Service Prices. Defaults to the logged-in user. Null when the
+     * service is unpriced or switched off.
      */
-    public function priceFor(string $method): ?float;
+    public function priceFor(string $method, ?\App\Models\User $user = null): ?float;
 
     public function verifyByNin(string $nin): VerificationResult;
 
