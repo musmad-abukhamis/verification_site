@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -127,7 +128,15 @@ class UserController extends Controller
             return back()->withErrors(['role' => 'You cannot change your own role.']);
         }
 
-        $user->update(['role' => $role]);
+        $attributes = ['role' => $role];
+
+        // Granting API access with no token leaves the user on a page telling
+        // them to generate one; issue it here so the role is usable immediately.
+        if ($role === UserRole::API && empty($user->apitoken)) {
+            $attributes['apitoken'] = 'sk_live_'.Str::random(48);
+        }
+
+        $user->update($attributes);
 
         return back()->with('success', "{$user->name}'s role updated to {$role->value}.");
     }
