@@ -55,7 +55,7 @@ abstract class AbstractProviderController extends Controller
         $price = $provider->priceFor($method);
 
         if ($price === null) {
-            return $this->error('service_unpriced', 'This service is not priced yet. Please contact support.', 503);
+            return $this->error('service_unpriced', 'This service is currently unavailable. Please contact support.', 503);
         }
 
         if ((float) $user->balance < $price) {

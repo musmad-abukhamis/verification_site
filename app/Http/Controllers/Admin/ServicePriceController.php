@@ -103,9 +103,19 @@ class ServicePriceController extends Controller
     {
         $validated = $request->validate([
             'price' => 'required|numeric|min:0',
+            'is_active' => 'sometimes|boolean',
         ]);
 
-        $this->ninPrices()->update([$servicePrice => (string) $validated['price']]);
+        // $servicePrice is a column name straight off the URL. Without this it
+        // would happily write any column on the row -- including `id`, which
+        // would detach the config row the whole NIN section reads.
+        if (! in_array($servicePrice, $this->serviceColumns(), true)) {
+            return back()->withErrors(['price' => 'Unknown service.']);
+        }
+
+        $this->ninPrices()->update([
+            $servicePrice => $this->columnValue($validated, fn ($price) => (string) $price),
+        ]);
         // The NIN services read this row through a 5-minute cache, so without
         // this the admin sees the new price but users keep paying the old one.
         $this->forgetCache();
@@ -120,13 +130,43 @@ class ServicePriceController extends Controller
     {
         $validated = $request->validate([
             'price' => 'required|numeric|min:0',
+            'is_active' => 'sometimes|boolean',
         ]);
 
         $column = $this->slipColumns[strtolower($slipType)] ?? 'standardslipsprice';
-        $this->verifyConfig()->update([$column => (int) $validated['price']]);
+        $this->verifyConfig()->update([
+            $column => $this->columnValue($validated, fn ($price) => (int) $price),
+        ]);
         $this->forgetCache();
 
         return back()->with('success', 'Slip price updated successfully.');
+    }
+
+    /**
+     * The editable columns on the ninServicePrices row.
+     *
+     * @return array<int, string>
+     */
+    private function serviceColumns(): array
+    {
+        return array_values(array_diff(array_keys($this->ninPrices()->getAttributes()), ['id']));
+    }
+
+    /**
+     * What to write for a price column, honouring the Active checkbox.
+     *
+     * These single-row config tables have no separate enabled flag -- one
+     * nullable column per service is all there is -- so "inactive" is stored as
+     * NULL. That is also exactly what the services already treat as unpriced, so
+     * they refuse the request instead of charging. The trade-off: switching a
+     * service off discards its price, and you re-enter it to switch it back on.
+     * This is how clearing a slip type has always behaved.
+     */
+    private function columnValue(array $validated, callable $cast)
+    {
+        return ($validated['is_active'] ?? true)
+            ? $cast($validated['price'])
+            : null;
     }
 
     /**
@@ -137,6 +177,7 @@ class ServicePriceController extends Controller
         $validated = $request->validate([
             'code' => 'required|string',
             'price' => 'required|numeric|min:0',
+            'is_active' => 'sometimes|boolean',
         ]);
 
         $column = $this->slipColumns[strtolower($validated['code'])] ?? null;
@@ -145,7 +186,9 @@ class ServicePriceController extends Controller
             return back()->withErrors(['code' => 'Unknown slip type. Allowed: '.implode(', ', array_keys($this->slipColumns))]);
         }
 
-        $this->verifyConfig()->update([$column => (int) $validated['price']]);
+        $this->verifyConfig()->update([
+            $column => $this->columnValue($validated, fn ($price) => (int) $price),
+        ]);
         $this->forgetCache();
 
         return back()->with('success', 'Slip price saved successfully.');

@@ -110,6 +110,61 @@ class NinServicePricingTest extends TestCase
     }
 
     /**
+     * The Active checkbox was posted but never validated, so the controller
+     * dropped it and every save wrote a non-null price -- which is exactly how
+     * is_active is derived, so a service could never be switched off.
+     */
+    public function test_unchecking_active_switches_a_service_off(): void
+    {
+        $this->prices();
+
+        $admin = User::factory()->create(['role' => \App\Enums\UserRole::ADMIN]);
+
+        $this->actingAs($admin)
+            ->put('/admin/service-prices/searchslip1', ['price' => 75, 'is_active' => false])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(NinServicePrice::priceFor('searchslip1'));
+
+        $row = collect($this->get('/admin/service-prices')->original->getData()['page']['props']['servicePrices'])
+            ->firstWhere('id', 'searchslip1');
+
+        $this->assertFalse($row['is_active']);
+    }
+
+    public function test_a_switched_off_service_refuses_instead_of_charging(): void
+    {
+        $this->prices(['searchslip1' => null]);
+
+        Http::fake();
+
+        $user = User::factory()->create(['balance' => 1000]);
+
+        $this->actingAs($user)
+            ->post('/nin/verify/v1', ['idType' => 'nin', 'idValue' => '12345678901'])
+            ->assertSessionHasErrors('message');
+
+        $this->assertSame(1000.0, (float) $user->fresh()->balance);
+    }
+
+    /**
+     * The column name comes straight off the URL. Writing `id` would detach the
+     * single config row the whole NIN section reads.
+     */
+    public function test_an_unknown_service_column_is_rejected(): void
+    {
+        $this->prices();
+
+        $admin = User::factory()->create(['role' => \App\Enums\UserRole::ADMIN]);
+
+        $this->actingAs($admin)
+            ->put('/admin/service-prices/id', ['price' => 5])
+            ->assertSessionHasErrors('price');
+
+        $this->assertSame('API1', NinServicePrice::current()->id);
+    }
+
+    /**
      * The row is cached for 5 minutes, so saving a price in the admin has to
      * bust it -- otherwise users keep paying the old fee.
      */

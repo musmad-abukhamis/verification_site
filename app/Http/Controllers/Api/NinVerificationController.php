@@ -24,12 +24,13 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * A service no admin has priced yet. 503 rather than 500: nothing is broken,
-     * the operator just has to set a price in Admin > Service Prices.
+     * A service with no price -- unset, or switched off in Admin > Service
+     * Prices. 503 rather than 500: nothing is broken, the operator just has to
+     * set a price there.
      */
     protected function unpricedService()
     {
-        return response()->json(['error' => 'This service is not priced yet. Please contact support.'], 503);
+        return response()->json(['error' => 'This service is currently unavailable. Please contact support.'], 503);
     }
 
     /**
