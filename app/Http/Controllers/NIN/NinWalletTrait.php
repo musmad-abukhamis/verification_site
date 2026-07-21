@@ -2,14 +2,26 @@
 
 namespace App\Http\Controllers\NIN;
 
+use App\Models\NinServicePrice;
 use App\Models\User;
 use App\Models\VerifyApiConfig;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * Pricing for the NIN section.
+ *
+ * Service fees come from ninServicePrices -- the table Admin > Service Prices
+ * edits. Slip *downloads* are priced per slip type on verifyapiconfiq, which is
+ * what the Slip Types panel on that same page writes.
+ *
+ * Service prices return null when unconfigured so the caller can refuse the
+ * request; they must never fall back to a hardcoded amount, or the user gets
+ * billed a figure that appears nowhere in the admin.
+ */
 trait NinWalletTrait
 {
     /**
-     * The single-row NIN/verification pricing config (Prisma verifyapiconfiq).
+     * The single-row slip pricing config (Prisma verifyapiconfiq).
      */
     protected function verifyConfig(): VerifyApiConfig
     {
@@ -33,11 +45,28 @@ trait NinWalletTrait
     }
 
     /**
-     * NIN verification (pull) price.
+     * NIN verification price. Both provider versions share one fee, so v1 and
+     * v2 alike read searchslip1.
      */
-    protected function getVerificationPrice(): float
+    protected function getVerificationPrice(): ?float
     {
-        return (float) ($this->verifyConfig()->pullingprice ?? 50);
+        return NinServicePrice::priceFor('searchslip1');
+    }
+
+    /**
+     * Verification by phone number.
+     */
+    protected function getPhoneVerifyPrice(): ?float
+    {
+        return NinServicePrice::priceFor('phone_verify');
+    }
+
+    /**
+     * Verification by demographic details (name / DOB / gender).
+     */
+    protected function getDemoVerifyPrice(): ?float
+    {
+        return NinServicePrice::priceFor('demo_verify');
     }
 
     /**
@@ -89,17 +118,28 @@ trait NinWalletTrait
     /**
      * IPE submission price.
      */
-    protected function getIpePrice(): float
+    protected function getIpePrice(): ?float
     {
-        return (float) ($this->verifyConfig()->ipeprice ?? 50);
+        return NinServicePrice::priceFor('ipe');
     }
 
     /**
      * NIN validation price.
      */
-    protected function getValidationPrice(): float
+    protected function getValidationPrice(): ?float
     {
-        return (float) ($this->verifyConfig()->validation ?? 50);
+        return NinServicePrice::priceFor('validation');
+    }
+
+    /**
+     * The response for a service whose price no admin has set yet. Refusing is
+     * the only safe option: we cannot guess what to charge.
+     */
+    protected function unpricedService()
+    {
+        return back()->withErrors([
+            'message' => 'This service is not priced yet. Please contact support.',
+        ]);
     }
 
     /**

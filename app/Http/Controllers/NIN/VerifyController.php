@@ -114,6 +114,10 @@ class VerifyController extends Controller
         // Get VERIFICATION price only (not slip price)
         $verificationPrice = $this->getVerificationPrice();
 
+        if ($verificationPrice === null) {
+            return $this->unpricedService();
+        }
+
         if ((float) $user->balance < $verificationPrice) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);
         }

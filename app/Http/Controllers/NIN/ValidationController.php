@@ -119,6 +119,10 @@ class ValidationController extends Controller
         $user = Auth::user();
         $price = $this->getValidationPrice();
 
+        if ($price === null) {
+            return $this->unpricedService();
+        }
+
         if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);
         }

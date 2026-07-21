@@ -27,7 +27,7 @@ class PhoneVerifyController extends Controller
 
         return Inertia::render('NIN/PhoneVerify/Index', [
             'wallet' => $this->walletPayload($user),
-            'price' => $this->getSlipPrice('premium'),
+            'price' => $this->getPhoneVerifyPrice(),
             'transactions' => Validation::where('userId', $user->id)
                 ->where('comment', 'like', '%phone%')
                 ->orderByDesc('createdAt')
@@ -73,7 +73,11 @@ class PhoneVerifyController extends Controller
         ]);
 
         $user = Auth::user();
-        $price = $this->getSlipPrice('premium');
+        $price = $this->getPhoneVerifyPrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);

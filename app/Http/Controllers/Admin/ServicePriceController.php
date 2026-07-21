@@ -25,6 +25,19 @@ class ServicePriceController extends Controller
         'advanced' => 'advslipprice',
     ];
 
+    /**
+     * Friendlier names for the ninServicePrices columns that drive live NIN
+     * pricing, so an admin can tell which field bills which service. Anything
+     * not listed keeps the humanised column name.
+     */
+    private array $serviceLabels = [
+        'searchslip1' => 'NIN Verification',
+        'phone_verify' => 'Phone Verification',
+        'demo_verify' => 'Demographic Verification',
+        'ipe' => 'IPE Clearance',
+        'validation' => 'NIN Validation',
+    ];
+
     private function verifyConfig(): VerifyApiConfig
     {
         return VerifyApiConfig::firstOrCreate(['id' => 'API1']);
@@ -38,6 +51,7 @@ class ServicePriceController extends Controller
     private function forgetCache(): void
     {
         Cache::forget('verifyapiconfiq.API1');
+        NinServicePrice::forgetCache();
     }
 
     /**
@@ -69,7 +83,7 @@ class ServicePriceController extends Controller
             ->map(fn ($value, $column) => [
                 'id' => $column,
                 'service_type' => $column,
-                'name' => ucwords(str_replace('_', ' ', $column)),
+                'name' => $this->serviceLabels[$column] ?? ucwords(str_replace('_', ' ', $column)),
                 'price' => (float) $value,
                 'is_active' => ! is_null($value),
             ])
@@ -92,6 +106,9 @@ class ServicePriceController extends Controller
         ]);
 
         $this->ninPrices()->update([$servicePrice => (string) $validated['price']]);
+        // The NIN services read this row through a 5-minute cache, so without
+        // this the admin sees the new price but users keep paying the old one.
+        $this->forgetCache();
 
         return back()->with('success', 'Service price updated successfully.');
     }

@@ -39,7 +39,7 @@ class DemoVerifyController extends Controller
 
         return Inertia::render('NIN/DemoVerify/Index', [
             'wallet' => $this->walletPayload($user),
-            'price' => $this->getSlipPrice('premium'),
+            'price' => $this->getDemoVerifyPrice(),
             'transactions' => Validation::where('userId', $user->id)
                 ->where('comment', 'like', '%demo%')
                 ->orderByDesc('createdAt')
@@ -75,7 +75,11 @@ class DemoVerifyController extends Controller
         ]);
 
         $user = Auth::user();
-        $price = $this->getSlipPrice('premium');
+        $price = $this->getDemoVerifyPrice();
+
+        if ($price === null) {
+            return $this->unpricedService();
+        }
 
         if ((float) $user->balance < $price) {
             return back()->withErrors(['message' => 'Insufficient wallet balance. Please fund your wallet.']);

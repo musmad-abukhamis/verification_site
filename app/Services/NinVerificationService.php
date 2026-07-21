@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\NinServicePrice;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -208,24 +209,39 @@ class NinVerificationService
     }
 
     /**
-     * Get verification price based on slip type
+     * NIN verification price. Both provider versions share one fee.
+     *
+     * These used to read config('services.nin.prices.*'), which meant the API
+     * resellers were billed from a config file while the web UI billed from the
+     * database -- two prices for the same service. Everything is now the one row
+     * Admin > Service Prices edits.
      */
-    public function getPrice(string $slipType): float
+    public function getVerificationPrice(): ?float
     {
-        $prices = [
-            'premium' => config('services.nin.prices.premium', 150),
-            'standard' => config('services.nin.prices.standard', 100),
-            'regular' => config('services.nin.prices.regular', 50),
-        ];
+        return NinServicePrice::priceFor('searchslip1');
+    }
 
-        return $prices[$slipType] ?? $prices['regular'];
+    /**
+     * Verification by phone number.
+     */
+    public function getPhoneVerifyPrice(): ?float
+    {
+        return NinServicePrice::priceFor('phone_verify');
+    }
+
+    /**
+     * Verification by demographic details.
+     */
+    public function getDemoVerifyPrice(): ?float
+    {
+        return NinServicePrice::priceFor('demo_verify');
     }
 
     /**
      * Get IPE submission price
      */
-    public function getIpePrice(): float
+    public function getIpePrice(): ?float
     {
-        return config('services.nin.prices.ipe', 50);
+        return NinServicePrice::priceFor('ipe');
     }
 }
