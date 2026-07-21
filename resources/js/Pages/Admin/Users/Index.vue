@@ -6,29 +6,58 @@ import { ref, watch } from 'vue';
 const props = defineProps({
     users: Object,
     filters: Object,
+    roles: Array,
+    currentUserId: String,
 });
 
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || '');
+const role = ref(props.filters.role || '');
 let searchTimeout;
 
-// Debounced search
-watch(search, (value) => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        router.get(route('admin.users.index'), { search: value, status: status.value }, {
-            preserveState: true,
-            replace: true,
-        });
-    }, 300);
-});
-
-watch(status, (value) => {
-    router.get(route('admin.users.index'), { search: search.value, status: value }, {
+const reload = () => {
+    router.get(route('admin.users.index'), {
+        search: search.value,
+        status: status.value,
+        role: role.value,
+    }, {
         preserveState: true,
         replace: true,
     });
+};
+
+// Debounced search
+watch(search, () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(reload, 300);
 });
+
+watch(status, reload);
+watch(role, reload);
+
+// Role drives both pricing and API access, so confirm before changing it.
+const updateRole = (user, event) => {
+    const next = event.target.value;
+
+    if (next === user.role) return;
+
+    if (!confirm(`Change ${user.name}'s role from ${user.role} to ${next}?\n\nThis affects the prices they are charged.`)) {
+        event.target.value = user.role;
+        return;
+    }
+
+    router.patch(route('admin.users.role', user.id), { role: next }, {
+        preserveScroll: true,
+        onError: () => { event.target.value = user.role; },
+    });
+};
+
+const roleBadge = (value) => ({
+    ADMIN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+    AGENT: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
+    API: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+    SMART: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300',
+}[value] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300');
 </script>
 
 <template>
@@ -51,6 +80,13 @@ watch(status, (value) => {
                         class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     />
                     <select
+                        v-model="role"
+                        class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    >
+                        <option value="">All Roles</option>
+                        <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
+                    </select>
+                    <select
                         v-model="status"
                         class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     >
@@ -69,6 +105,7 @@ watch(status, (value) => {
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Phone</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wallet Balance</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -91,6 +128,26 @@ watch(status, (value) => {
                             <td class="px-6 py-4 text-gray-900 dark:text-white">{{ user.phone || 'N/A' }}</td>
                             <td class="px-6 py-4 text-gray-900 dark:text-white">₦{{ user.wallet_balance.toLocaleString() }}</td>
                             <td class="px-6 py-4">
+                                <!-- Your own role is read-only: demoting yourself
+                                     would lock you out of this page. -->
+                                <span
+                                    v-if="user.id === currentUserId"
+                                    :class="roleBadge(user.role)"
+                                    class="px-2 py-1 text-xs rounded-full"
+                                    title="You cannot change your own role"
+                                >
+                                    {{ user.role }}
+                                </span>
+                                <select
+                                    v-else
+                                    :value="user.role"
+                                    @change="updateRole(user, $event)"
+                                    class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1"
+                                >
+                                    <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
+                                </select>
+                            </td>
+                            <td class="px-6 py-4">
                                 <span
                                     :class="user.email_verified
                                         ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
@@ -98,12 +155,6 @@ watch(status, (value) => {
                                     class="px-2 py-1 text-xs rounded-full"
                                 >
                                     {{ user.email_verified ? 'Active' : 'Inactive' }}
-                                </span>
-                                <span
-                                    v-if="user.is_admin"
-                                    class="ml-2 px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 rounded-full"
-                                >
-                                    Admin
                                 </span>
                             </td>
                             <td class="px-6 py-4">

@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -26,6 +27,12 @@ class UserController extends Controller
                     ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%");
             });
+        }
+
+        // Filter by role -- the practical way to find every AGENT or API user
+        // when their pricing changes.
+        if ($role = $request->input('role')) {
+            $query->where('role', $role);
         }
 
         // Filter by status (verified / unverified email)
@@ -52,7 +59,9 @@ class UserController extends Controller
 
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,
-            'filters' => $request->only(['search', 'status']),
+            'filters' => $request->only(['search', 'status', 'role']),
+            'roles' => array_column(UserRole::cases(), 'value'),
+            'currentUserId' => Auth::id(),
         ]);
     }
 
@@ -95,6 +104,32 @@ class UserController extends Controller
         ]);
 
         return back()->with('success', 'User admin status updated successfully.');
+    }
+
+    /**
+     * Set a user's role.
+     *
+     * Role drives pricing (Plan::priceForRole) and API access, so this is a
+     * commercial control, not just a permission one -- moving someone to AGENT
+     * or API changes what they pay.
+     */
+    public function updateRole(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'role' => ['required', Rule::enum(UserRole::class)],
+        ]);
+
+        $role = UserRole::from($validated['role']);
+
+        // Without this an admin can drop their own ADMIN role and lock
+        // themselves out of the page they are standing on.
+        if ($user->id === Auth::id() && $role !== UserRole::ADMIN) {
+            return back()->withErrors(['role' => 'You cannot change your own role.']);
+        }
+
+        $user->update(['role' => $role]);
+
+        return back()->with('success', "{$user->name}'s role updated to {$role->value}.");
     }
 
     public function toggleStatus(User $user)

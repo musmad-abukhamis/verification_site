@@ -34,6 +34,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::patch('/users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggle-admin');
+    Route::patch('/users/{user}/role', [UserController::class, 'updateRole'])->name('users.role');
     Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::post('/users/{user}/wallet/credit', [UserController::class, 'creditWallet'])->name('users.wallet.credit');
     Route::post('/users/{user}/wallet/debit', [UserController::class, 'debitWallet'])->name('users.wallet.debit');
