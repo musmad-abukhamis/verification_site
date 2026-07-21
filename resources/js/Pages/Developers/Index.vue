@@ -165,6 +165,33 @@ const ninError = `{
   }
 }`;
 
+const dataSuccess = `{
+  "status": "success",
+  "message": "You have gifted 1GB to 08031234567.",
+  "request-id": "ORDER-4417",
+  "transaction_status": "success",
+  "network": "MTN",
+  "amount": "600",
+  "dataplan": "1GB",
+  "plan_type": "SME",
+  "phone_number": "08031234567",
+  "oldbal": "5000",
+  "newbal": 4400,
+  "system": "API",
+  "wallet_vending": "wallet",
+  "response": "You have gifted 1GB to 08031234567.",
+  "data": {
+    "reference": "Data_1753100000_884213",
+    "status": "success",
+    "network": "mtn",
+    "plan": "1GB",
+    "phone": "08031234567",
+    "amount": 600,
+    "vendor_reference": "VA-99312",
+    "created_at": "2026-07-21T11:04:22+00:00"
+  }
+}`;
+
 const bvnSuccess = `{
   "status": "success",
   "reference": "Verify_1753100000_7734",
@@ -489,6 +516,25 @@ Accept: application/json</code></pre>
                             <code>ref</code> (any format). Replaying the same id inside 10 minutes returns the original
                             purchase instead of buying twice — so a timeout is safe to retry. Omit it and we generate
                             one, which means a retry <em>will</em> buy again.
+                        </p>
+                    </div>
+
+                    <h3 class="mt-6 text-sm font-semibold text-gray-900 dark:text-white">Response</h3>
+                    <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                        Returned in both the flat shape other data APIs use and our own
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">data</code> object, so you can read
+                        whichever your existing code already expects. Your
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">request-id</code> comes back verbatim.
+                    </p>
+                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ dataSuccess }}</code></pre>
+
+                    <div class="mt-4 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 dark:bg-amber-900/20">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">
+                            <strong>Read <code>transaction_status</code>, not <code>status</code>, to know if the data
+                            landed.</strong> Top-level <code>status</code> means we accepted the request; delivery
+                            happens asynchronously, so it can still be <code>pending</code>. Poll
+                            <code>GET /data/&#123;reference&#125;</code> until <code>transaction_status</code> is
+                            <code>success</code> or <code>fail</code>. A failed purchase is refunded.
                         </p>
                     </div>
                 </section>

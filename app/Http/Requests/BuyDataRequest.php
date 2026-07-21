@@ -39,7 +39,10 @@ class BuyDataRequest extends FormRequest
             // NCC prefixes make prefix checks unreliable server-side).
             'phone' => ['required', 'digits:11'],
             'ported' => ['boolean'],
-            'client_ref' => ['required', 'uuid'],
+            // The caller's own order id, in whatever format they use. Not
+            // constrained to a UUID: no other data API asks for one, and the
+            // value is echoed back so it must survive verbatim.
+            'client_ref' => ['required', 'string', 'max:100'],
         ];
     }
 
