@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ServicePrice;
 use App\Models\NinDetail;
+use App\Services\Bvn\BvnSearchService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 /**
@@ -21,12 +18,9 @@ use Inertia\Inertia;
  */
 class BvnSearchController extends Controller
 {
-    /** slipType -> service_prices key (premium = BVN Slip). */
-    private array $slipColumns = [
-        'premium' => 'bvn.search.premium',
-        'standard' => 'bvn.search.standard',
-        'regular' => 'bvn.search.regular',
-    ];
+    public function __construct(private BvnSearchService $search)
+    {
+    }
 
     private function walletPayload($user): array
     {
@@ -37,34 +31,6 @@ class BvnSearchController extends Controller
             'bonus_balance' => 0.0,
             'total_balance' => $balance,
         ];
-    }
-
-    /**
-     * What the current user pays for a slip type, or null when unavailable.
-     */
-    private function slipPrice(string $slipType): ?float
-    {
-        $service = $this->slipColumns[$slipType] ?? null;
-
-        return $service ? ServicePrice::priceForUser($service, Auth::user()) : null;
-    }
-
-    /**
-     * Slip types that have a configured price, for the frontend selector.
-     */
-    private function activeSlipTypes(): array
-    {
-        $labels = ['premium' => 'BVN Slip', 'standard' => 'Standard Slip', 'regular' => 'Regular Slip'];
-
-        $types = [];
-        foreach ($this->slipColumns as $code => $column) {
-            $price = $this->slipPrice($code);
-            if ($price !== null && $price > 0) {
-                $types[] = ['code' => $code, 'name' => $labels[$code], 'price' => $price];
-            }
-        }
-
-        return $types;
     }
 
     public function index()
@@ -89,153 +55,37 @@ class BvnSearchController extends Controller
 
         return Inertia::render('BvnSearch/Index', [
             'wallet' => $this->walletPayload($user),
-            'slipTypes' => $this->activeSlipTypes(),
+            'slipTypes' => $this->search->activeSlipTypes($user),
             'history' => $history,
         ]);
     }
 
     public function searchV1(Request $request)
     {
-        return $this->process($request, 'v1');
+        return $this->process($request);
     }
 
     public function searchV2(Request $request)
     {
-        return $this->process($request, 'v2');
+        return $this->process($request);
     }
 
-    protected function process(Request $request, string $version)
+    protected function process(Request $request)
     {
         $validated = $request->validate([
             'idValue' => 'required|digits:11',
-            'slipType' => 'required|string|in:'.implode(',', array_keys($this->slipColumns)),
+            'slipType' => 'required|string|in:'.implode(',', array_keys(BvnSearchService::SLIP_SERVICES)),
         ]);
 
-        $slipType = $validated['slipType'];
-        $idValue = $validated['idValue'];
+        $result = $this->search->search(Auth::user(), $validated['idValue'], $validated['slipType']);
 
-        $price = $this->slipPrice($slipType);
-        if ($price === null) {
-            return back()->withErrors(['message' => 'Service configuration error. Please contact support.']);
+        if (! $result['success']) {
+            return back()->withErrors(['message' => $result['message']]);
         }
 
-        $user = Auth::user();
-        $oldBalance = (float) $user->balance;
-
-        if ($oldBalance < $price) {
-            return back()->withErrors(['message' => 'Insufficient balance. Please top up your account.']);
-        }
-
-        $reference = 'Verify_'.now()->timestamp.random_int(1000, 9999);
-
-        try {
-            DB::beginTransaction();
-
-            if (! $user->debit($price, false, ['fundingtype' => 'bvn_search'])) {
-                DB::rollBack();
-
-                return back()->withErrors(['message' => 'Insufficient balance. Please top up your account.']);
-            }
-
-            $base = rtrim((string) config('services.arewasmart.base_url'), '/');
-
-            $response = Http::timeout(40)
-                ->withToken((string) config('services.arewasmart.token')) // Authorization: Bearer <token>
-                ->acceptJson()
-                ->post($base.'/bvn/verify', [
-                    'bvn' => $idValue,
-                ]);
-
-            $body = $response->json();
-            $data = $body['data'] ?? null;
-
-            if ($response->successful() && ($body['status'] ?? null) === 'success' && is_array($data)) {
-                $details = $this->normalize($data, $idValue);
-
-                NinDetail::create([
-                    'id' => $reference,
-                    'surname' => $details['surname'],
-                    'othernames' => trim(($details['firstname'] ?? '').' '.($details['middlename'] ?? '')) ?: null,
-                    'idtype' => 'bvn',
-                    'idvalue' => $idValue,
-                    'sliptype' => $slipType,
-                    'status' => 'success',
-                    'oldBal' => $oldBalance,
-                    'newBal' => (float) $user->balance,
-                    'price' => (int) round($price),
-                    'userId' => $user->id,
-                ]);
-
-                DB::commit();
-
-                return back()->with([
-                    'success' => 'BVN details fetched successfully.',
-                    'verification_data' => $details,
-                ]);
-            }
-
-            // Failure: refund and log.
-            $this->refund($user, $price);
-
-            NinDetail::create([
-                'id' => $reference,
-                'idtype' => 'bvn',
-                'idvalue' => $idValue,
-                'sliptype' => $slipType,
-                'status' => 'fail',
-                'oldBal' => $oldBalance,
-                'newBal' => $oldBalance,
-                'price' => (int) round($price),
-                'userId' => $user->id,
-            ]);
-
-            DB::commit();
-
-            $message = $body['message'] ?? $body['error'] ?? 'Verification failed. Please check the BVN and try again.';
-            if (is_array($message)) {
-                $message = implode(' ', $message);
-            }
-
-            return back()->withErrors(['message' => $message]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            $this->refund($user, $price);
-            Log::error("BVN search {$version} error: ".$e->getMessage());
-
-            return back()->withErrors(['message' => 'Network error. Please try again.']);
-        }
-    }
-
-    private function refund($user, float $price): void
-    {
-        $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-    }
-
-    /**
-     * Map the ArewaSmart BVN `data` (camelCase) into the field names the slip
-     * component renders. `photo` is raw base64 JPEG (no data: prefix).
-     */
-    private function normalize(array $d, string $bvn): array
-    {
-        return [
-            'bvn' => $d['bvn'] ?? $bvn,
-            'surname' => $d['lastName'] ?? null,
-            'firstname' => $d['firstName'] ?? null,
-            'middlename' => $d['middleName'] ?? null,
-            'gender' => $d['gender'] ?? null,
-            'dob' => $d['birthday'] ?? null,
-            'phone' => $d['phoneNumber'] ?? null,
-            'phone2' => $d['phoneNumber2'] ?? null,
-            'email' => $d['email'] ?? null,
-            'photo' => $d['photo'] ?? null,
-            'marital_status' => $d['maritalStatus'] ?? null,
-            'state_of_origin' => $d['stateOfOrigin'] ?? null,
-            'lga_of_origin' => $d['lgaOfOrigin'] ?? null,
-            'registration_date' => $d['registrationDate'] ?? null,
-            'enrollment_bank' => $d['enrollmentBank'] ?? null,
-            'enrollment_bank_branch' => $d['enrollmentBranch'] ?? null,
-            'residential_Address' => $d['residentialAddress'] ?? null,
-            'nationality' => $d['nationality'] ?? null,
-        ];
+        return back()->with([
+            'success' => 'BVN details fetched successfully.',
+            'verification_data' => $result['data'],
+        ]);
     }
 }

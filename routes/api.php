@@ -73,11 +73,27 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     });
 });
 
-// Data purchases for API-role resellers. Authenticated by the app-managed
-// apitoken string (no Sanctum PAT infra), gated to role = API.
+/*
+|--------------------------------------------------------------------------
+| Reseller API
+|--------------------------------------------------------------------------
+| For external sites integrating our services. Authenticated by the
+| app-managed apitoken string (no Sanctum PAT infra), gated to role = API.
+| Every endpoint charges the caller's wallet at their role's price.
+|
+| Documented at /developers.
+*/
 Route::middleware('api.token')->prefix('v1')->group(function () {
+    Route::get('/balance', [\App\Http\Controllers\Api\Reseller\AccountController::class, 'balance'])->name('api.balance');
+    Route::get('/services', [\App\Http\Controllers\Api\Reseller\AccountController::class, 'services'])->name('api.services');
+
     Route::post('/data', [\App\Http\Controllers\Api\DataController::class, 'store'])->name('api.data.store');
     Route::get('/data/{reference}', [\App\Http\Controllers\Api\DataController::class, 'show'])->name('api.data.show');
+
+    Route::get('/nin/providers', [\App\Http\Controllers\Api\Reseller\NinController::class, 'providers'])->name('api.nin.providers');
+    Route::post('/nin/verify', [\App\Http\Controllers\Api\Reseller\NinController::class, 'verify'])->name('api.nin.verify');
+
+    Route::post('/bvn/verify', [\App\Http\Controllers\Api\Reseller\BvnController::class, 'verify'])->name('api.bvn.verify');
 });
 
 // PayVessel static virtual-account funding webhook.

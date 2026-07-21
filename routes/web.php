@@ -19,6 +19,7 @@ use App\Http\Controllers\BvnSearchController;
 use App\Http\Controllers\IdCardController;
 use App\Http\Controllers\BvnRecordController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ApiAccessController;
 use App\Http\Controllers\HelpController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -140,6 +141,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/help', [HelpController::class, 'index'])->name('help.index');
     Route::post('/help', [HelpController::class, 'submit'])->name('help.submit');
 
+    // API Access — where a reseller collects the token they integrate with.
+    Route::get('/api-access', [ApiAccessController::class, 'index'])->name('api-access.index');
+    Route::post('/api-access/token', [ApiAccessController::class, 'regenerate'])->name('api-access.regenerate');
+
     // Report Routes (ported from nimcweb "Transactions"/"Reports" sidebar groups)
     Route::get('/reports/data-transactions', [ReportController::class, 'dataTransactions'])->name('reports.data-transactions');
     Route::get('/reports/nin-bvn-transactions', [ReportController::class, 'verifyTransactions'])->name('reports.verify-transactions');
@@ -154,3 +159,10 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/admin.php';
 require __DIR__.'/auth.php';
+
+// Public API documentation for external integrators. Deliberately outside the
+// auth group: the people wiring up an integration are often reading it before
+// they have an account, and it contains no account-specific data.
+Route::get('/developers', fn () => Inertia::render('Developers/Index', [
+    'endpoint' => url('/api/v1'),
+]))->name('developers');
