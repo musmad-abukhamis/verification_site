@@ -5,26 +5,22 @@ namespace App\Services;
 use App\Models\NinDetail;
 use App\Models\Transaction;
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
+use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * NIN/BVN verification for the /verification/* pages.
+ *
+ * The provider is no longer a pair of hardcoded config endpoints: both methods
+ * go through VerificationDispatcher, which walks the chain configured in
+ * Admin > Verification in priority order, fails over when one declines, and
+ * hands back a normalized record whatever shape the provider replied in.
+ *
+ * The wallet flow is unchanged — debit up front, refund on any non-success.
+ */
 class VerificationService
 {
-    protected string $ninBaseUrl;
-
-    protected string $ninApiKey;
-
-    protected string $bvnBaseUrl;
-
-    protected string $bvnApiKey;
-
-    public function __construct()
-    {
-        $this->ninBaseUrl = config('services.nin.base_url');
-        $this->ninApiKey = config('services.nin.api_key');
-        $this->bvnBaseUrl = config('services.bvn.base_url');
-        $this->bvnApiKey = config('services.bvn.api_key');
-    }
+    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
 
     /**
      * Verify NIN (National Identity Number)
@@ -40,24 +36,30 @@ class VerificationService
             return ['success' => false, 'message' => 'User not found'];
         }
 
-        $apiPayload = ['reference' => $reference];
+        // Canonical inputs — the engine's field maps rename them per provider.
         $identityNumber = '';
+        $service = 'nin.verify';
+        $input = [];
 
         switch ($verificationType) {
             case 'nin':
                 $identityNumber = $data['nin_number'];
-                $apiPayload['nin'] = $data['nin_number'];
+                $input = ['nin' => $data['nin_number']];
                 break;
             case 'phone':
                 $identityNumber = $data['phone_number'];
-                $apiPayload['phone_number'] = $data['phone_number'];
+                $service = 'nin.phone';
+                $input = ['phone' => $data['phone_number']];
                 break;
             case 'demographic':
                 $identityNumber = $data['last_name'].'_'.$data['first_name'];
-                $apiPayload['last_name'] = $data['last_name'];
-                $apiPayload['first_name'] = $data['first_name'];
-                $apiPayload['gender'] = $data['gender'];
-                $apiPayload['date_of_birth'] = $data['date_of_birth'];
+                $service = 'nin.demographic';
+                $input = [
+                    'last_name' => $data['last_name'],
+                    'first_name' => $data['first_name'],
+                    'gender' => $data['gender'],
+                    'date_of_birth' => $data['date_of_birth'],
+                ];
                 break;
         }
 
@@ -82,17 +84,15 @@ class VerificationService
         ]);
 
         try {
-            $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Bearer '.$this->ninApiKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->ninBaseUrl.'/verify-nin', $apiPayload);
+            $outcome = $this->dispatcher->verify($service, $input, [
+                'user_id' => $userId,
+                'reference' => $reference,
+            ]);
 
-            $body = $response->json();
+            if ($outcome->isSuccess()) {
+                $verificationData = $outcome->data;
 
-            if ($response->successful() && ($body['status'] ?? false)) {
-                $verificationData = $body['data'] ?? [];
-
-                $transaction->markAsSuccess($body['reference'] ?? null, json_encode($verificationData));
+                $transaction->markAsSuccess($outcome->reference, json_encode($verificationData));
 
                 NinDetail::create([
                     'id' => $reference,
@@ -120,18 +120,19 @@ class VerificationService
                         'date_of_birth' => $verificationData['date_of_birth'] ?? null,
                         'gender' => $verificationData['gender'] ?? null,
                         'phone' => $verificationData['phone'] ?? null,
-                        'address' => $verificationData['address'] ?? null,
+                        'address' => $verificationData['residence_address'] ?? null,
+                        'provider' => $outcome->providerName,
                     ],
                 ];
             }
 
-            // Failed - refund and update
+            // Every routed provider declined (or none answered) — refund.
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed($body['message'] ?? 'Verification failed');
+            $transaction->markAsFailed($outcome->message ?? 'Verification failed');
 
             return [
                 'success' => false,
-                'message' => $body['message'] ?? 'NIN verification failed',
+                'message' => $outcome->message ?? 'NIN verification failed',
             ];
         } catch (\Exception $e) {
             Log::error('NIN verification failed', [
@@ -191,45 +192,42 @@ class VerificationService
         ]);
 
         try {
-            $response = Http::timeout(10)->withHeaders([
-                'Authorization' => 'Bearer '.$this->bvnApiKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->bvnBaseUrl.'/verify-bvn', [
-                'bvn' => $bvnNumber,
+            $outcome = $this->dispatcher->verify('bvn.verify', ['bvn' => $bvnNumber], [
+                'user_id' => $userId,
                 'reference' => $reference,
             ]);
 
-            $body = $response->json();
+            if ($outcome->isSuccess()) {
+                $verificationData = $outcome->data;
 
-            if ($response->successful() && ($body['status'] ?? false)) {
-                $verificationData = $body['data'] ?? [];
-
-                $transaction->markAsSuccess($body['reference'] ?? null, json_encode($verificationData));
+                $transaction->markAsSuccess($outcome->reference, json_encode($verificationData));
 
                 return [
                     'success' => true,
                     'message' => 'BVN verification successful',
                     'data' => [
                         'reference' => $reference,
-                        'bvn' => $bvnNumber,
+                        'bvn' => $verificationData['bvn'] ?? $bvnNumber,
                         'full_name' => $verificationData['full_name'] ?? null,
                         'date_of_birth' => $verificationData['date_of_birth'] ?? null,
                         'gender' => $verificationData['gender'] ?? null,
                         'phone' => $verificationData['phone'] ?? null,
                         'email' => $verificationData['email'] ?? null,
-                        'address' => $verificationData['address'] ?? null,
+                        'address' => $verificationData['residence_address'] ?? null,
                         'nationality' => $verificationData['nationality'] ?? null,
+                        'photo' => $verificationData['photo'] ?? null,
+                        'provider' => $outcome->providerName,
                     ],
                 ];
             }
 
-            // Failed - refund and update
+            // Every routed provider declined (or none answered) — refund.
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed($body['message'] ?? 'Verification failed');
+            $transaction->markAsFailed($outcome->message ?? 'Verification failed');
 
             return [
                 'success' => false,
-                'message' => $body['message'] ?? 'BVN verification failed',
+                'message' => $outcome->message ?? 'BVN verification failed',
             ];
         } catch (\Exception $e) {
             Log::error('BVN verification failed', [

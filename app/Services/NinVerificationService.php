@@ -4,49 +4,48 @@ namespace App\Services;
 
 use App\Models\ServicePrice;
 use App\Models\User;
+use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * NIN verification for the Sanctum API.
+ *
+ * Provider selection comes from the routing chain in Admin > Verification —
+ * the old provider1/provider2 arguments are gone, along with the two versioned
+ * upstream endpoints they mapped to.
+ */
 class NinVerificationService
 {
-    protected $baseUrl;
-
-    protected $apiKey;
-
-    public function __construct()
-    {
-        $this->baseUrl = config('services.nin.base_url', 'https://api.example.com');
-        $this->apiKey = config('services.nin.api_key', '');
-    }
+    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
 
     /**
-     * Verify NIN using specified provider
+     * Verify a NIN or phone number through the routed chain.
      */
-    public function verifyNin(array $data, string $provider): array
+    public function verifyNin(array $data): array
     {
+        $idType = $data['idType'] ?? 'nin';
+        $service = $idType === 'phone' ? 'nin.phone' : 'nin.verify';
+        $field = $idType === 'phone' ? 'phone' : 'nin';
+
         try {
-            $endpoint = $provider === 'provider1' ? '/nin/verify_1' : '/nin/verify_2';
+            $outcome = $this->dispatcher->verify(
+                $service,
+                [$field => $data['idValue']],
+                ['user_id' => Auth::id()],
+            );
 
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->apiKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.$endpoint, [
-                'idType' => $data['idType'],
-                'idValue' => $data['idValue'],
-                'slipType' => $data['slipType'],
-            ]);
-
-            if ($response->successful()) {
+            if ($outcome->isSuccess()) {
                 return [
                     'success' => true,
-                    'data' => $response->json(),
+                    'data' => $outcome->data + ['provider' => $outcome->providerName],
                 ];
             }
 
             return [
                 'success' => false,
-                'message' => $response->json('message') ?? 'Verification failed',
+                'message' => $outcome->message ?? 'Verification failed',
                 'reference' => 'Verify_'.now()->timestamp,
             ];
         } catch (\Exception $e) {
@@ -136,35 +135,26 @@ class NinVerificationService
     /**
      * Submit IPE request
      */
-    public function submitIpe(string $trackingId, string $provider, string $description = 'My Reference'): array
+    public function submitIpe(string $trackingId, string $description = 'My Reference'): array
     {
         try {
-            if ($provider === 'provider1') {
-                $endpoint = '/nin/ipe';
-                $payload = ['trkid' => $trackingId];
-            } else {
-                $endpoint = '/nin/ipe2';
-                $payload = [
-                    'tracking_id' => $trackingId,
-                    'description' => $description,
-                ];
-            }
+            $outcome = $this->dispatcher->verify(
+                'nin.ipe',
+                ['tracking_id' => $trackingId],
+                ['user_id' => Auth::id()],
+            );
 
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->apiKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.$endpoint, $payload);
-
-            if ($response->successful()) {
+            if ($outcome->isSuccess()) {
                 return [
                     'success' => true,
-                    'data' => $response->json(),
+                    'data' => $outcome->data,
+                    'provider' => $outcome->providerName,
                 ];
             }
 
             return [
                 'success' => false,
-                'message' => $response->json('message') ?? 'IPE submission failed',
+                'message' => $outcome->message ?? 'IPE submission failed',
             ];
         } catch (\Exception $e) {
             Log::error('IPE Submission Error: '.$e->getMessage());

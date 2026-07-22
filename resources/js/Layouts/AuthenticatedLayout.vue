@@ -48,7 +48,7 @@ const menuItems = computed(() => [
         name: 'BVN Services',
         icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
         children: [
-            { name: 'BVN Search', route: 'bvn-search.index', pattern: 'bvn-search.*' },
+            { name: 'BVN Verification', route: 'bvn-verify.index', pattern: 'bvn-verify.*' },
             { name: 'Modification', route: 'bvn-modification.index', pattern: 'bvn-modification.index' },
             { name: 'My Modifications', route: 'bvn-modification.requests', pattern: 'bvn-modification.requests' },
             { name: 'Onboarding', route: 'bvn-sdk-form.index', pattern: 'bvn-sdk-form.*' },

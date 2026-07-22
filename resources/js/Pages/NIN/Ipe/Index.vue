@@ -11,28 +11,21 @@ const props = defineProps({
 });
 
 const page = usePage();
-const provider = ref('v1');
 const checkingStatus = ref({});
 const search = ref(props.filters?.search || '');
 const statusFilter = ref(props.filters?.status || '');
 let searchTimeout;
 
-const v1Form = useForm({ trkid: '' });
-const v2Form = useForm({ tracking_id: '', description: '' });
+// One form now: the two versions only differed in which provider they hit,
+// which the routing chain decides.
+const activeForm = useForm({ tracking_id: '', description: '' });
 
-const activeForm = computed(() => provider.value === 'v1' ? v1Form : v2Form);
-
-const canSubmit = computed(() => {
-    if (provider.value === 'v1') return v1Form.trkid.length === 15 && !v1Form.processing;
-    return v2Form.tracking_id.length === 15 && !v2Form.processing;
-});
+const canSubmit = computed(() => activeForm.tracking_id.length === 15 && !activeForm.processing);
 
 const submit = () => {
-    const routeName = provider.value === 'v1' ? 'nin.ipe.v1' : 'nin.ipe.v2';
-    const form = provider.value === 'v1' ? v1Form : v2Form;
-    form.post(route(routeName), {
+    activeForm.post(route('nin.ipe.store'), {
         preserveScroll: true,
-        onSuccess: () => form.reset(),
+        onSuccess: () => activeForm.reset(),
     });
 };
 
@@ -106,36 +99,18 @@ const pagination = computed(() => ({
                 <div v-if="$page.props.errors?.message" class="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ $page.props.errors.message }}</div>
                 <div v-if="$page.props.flash?.success" class="mb-4 p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg text-sm">{{ $page.props.flash.success }}</div>
 
-                <!-- Provider Tabs -->
-                <div class="flex gap-2 mb-6">
-                    <button v-for="v in ['v1', 'v2']" :key="v" @click="provider = v"
-                        :class="['px-5 py-2 rounded-lg text-sm font-semibold transition-colors', provider === v ? 'bg-orange-500 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200']">
-                        {{ v === 'v1' ? 'V1' : 'V2' }}
-                    </button>
-                </div>
-
                 <form @submit.prevent="submit" class="space-y-4 max-w-lg">
-                    <!-- V1: trkid field -->
-                    <div v-if="provider === 'v1'">
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tracking ID (15 characters)</label>
-                        <input v-model="v1Form.trkid" type="text" maxlength="15" placeholder="Enter 15-character tracking ID"
+                        <input v-model="activeForm.tracking_id" type="text" maxlength="15" placeholder="Enter 15-character tracking ID"
                             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 font-mono focus:ring-2 focus:ring-orange-500" />
-                        <p class="mt-1 text-xs text-gray-500">{{ v1Form.trkid.length }}/15 characters</p>
-                        <p v-if="v1Form.errors.trkid" class="mt-1 text-xs text-red-500">{{ v1Form.errors.trkid }}</p>
+                        <p class="mt-1 text-xs text-gray-500">{{ activeForm.tracking_id.length }}/15 characters</p>
+                        <p v-if="activeForm.errors.tracking_id" class="mt-1 text-xs text-red-500">{{ activeForm.errors.tracking_id }}</p>
                     </div>
-                    <!-- V2: tracking_id + description fields -->
-                    <div v-else class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tracking ID (15 characters)</label>
-                            <input v-model="v2Form.tracking_id" type="text" maxlength="15" placeholder="Enter 15-character tracking ID"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 font-mono focus:ring-2 focus:ring-orange-500" />
-                            <p class="mt-1 text-xs text-gray-500">{{ v2Form.tracking_id.length }}/15 characters</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description <span class="text-gray-400">(optional)</span></label>
-                            <input v-model="v2Form.description" type="text" placeholder="Enrollment ref #001"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-orange-500" />
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description <span class="text-gray-400">(optional)</span></label>
+                        <input v-model="activeForm.description" type="text" placeholder="Enrollment ref #001"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-orange-500" />
                     </div>
 
                     <button type="submit" :disabled="!canSubmit"

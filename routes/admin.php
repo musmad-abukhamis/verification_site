@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\VendorController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VerificationLogController;
+use App\Http\Controllers\Admin\VerificationProviderController;
+use App\Http\Controllers\Admin\VerificationRoutingController;
 use App\Http\Controllers\Admin\ServicePriceController;
 use App\Http\Controllers\Admin\NinValidationController;
 use App\Http\Controllers\Admin\BvnModificationController;
@@ -61,6 +63,24 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     // Verification Logs
     Route::get('/verification-logs', [VerificationLogController::class, 'index'])->name('verification-logs.index');
+
+    // ---- Verification provider engine (config-driven providers + failover) ----
+
+    // Providers: auth style, per-service endpoints, field maps, live test call.
+    Route::get('/verification-providers', [VerificationProviderController::class, 'index'])->name('verification-providers.index');
+    Route::post('/verification-providers', [VerificationProviderController::class, 'store'])->name('verification-providers.store');
+    Route::put('/verification-providers/{provider}', [VerificationProviderController::class, 'update'])->name('verification-providers.update');
+    Route::patch('/verification-providers/{provider}/toggle', [VerificationProviderController::class, 'toggle'])->name('verification-providers.toggle');
+    Route::post('/verification-providers/{provider}/test', [VerificationProviderController::class, 'test'])->name('verification-providers.test');
+    Route::delete('/verification-providers/{provider}', [VerificationProviderController::class, 'destroy'])->name('verification-providers.destroy');
+
+    // Ordered failover chain per service + failover switches.
+    Route::get('/verification-routing', [VerificationRoutingController::class, 'index'])->name('verification-routing.index');
+    Route::put('/verification-routing', [VerificationRoutingController::class, 'updateRoutes'])->name('verification-routing.update');
+    Route::put('/verification-routing/settings', [VerificationRoutingController::class, 'updateSettings'])->name('verification-routing.settings.update');
+
+    // Per-hop audit of every provider call, failed-over hops included.
+    Route::get('/verification-attempts', [VerificationRoutingController::class, 'attempts'])->name('verification-attempts.index');
 
     // Reports (ported from nimcweb admin "Reports"/"Transactions" groups)
     Route::get('/reports/nin-bvn-transactions', [ReportController::class, 'verifyTransactions'])->name('reports.verify-transactions');

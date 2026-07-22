@@ -67,10 +67,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/wallet/virtual-account', [WalletController::class, 'createVirtualAccount'])->name('wallet.virtual-account.create');
     Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
 
-    // NIN Verification Routes (by NIN number) — v1 Prembly, v2 ArewaSmart
+    // NIN Verification. One endpoint — the provider comes from the routing
+    // chain in Admin > Verification, so the old v1/v2 split is gone.
     Route::get('/nin/verify', [NinVerifyController::class, 'index'])->name('nin.verify.index');
-    Route::post('/nin/verify/v1', [NinVerifyController::class, 'verifyV1'])->name('nin.verify.v1');
-    Route::post('/nin/verify/v2', [NinVerifyController::class, 'verifyV2'])->name('nin.verify.v2');
+    Route::post('/nin/verify', [NinVerifyController::class, 'verify'])->name('nin.verify.store');
 
     // NIN Slip Download Routes — separate billing from verification
     Route::get('/nin/slip/types', [SlipDownloadController::class, 'types'])->name('nin.slip.types');
@@ -84,24 +84,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/nin/phone', fn () => redirect()->route('nin.verify.index'))->name('nin.phone.index');
     Route::get('/nin/demo', fn () => redirect()->route('nin.verify.index'))->name('nin.demo.index');
 
-    // NIN IPE Routes — v1 Nguru, v2 ArewaSmart
+    // NIN IPE Clearance
     Route::get('/nin/ipe', [NinIpeController::class, 'index'])->name('nin.ipe.index');
-    Route::post('/nin/ipe/v1', [NinIpeController::class, 'submitV1'])->name('nin.ipe.v1');
-    Route::post('/nin/ipe/v2', [NinIpeController::class, 'submitV2'])->name('nin.ipe.v2');
+    Route::post('/nin/ipe', [NinIpeController::class, 'submit'])->name('nin.ipe.store');
     Route::post('/nin/ipe/{clearance}/status', [NinIpeController::class, 'checkStatus'])->name('nin.ipe.status');
 
-    // NIN Validation Routes — v1 Prembly, v2 ArewaSmart
+    // NIN Validation
     Route::get('/nin/validation', [NinValidationController::class, 'index'])->name('nin.validation.index');
-    Route::post('/nin/validation/v1', [NinValidationController::class, 'storeV1'])->name('nin.validation.v1');
-    Route::post('/nin/validation/v2', [NinValidationController::class, 'storeV2'])->name('nin.validation.v2');
+    Route::post('/nin/validation', [NinValidationController::class, 'store'])->name('nin.validation.store');
     Route::post('/nin/validation/{validation}/check', [NinValidationController::class, 'checkStatus'])->name('nin.validation.check');
 
-    // Legacy aliases (keep old routes working)
+    // Legacy aliases (keep old links working)
     Route::get('/validation', [NinValidationController::class, 'index'])->name('validation.index');
-    Route::post('/validation', [NinValidationController::class, 'storeV1'])->name('validation.store');
+    Route::post('/validation', [NinValidationController::class, 'store'])->name('validation.store');
     Route::post('/validation/{validation}/check', [NinValidationController::class, 'checkStatus'])->name('validation.check');
     Route::get('/nin-ipe-clearance', [NinIpeController::class, 'index'])->name('nin-ipe-clearance.index');
-    Route::post('/nin-ipe-clearance', [NinIpeController::class, 'submitV1'])->name('nin-ipe-clearance.store');
+    Route::post('/nin-ipe-clearance', [NinIpeController::class, 'submit'])->name('nin-ipe-clearance.store');
     Route::post('/nin-ipe-clearance/{clearance}/check', [NinIpeController::class, 'checkStatus'])->name('nin-ipe-clearance.check');
 
     // BVN Modification Routes
@@ -121,10 +119,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/bvn-retrieval', [BvnRetrievalController::class, 'index'])->name('bvn-retrieval.index');
     Route::post('/bvn-retrieval', [BvnRetrievalController::class, 'store'])->name('bvn-retrieval.store');
 
-    // BVN Search (verify + slip) Routes — v1 & v2 providers
-    Route::get('/bvn-search', [BvnSearchController::class, 'index'])->name('bvn-search.index');
-    Route::post('/bvn-search/v1', [BvnSearchController::class, 'searchV1'])->name('bvn-search.v1');
-    Route::post('/bvn-search/v2', [BvnSearchController::class, 'searchV2'])->name('bvn-search.v2');
+    // BVN Verification (lookup + slip). Named bvn-verify because that is what
+    // the page does; /bvn-search still resolves so old links keep working.
+    Route::get('/bvn-verify', [BvnSearchController::class, 'index'])->name('bvn-verify.index');
+    Route::post('/bvn-verify', [BvnSearchController::class, 'verify'])->name('bvn-verify.store');
+    Route::get('/bvn-search', fn () => redirect()->route('bvn-verify.index'))->name('bvn-search.index');
 
     // ID Card Application Routes (form + own requests on one page)
     Route::get('/idcard', [IdCardController::class, 'index'])->name('idcard.index');

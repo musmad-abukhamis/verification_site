@@ -60,17 +60,13 @@ class BvnSearchController extends Controller
         ]);
     }
 
-    public function searchV1(Request $request)
-    {
-        return $this->process($request);
-    }
-
-    public function searchV2(Request $request)
-    {
-        return $this->process($request);
-    }
-
-    protected function process(Request $request)
+    /**
+     * There is one endpoint now. The v1/v2 split existed only to pick a
+     * provider; that choice belongs to the routing chain in
+     * Admin > Verification, which also gives failover the versioned endpoints
+     * never had.
+     */
+    public function verify(Request $request)
     {
         $validated = $request->validate([
             'idValue' => 'required|digits:11',

@@ -28,8 +28,10 @@ const validationId = ref(null);
 const submitting = ref(false);
 const fieldErrors = ref({});
 
-// Selected provider + method drive the whole dynamic form.
-const selectedProvider = ref(props.providers[0]?.key ?? null);
+// There is no provider choice any more — the routing chain in
+// Admin > Verification picks it and fails over. `providers` now carries exactly
+// one entry ("auto"), which is what supplies the available methods and prices.
+const routedProvider = computed(() => props.providers[0] ?? null);
 const selectedMethod = ref(props.providers[0]?.methods?.[0] ?? 'nin');
 
 // Field values persist across method switches (preserve user input where useful).
@@ -42,28 +44,17 @@ const form = reactive({
     date_of_birth: '',
 });
 
-const currentProvider = computed(() =>
-    props.providers.find((p) => p.key === selectedProvider.value) ?? null,
-);
-
-// Only the methods the chosen provider supports, in catalog order.
+// Only the methods that actually have a provider routed behind them, in
+// catalog order — offering one with an empty chain would charge for a request
+// that can only fail.
 const availableMethods = computed(() => {
-    const supported = currentProvider.value?.methods ?? [];
+    const supported = routedProvider.value?.methods ?? [];
     return props.methodCatalog.filter((m) => supported.includes(m.value));
 });
 
 const currentPrice = computed(() => {
-    const prices = currentProvider.value?.prices ?? {};
+    const prices = routedProvider.value?.prices ?? {};
     return Number(prices[selectedMethod.value] ?? 0);
-});
-
-// If the new provider doesn't support the current method, fall back gracefully.
-watch(selectedProvider, () => {
-    const supported = currentProvider.value?.methods ?? [];
-    if (!supported.includes(selectedMethod.value)) {
-        selectedMethod.value = supported[0] ?? 'nin';
-    }
-    fieldErrors.value = {};
 });
 
 watch(selectedMethod, () => {
@@ -71,7 +62,7 @@ watch(selectedMethod, () => {
 });
 
 const canSubmit = computed(() => {
-    if (submitting.value || !currentProvider.value) return false;
+    if (submitting.value || !routedProvider.value) return false;
     switch (selectedMethod.value) {
         case 'nin':
             return /^\d{11}$/.test(form.nin);
@@ -111,7 +102,7 @@ const submit = async () => {
 
     try {
         const { data } = await axios.post(
-            `/api/v1/nin/providers/${selectedProvider.value}/verify`,
+            '/api/v1/nin/providers/auto/verify',
             buildPayload(),
             { headers: { Accept: 'application/json' } },
         );
@@ -414,29 +405,12 @@ const pagination = computed(() => ({
                 <!-- Verify Tab Content -->
                 <div v-show="activeTab === 'verify'" class="p-6">
                     <div v-if="providers.length === 0" class="p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200">
-                        No verification providers are currently active. Please configure a provider.
+                        No verification providers are currently active. An admin must add one under Verification Engine &rsaquo; Providers and give it a routing position.
                     </div>
 
+                    <!-- No provider picker: the provider is chosen by the admin
+                         routing chain, which also fails over automatically. -->
                     <form v-else @submit.prevent="submit" class="space-y-6 max-w-lg mx-auto">
-                        <!-- Provider selector -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Verification Provider</label>
-                            <div class="flex flex-wrap gap-2">
-                                <button
-                                    v-for="p in providers" :key="p.key" type="button"
-                                    @click="selectedProvider = p.key"
-                                    :class="[
-                                        'px-4 py-2 rounded-lg text-sm font-semibold transition-colors',
-                                        selectedProvider === p.key
-                                            ? 'bg-lime-600 text-white shadow'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                    ]"
-                                >
-                                    {{ p.label }}
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Method selector (segmented) -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Verification Method</label>
@@ -529,7 +503,7 @@ const pagination = computed(() => ({
                             <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             {{ submitting ? 'Verifying...' : 'Verify' }}
                         </button>
-                        <p class="text-center text-xs text-gray-500 dark:text-gray-400">Using <strong>{{ currentProvider?.label }}</strong></p>
+                        <p class="text-center text-xs text-gray-500 dark:text-gray-400">Provider selected automatically, with failover</p>
                     </form>
                 </div>
 

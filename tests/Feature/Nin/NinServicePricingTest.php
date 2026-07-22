@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Nin\NinProviderManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\ConfiguresVerificationProviders;
 use Tests\TestCase;
 
 /**
@@ -19,7 +20,7 @@ use Tests\TestCase;
  */
 class NinServicePricingTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfiguresVerificationProviders, RefreshDatabase;
 
     private function price(string $service, float $price, string $role = ServicePrice::BASE, bool $active = true): ServicePrice
     {
@@ -36,6 +37,7 @@ class NinServicePricingTest extends TestCase
         parent::setUp();
 
         ServicePrice::forgetCache();
+        $this->routeNinProvider();
     }
 
     protected function tearDown(): void
@@ -54,7 +56,7 @@ class NinServicePricingTest extends TestCase
         $user = User::factory()->create(['balance' => 1000, 'role' => UserRole::USER]);
 
         $this->actingAs($user)
-            ->post('/nin/verify/v1', ['idType' => 'nin', 'idValue' => '12345678901'])
+            ->post('/nin/verify', ['idType' => 'nin', 'idValue' => '12345678901'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame(925.0, (float) $user->fresh()->balance);
@@ -73,7 +75,7 @@ class NinServicePricingTest extends TestCase
         $agent = User::factory()->create(['balance' => 1000, 'role' => UserRole::AGENT]);
 
         $this->actingAs($agent)
-            ->post('/nin/verify/v1', ['idType' => 'nin', 'idValue' => '12345678901'])
+            ->post('/nin/verify', ['idType' => 'nin', 'idValue' => '12345678901'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame(960.0, (float) $agent->fresh()->balance);
@@ -135,7 +137,7 @@ class NinServicePricingTest extends TestCase
         $user = User::factory()->create(['balance' => 1000]);
 
         $this->actingAs($user)
-            ->post('/nin/verify/v1', ['idType' => 'nin', 'idValue' => '12345678901'])
+            ->post('/nin/verify', ['idType' => 'nin', 'idValue' => '12345678901'])
             ->assertSessionHasErrors('message');
 
         $this->assertSame(1000.0, (float) $user->fresh()->balance);
@@ -149,24 +151,35 @@ class NinServicePricingTest extends TestCase
         $this->price('nin.demographic', 200);
 
         $user = User::factory()->create(['role' => UserRole::USER]);
-        $provider = app(NinProviderManager::class)->get('prembly');
+        $provider = app(NinProviderManager::class)->get('auto');
 
         $this->assertSame(75.0, $provider->priceFor('nin', $user));
         $this->assertSame(120.0, $provider->priceFor('phone', $user));
         $this->assertSame(200.0, $provider->priceFor('demographic', $user));
     }
 
-    public function test_every_provider_charges_the_same_fee_for_a_method(): void
+    /**
+     * The fee is a property of the service, not of whoever fulfils it: failing
+     * over to a second provider must never change what the user is charged.
+     */
+    public function test_the_fee_does_not_depend_on_which_provider_answers(): void
     {
         $this->price('nin.verify', 75);
+        $this->routeProviderFor(['nin.verify'], 'backup', 'https://backup.test');
 
-        $user = User::factory()->create();
-        $manager = app(NinProviderManager::class);
+        $user = User::factory()->create(['balance' => 1000, 'role' => UserRole::USER]);
 
-        $this->assertSame(
-            $manager->get('prembly')->priceFor('nin', $user),
-            $manager->get('arewasmart')->priceFor('nin', $user),
-        );
+        // The primary declines, the backup answers.
+        Http::fake([
+            'provider.test/*' => Http::response(['status' => false, 'message' => 'Not found'], 200),
+            'backup.test/*' => Http::response(['status' => true, 'data' => ['nin' => '12345678901']], 200),
+        ]);
+
+        $this->actingAs($user)
+            ->post('/nin/verify', ['idType' => 'nin', 'idValue' => '12345678901'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(925.0, (float) $user->fresh()->balance);
     }
 
     /**

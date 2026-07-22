@@ -58,6 +58,8 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
                 'verification_data' => fn () => $request->session()->get('verification_data'),
+                // Result of an admin "test provider" call (Admin > Verification).
+                'testResult' => fn () => $request->session()->get('testResult'),
             ],
             // Powers the notification bell/drawer and global-announcement modal.
             // Lazily evaluated so it only runs when a page (or partial reload)

@@ -34,19 +34,12 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * NIN Verify - Provider 1 (Prembly)
+     * NIN Verify. One endpoint — the provider comes from the routing chain in
+     * Admin > Verification, so there is no provider1/provider2 split.
      */
-    public function verifyProvider1(NinVerificationRequest $request)
+    public function verify(NinVerificationRequest $request)
     {
-        return $this->processVerification($request, 'provider1');
-    }
-
-    /**
-     * NIN Verify - Provider 2 (ArewaSmart)
-     */
-    public function verifyProvider2(NinVerificationRequest $request)
-    {
-        return $this->processVerification($request, 'provider2');
+        return $this->processVerification($request);
     }
 
     /**
@@ -162,19 +155,11 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * IPE Submission - Provider 1 (Nguru)
+     * IPE Submission. One endpoint — routed like everything else.
      */
-    public function submitIpeProvider1(NinIpeSubmissionRequest $request)
+    public function submitIpe(NinIpeSubmissionRequest $request)
     {
-        return $this->processIpeSubmission($request, 'provider1');
-    }
-
-    /**
-     * IPE Submission - Provider 2 (ArewaSmart)
-     */
-    public function submitIpeProvider2(NinIpeSubmissionRequest $request)
-    {
-        return $this->processIpeSubmission($request, 'provider2');
+        return $this->processIpeSubmission($request);
     }
 
     /**
@@ -208,9 +193,9 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * Process NIN verification for both providers
+     * Charge, verify through the routed chain, refund on failure.
      */
-    protected function processVerification(NinVerificationRequest $request, string $provider)
+    protected function processVerification(NinVerificationRequest $request)
     {
         $user = Auth::user();
         // One verification fee regardless of the slip type requested -- the slip
@@ -231,7 +216,7 @@ class NinVerificationController extends Controller
             $oldBalance = (float) $user->balance;
             $user->debit($price, false, ['fundingtype' => 'nin_verification']);
 
-            $result = $this->verificationService->verifyNin($request->validated(), $provider);
+            $result = $this->verificationService->verifyNin($request->validated());
 
             if ($result['success']) {
                 Validation::create([
@@ -267,9 +252,9 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * Process IPE submission for both providers
+     * Charge, submit the IPE through the routed chain, refund on failure.
      */
-    protected function processIpeSubmission(NinIpeSubmissionRequest $request, string $provider)
+    protected function processIpeSubmission(NinIpeSubmissionRequest $request)
     {
         $user = Auth::user();
         $price = $this->verificationService->getIpePrice($user);
@@ -288,13 +273,11 @@ class NinVerificationController extends Controller
             $oldBalance = (float) $user->balance;
             $user->debit($price, false, ['fundingtype' => 'nin_ipe']);
 
-            $trackingId = $provider === 'provider1'
-                ? $request->trkid
-                : $request->tracking_id;
+            // Either spelling the two old versioned endpoints accepted.
+            $trackingId = $request->trkid ?: $request->tracking_id;
 
             $result = $this->verificationService->submitIpe(
                 $trackingId,
-                $provider,
                 $request->description ?? 'My Reference'
             );
 
@@ -303,7 +286,7 @@ class NinVerificationController extends Controller
                     'trkid' => $trackingId,
                     'status' => 'processing',
                     'result' => 'Pending',
-                    'comment' => $provider === 'provider1' ? 'New submission' : 'Submitted to ArewaSmart',
+                    'comment' => 'Submitted to '.($result['provider'] ?? 'provider'),
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
                     'userId' => $user->id,
