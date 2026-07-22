@@ -3,11 +3,7 @@
 namespace App\Services\Nin;
 
 use App\Services\Nin\Contracts\NinProvider;
-use App\Services\Nin\Providers\ArewaSmartProvider;
-use App\Services\Nin\Providers\PremblyProvider;
-use App\Services\Nin\Providers\ProviderFiveProvider;
-use App\Services\Nin\Providers\ProviderFourProvider;
-use App\Services\Nin\Providers\ProviderThreeProvider;
+use App\Services\Nin\Providers\RoutedProvider;
 
 /**
  * Central registry of NIN providers.
@@ -17,13 +13,19 @@ use App\Services\Nin\Providers\ProviderThreeProvider;
  */
 class NinProviderManager
 {
-    /** @var array<string, class-string<NinProvider>> */
+    /**
+     * One entry: the config-driven engine.
+     *
+     * The old V1..V5 entries were five hardcoded providers, and picking between
+     * them was what the "version" selector on the verification pages did. That
+     * choice now belongs to the routing chain in Admin > Verification, which
+     * also gives failover the versioned providers never had — so exposing them
+     * would just be a second, conflicting way to choose a provider.
+     *
+     * @var array<string, class-string<NinProvider>>
+     */
     protected array $registry = [
-        'prembly' => PremblyProvider::class,
-        'arewasmart' => ArewaSmartProvider::class,
-        'provider3' => ProviderThreeProvider::class,
-        'provider4' => ProviderFourProvider::class,
-        'provider5' => ProviderFiveProvider::class,
+        'auto' => RoutedProvider::class,
     ];
 
     /** @var array<string, NinProvider> */

@@ -3,11 +3,7 @@
 use App\Http\Controllers\Api\BillstackWebhookController;
 use App\Http\Controllers\Api\PayVesselWebhookController;
 use App\Http\Controllers\Api\NinVerificationController;
-use App\Http\Controllers\Api\Nin\PremblyController;
-use App\Http\Controllers\Api\Nin\ArewaSmartController;
-use App\Http\Controllers\Api\Nin\ProviderThreeController;
-use App\Http\Controllers\Api\Nin\ProviderFourController;
-use App\Http\Controllers\Api\Nin\ProviderFiveController;
+use App\Http\Controllers\Api\Nin\RoutedController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,13 +21,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     
     // NIN Verification - Provider 1 (Prembly)
-    Route::post('/nin/verify_1', [NinVerificationController::class, 'verifyProvider1'])
-        ->name('api.nin.verify1');
-    
-    // NIN Verification - Provider 2 (ArewaSmart)
-    Route::post('/nin/verify_2', [NinVerificationController::class, 'verifyProvider2'])
-        ->name('api.nin.verify2');
-    
+    Route::post('/nin/verify', [NinVerificationController::class, 'verify'])
+        ->name('api.nin.verify.routed');
+
     // NIN Demo Verification
     Route::post('/nin/demo', [NinVerificationController::class, 'verifyDemo'])
         ->name('api.nin.demo');
@@ -40,14 +32,10 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('/nin/phone', [NinVerificationController::class, 'verifyPhone'])
         ->name('api.nin.phone');
     
-    // IPE Submission - Provider 1 (Nguru)
-    Route::post('/nin/ipe', [NinVerificationController::class, 'submitIpeProvider1'])
-        ->name('api.nin.ipe1');
-    
-    // IPE Submission - Provider 2 (ArewaSmart)
-    Route::post('/nin/ipe2', [NinVerificationController::class, 'submitIpeProvider2'])
-        ->name('api.nin.ipe2');
-    
+    // IPE Submission
+    Route::post('/nin/ipe', [NinVerificationController::class, 'submitIpe'])
+        ->name('api.nin.ipe.submit');
+
     // Get All IPE Submissions
     Route::get('/nin/ipe', [NinVerificationController::class, 'getAllIpeSubmissions'])
         ->name('api.nin.ipe.all');
@@ -65,11 +53,10 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     | Add a new provider by adding one line here + its controller.
     */
     Route::prefix('nin/providers')->name('api.nin.providers.')->group(function () {
-        Route::post('/prembly/verify',    [PremblyController::class, 'verify'])->name('prembly');
-        Route::post('/arewasmart/verify', [ArewaSmartController::class, 'verify'])->name('arewasmart');
-        Route::post('/provider3/verify',  [ProviderThreeController::class, 'verify'])->name('provider3');
-        Route::post('/provider4/verify',  [ProviderFourController::class, 'verify'])->name('provider4');
-        Route::post('/provider5/verify',  [ProviderFiveController::class, 'verify'])->name('provider5');
+        // One endpoint. The per-provider routes (prembly, arewasmart,
+        // provider3..5) are gone: choosing a provider is the routing chain's
+        // job now, and letting a caller name one would bypass failover.
+        Route::post('/auto/verify', [RoutedController::class, 'verify'])->name('auto');
     });
 });
 

@@ -6,21 +6,26 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\Validation;
 use App\Services\Nin\NinProviderManager;
+use App\Services\Nin\Providers\RoutedProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 /**
- * NIN Verification Controller (by NIN number)
- * Supports v1 (Prembly) and v2 (ArewaSmart)
- * Charges only verification fee - slip download is separate
+ * NIN Verification (by NIN or phone).
+ *
+ * The provider is chosen by the routing chain in Admin > Verification, with
+ * failover — there is no v1/v2 any more, because those were just two hardcoded
+ * providers. Charges the verification fee only; slip download is billed
+ * separately.
  */
 class VerifyController extends Controller
 {
     use NinWalletTrait;
+
+    public function __construct(private readonly RoutedProvider $routed) {}
 
     /**
      * Show the NIN Verification page
@@ -79,35 +84,26 @@ class VerifyController extends Controller
     }
 
     /**
-     * Verify NIN using Provider 1 (Prembly)
+     * Verify a NIN or phone number.
+     *
+     * One endpoint: the v1/v2 split only ever chose between two hardcoded
+     * providers, which is now the job of the `nin.verify` / `nin.phone` routing
+     * chain in Admin > Verification.
      */
-    public function verifyV1(Request $request)
+    public function verify(Request $request)
     {
         $validated = $request->validate([
             'idType' => 'required|string|in:nin,phone',
             'idValue' => 'required|string|min:10|max:15',
         ]);
 
-        return $this->processVerification($validated, 'v1');
+        return $this->processVerification($validated);
     }
 
     /**
-     * Verify NIN using Provider 2 (ArewaSmart)
+     * Charge the verification fee, run the routed chain, refund on failure.
      */
-    public function verifyV2(Request $request)
-    {
-        $validated = $request->validate([
-            'idType' => 'required|string|in:nin,phone',
-            'idValue' => 'required|string|min:10|max:15',
-        ]);
-
-        return $this->processVerification($validated, 'v2');
-    }
-
-    /**
-     * Process NIN verification - charges only verification fee
-     */
-    protected function processVerification(array $data, string $version)
+    protected function processVerification(array $data)
     {
         $user = Auth::user();
 
@@ -131,38 +127,25 @@ class VerifyController extends Controller
             // Deduct verification fee
             $this->debitWallet($user, $verificationPrice, ['fundingtype' => 'nin_verification']);
 
-            $endpoint = $version === 'v1'
-                ? config('services.nin.base_url').'/api/v1/nin/verify_1'
-                : config('services.nin.base_url').'/api/v1/nin/verify_2';
+            $service = $data['idType'] === 'phone' ? 'nin.phone' : 'nin.verify';
 
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Authorization' => 'Bearer '.config('services.nin.api_key'),
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($endpoint, [
-                    'idType' => $data['idType'],
-                    'idValue' => $data['idValue'],
-                    'slipType' => 'standard', // API still needs this, but we don't charge for it
-                ]);
+            $result = $data['idType'] === 'phone'
+                ? $this->routed->verifyByPhone($data['idValue'])
+                : $this->routed->verifyByNin($data['idValue']);
 
-            $body = $response->json();
-            $rawBody = $response->body();
-            $httpStatus = $response->status();
+            if ($result->success) {
+                $body = $result->data ?? [];
 
-            if ($response->successful() && ! isset($body['error'])) {
-                // Create verification record
                 $validation = Validation::create([
                     'nin' => $body['nin'] ?? $data['idValue'],
                     'status' => 'completed',
                     'result' => json_encode($body),
-                    'comment' => "NIN verify {$version} ({$data['idType']}) [{$data['idValue']}]",
+                    'comment' => "NIN verify ({$data['idType']}) [{$data['idValue']}] via ".($body['provider'] ?? 'routing'),
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
                     'userId' => $user->id,
                 ]);
 
-                // Create transaction record for verification
                 Transaction::createVerification(
                     $user->id,
                     $verificationPrice,
@@ -172,7 +155,8 @@ class VerifyController extends Controller
                         'validation_id' => $validation->id,
                         'nin' => $body['nin'] ?? $data['idValue'],
                         'id_type' => $data['idType'],
-                        'provider' => $version,
+                        // The provider that actually answered, not a version tag.
+                        'provider' => $body['provider'] ?? null,
                         'old_balance' => $oldBalance,
                         'new_balance' => (float) $user->balance,
                     ]
@@ -180,7 +164,6 @@ class VerifyController extends Controller
 
                 DB::commit();
 
-                // Include validation_id in the verification data for persistence
                 $body['validation_id'] = $validation->id;
 
                 return back()->with([
@@ -190,20 +173,16 @@ class VerifyController extends Controller
                 ]);
             }
 
-            // Refund on failure
+            // Every routed provider declined (or none is configured) — refund.
             $this->creditWallet($user, $verificationPrice, ['fundingtype' => 'refund', 'status' => 'refund']);
 
-            $errorMessage = $body['message'] ?? $body['error'] ?? $body['msg'] ?? 'Verification failed';
-            $resultPayload = $body ? json_encode($body) : json_encode([
-                'http_status' => $httpStatus,
-                'raw_response' => substr($rawBody, 0, 2000),
-            ]);
+            $errorMessage = $result->message ?? 'Verification failed';
 
             Validation::create([
                 'nin' => $data['idValue'],
                 'status' => 'failed',
-                'result' => $resultPayload,
-                'comment' => "[HTTP {$httpStatus}] {$errorMessage}",
+                'result' => json_encode($result->raw ?? ['message' => $errorMessage]),
+                'comment' => "[{$service}] {$errorMessage}",
                 'oldBal' => $oldBalance,
                 'newBal' => (float) $user->balance,
                 'userId' => $user->id,
@@ -211,11 +190,11 @@ class VerifyController extends Controller
 
             DB::commit();
 
-            return back()->withErrors(['message' => "[HTTP {$httpStatus}] {$errorMessage}"]);
+            return back()->withErrors(['message' => $errorMessage]);
         } catch (\Exception $e) {
             DB::rollBack();
             $this->creditWallet($user, $verificationPrice, ['fundingtype' => 'refund', 'status' => 'refund']);
-            Log::error("NIN Verify {$version} error: ".$e->getMessage());
+            Log::error('NIN Verify error: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Network error: '.$e->getMessage()]);
         }

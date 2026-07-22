@@ -4,6 +4,7 @@ namespace App\Http\Controllers\NIN;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ipe;
+use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -11,13 +12,17 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 /**
- * NIN IPE (Identity Proof of Enrollment) Controller
- * Supports v1 (Nguru/Litetech) and v2 (ArewaSmart)
- * Also handles IPE status checking
+ * NIN IPE (Identity Proof of Enrollment).
+ *
+ * Submissions go through the `nin.ipe` routing chain in Admin > Verification.
+ * Unlike the lookup services this one never fails over on an ambiguous reply —
+ * the request may already have been filed upstream.
  */
 class IpeController extends Controller
 {
     use NinWalletTrait;
+
+    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
 
     private function walletPayload($user): array
     {
@@ -78,28 +83,25 @@ class IpeController extends Controller
     }
 
     /**
-     * Submit IPE — Provider 1 (Nguru/Litetech)
+     * Submit an IPE clearance through the routed provider chain.
+     *
+     * Accepts either field name the two old versioned endpoints used, so
+     * existing forms and integrations keep posting successfully.
      */
-    public function submitV1(Request $request)
+    public function submit(Request $request)
     {
         $validated = $request->validate([
-            'trkid' => 'required|string|size:15',
-        ]);
-
-        return $this->processIpeSubmission($validated['trkid'], 'v1', 'New submission');
-    }
-
-    /**
-     * Submit IPE — Provider 2 (ArewaSmart)
-     */
-    public function submitV2(Request $request)
-    {
-        $validated = $request->validate([
-            'tracking_id' => 'required|string|size:15',
+            'trkid' => 'required_without:tracking_id|string|size:15',
+            'tracking_id' => 'required_without:trkid|string|size:15',
             'description' => 'nullable|string|max:255',
+            'nin' => 'nullable|string|size:11',
         ]);
 
-        return $this->processIpeSubmission($validated['tracking_id'], 'v2', $validated['description'] ?? 'My Reference');
+        return $this->processIpeSubmission(
+            $validated['trkid'] ?? $validated['tracking_id'],
+            $validated['description'] ?? 'New submission',
+            $validated['nin'] ?? null,
+        );
     }
 
     /**
@@ -153,7 +155,7 @@ class IpeController extends Controller
     /**
      * Process IPE submission for either provider
      */
-    protected function processIpeSubmission(string $trackingId, string $version, string $description)
+    protected function processIpeSubmission(string $trackingId, string $description, ?string $nin = null)
     {
         $user = Auth::user();
         $price = $this->getIpePrice($user);
@@ -171,53 +173,45 @@ class IpeController extends Controller
         $reference = 'IPE_'.now()->timestamp.random_int(1000, 9999);
 
         try {
-            if ($version === 'v1') {
-                $endpoint = config('services.nin.base_url').'/api/v1/nin/ipe';
-                $payload = ['trkid' => $trackingId];
-            } else {
-                $endpoint = config('services.nin.base_url').'/api/v1/nin/ipe2';
-                $payload = ['tracking_id' => $trackingId, 'description' => $description];
-            }
+            $outcome = $this->dispatcher->verify('nin.ipe', array_filter([
+                'tracking_id' => $trackingId,
+                'nin' => $nin,
+            ]), ['user_id' => $user->id, 'reference' => $reference]);
 
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Authorization' => 'Bearer '.config('services.nin.api_key'),
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($endpoint, $payload);
-
-            $body = $response->json();
-
-            if ($response->successful() && ($body['success'] ?? ! isset($body['error']))) {
+            if ($outcome->isSuccess()) {
                 Ipe::create([
                     'trkid' => $trackingId,
                     'status' => 'processing',
                     'result' => 'Pending',
-                    'comment' => $version === 'v1' ? 'Submitted to Nguru' : 'Submitted to ArewaSmart',
+                    'comment' => 'Submitted to '.($outcome->providerName ?? 'provider').' — '.$description,
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
                     'userId' => $user->id,
                 ]);
 
-                return back()->with('success', "IPE {$version} submitted. Ref: {$reference}");
+                return back()->with('success', "IPE submitted. Ref: {$reference}");
             }
 
+            // IPE is a submission, not a lookup: on an ambiguous reply the
+            // dispatcher stops rather than re-submitting to another provider.
+            // The charge is still reversed, and the record is left visible so
+            // the request can be reconciled if it did land upstream.
             $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
 
             Ipe::create([
                 'trkid' => $trackingId,
-                'status' => 'failed',
-                'result' => 'Failed',
-                'comment' => $body['message'] ?? $body['error'] ?? 'Submission failed',
+                'status' => $outcome->isTimeout() ? 'processing' : 'failed',
+                'result' => $outcome->isTimeout() ? 'Unconfirmed' : 'Failed',
+                'comment' => $outcome->message ?? 'Submission failed',
                 'oldBal' => $oldBalance,
                 'newBal' => (float) $user->balance,
                 'userId' => $user->id,
             ]);
 
-            return back()->withErrors(['message' => $body['message'] ?? $body['error'] ?? 'IPE Submission Failed']);
+            return back()->withErrors(['message' => $outcome->message ?? 'IPE Submission Failed']);
         } catch (\Exception $e) {
             $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
-            Log::error("IPE Submit {$version} error: ".$e->getMessage());
+            Log::error('IPE Submit error: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Network error: '.$e->getMessage()]);
         }

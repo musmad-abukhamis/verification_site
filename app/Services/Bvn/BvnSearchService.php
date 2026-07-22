@@ -5,8 +5,8 @@ namespace App\Services\Bvn;
 use App\Models\NinDetail;
 use App\Models\ServicePrice;
 use App\Models\User;
+use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -15,9 +15,16 @@ use Illuminate\Support\Facades\Log;
  * Extracted from BvnSearchController so the web UI and the reseller API run the
  * same code -- including the same role-based price and the same refund on a
  * failed lookup. Attempts land in NINDetails with idtype = "bvn".
+ *
+ * The provider comes from the `bvn.verify` chain configured in
+ * Admin > Verification, so this honours the routing/failover order and every
+ * call shows up in Provider Calls. Slip pricing is unchanged -- it is still per
+ * slip type (bvn.search.*), not the engine's service price.
  */
 class BvnSearchService
 {
+    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
+
     /** slipType => service_prices key (premium = BVN Slip). */
     public const SLIP_SERVICES = [
         'premium' => 'bvn.search.premium',
@@ -101,18 +108,10 @@ class BvnSearchService
                 ];
             }
 
-            $base = rtrim((string) config('services.arewasmart.base_url'), '/');
+            $lookup = $this->lookup($user, $bvn, $reference);
 
-            $response = Http::timeout(40)
-                ->withToken((string) config('services.arewasmart.token'))
-                ->acceptJson()
-                ->post($base.'/bvn/verify', ['bvn' => $bvn]);
-
-            $body = $response->json();
-            $data = $body['data'] ?? null;
-
-            if ($response->successful() && ($body['status'] ?? null) === 'success' && is_array($data)) {
-                $details = $this->normalize($data, $bvn);
+            if ($lookup['success']) {
+                $details = $lookup['data'];
 
                 NinDetail::create([
                     'id' => $reference,
@@ -155,12 +154,10 @@ class BvnSearchService
 
             DB::commit();
 
-            $message = $body['message'] ?? $body['error'] ?? 'Verification failed. Please check the BVN and try again.';
-
             return [
                 'success' => false,
                 'code' => 'verification_failed',
-                'message' => is_array($message) ? implode(' ', $message) : $message,
+                'message' => $lookup['message'] ?? 'Verification failed. Please check the BVN and try again.',
                 'reference' => $reference,
                 'price' => $price,
             ];
@@ -185,30 +182,60 @@ class BvnSearchService
     }
 
     /**
-     * Map the ArewaSmart BVN `data` (camelCase) into the field names the slip
-     * component renders. `photo` is raw base64 JPEG (no data: prefix).
+     * Run the lookup against the routed `bvn.verify` chain.
+     *
+     * @return array{success: bool, data?: array<string, mixed>, message?: string}
      */
-    private function normalize(array $d, string $bvn): array
+    private function lookup(User $user, string $bvn, string $reference): array
+    {
+        // No silent fallback to a config-file provider: if nothing is routed for
+        // bvn.verify the request is refused (and refunded). A hidden fallback
+        // would send customers to a provider the admin never selected and log
+        // nothing in Provider Calls -- exactly the surprise this engine exists
+        // to prevent.
+        $outcome = $this->dispatcher->verify('bvn.verify', ['bvn' => $bvn], [
+            'user_id' => $user->id,
+            'reference' => $reference,
+        ]);
+
+        if (! $outcome->isSuccess()) {
+            return ['success' => false, 'message' => $outcome->message];
+        }
+
+        return ['success' => true, 'data' => $this->toSlipFields($outcome->data, $bvn)];
+    }
+
+    /**
+     * The engine's canonical field names -> the names the slip component
+     * renders. Kept as a translation layer so the Vue slip templates did not
+     * have to change.
+     *
+     * @param  array<string, mixed>  $d  canonical, from ResponseNormalizer
+     * @return array<string, mixed>
+     */
+    private function toSlipFields(array $d, string $bvn): array
     {
         return [
             'bvn' => $d['bvn'] ?? $bvn,
-            'surname' => $d['lastName'] ?? null,
-            'firstname' => $d['firstName'] ?? null,
-            'middlename' => $d['middleName'] ?? null,
+            'surname' => $d['last_name'] ?? null,
+            'firstname' => $d['first_name'] ?? null,
+            'middlename' => $d['middle_name'] ?? null,
             'gender' => $d['gender'] ?? null,
-            'dob' => $d['birthday'] ?? null,
-            'phone' => $d['phoneNumber'] ?? null,
-            'phone2' => $d['phoneNumber2'] ?? null,
+            'dob' => $d['date_of_birth'] ?? null,
+            'phone' => $d['phone'] ?? null,
+            'phone2' => $d['phone2'] ?? null,
             'email' => $d['email'] ?? null,
             'photo' => $d['photo'] ?? null,
-            'marital_status' => $d['maritalStatus'] ?? null,
-            'state_of_origin' => $d['stateOfOrigin'] ?? null,
-            'lga_of_origin' => $d['lgaOfOrigin'] ?? null,
-            'registration_date' => $d['registrationDate'] ?? null,
-            'enrollment_bank' => $d['enrollmentBank'] ?? null,
-            'enrollment_bank_branch' => $d['enrollmentBranch'] ?? null,
-            'residential_Address' => $d['residentialAddress'] ?? null,
+            'marital_status' => $d['marital_status'] ?? null,
+            'state_of_origin' => $d['state_of_origin'] ?? null,
+            'lga_of_origin' => $d['lga_of_origin'] ?? null,
+            'registration_date' => $d['registration_date'] ?? null,
+            'enrollment_bank' => $d['enrollment_bank'] ?? null,
+            'enrollment_bank_branch' => $d['enrollment_bank_branch'] ?? null,
+            // Capital A retained: the slip components already bind this name.
+            'residential_Address' => $d['residence_address'] ?? null,
             'nationality' => $d['nationality'] ?? null,
         ];
     }
+
 }

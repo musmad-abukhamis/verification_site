@@ -28,7 +28,7 @@ const formatCurrency = (amount) => {
 
 const submit = () => {
     form.transform((d) => ({ ...d, idValue: d.idValue.replace(/\D/g, '') }))
-        .post(route('bvn-search.v1'), {
+        .post(route('bvn-verify.store'), {
             preserveScroll: true,
             onSuccess: () => {
                 if (page.props.flash?.verification_data) {
@@ -73,13 +73,13 @@ const printSlip = () => window.print();
 </script>
 
 <template>
-    <Head title="BVN Search" />
+    <Head title="BVN Verification" />
     <AuthenticatedLayout>
         <div class="max-w-5xl mx-auto space-y-6">
             <!-- Wallet -->
             <div class="bg-gradient-to-r from-lime-600 to-green-700 rounded-xl shadow p-6 text-white print:hidden">
                 <p class="text-sm opacity-80">Wallet Balance</p>
-                <p class="text-3xl font-bold mt-1">₦{{ wallet.total_balance.toLocaleString() }}</p>
+                <p class="text-3xl font-bold mt-1">â‚¦{{ wallet.total_balance.toLocaleString() }}</p>
             </div>
 
             <!-- Form -->
@@ -90,7 +90,7 @@ const printSlip = () => window.print();
                 <div v-if="form.errors.message" class="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ form.errors.message }}</div>
 
                 <div v-if="slipTypes.length === 0" class="mb-4 p-3 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 rounded-lg text-sm">
-                    No BVN search prices configured. An admin must set a Search Slip price under BVN Service Prices.
+                    No BVN verification prices configured. An admin must set a Search Slip price under BVN Service Prices.
                 </div>
 
                 <form @submit.prevent="submit" class="space-y-4">
@@ -104,7 +104,7 @@ const printSlip = () => window.print();
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Slip Type</label>
                         <select v-model="form.slipType" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2.5">
-                            <option v-for="t in slipTypes" :key="t.code" :value="t.code">{{ t.name }} — {{ formatCurrency(t.price) }}</option>
+                            <option v-for="t in slipTypes" :key="t.code" :value="t.code">{{ t.name }} â€” {{ formatCurrency(t.price) }}</option>
                         </select>
                     </div>
                     <button type="submit" :disabled="form.processing || slipTypes.length === 0"
@@ -195,7 +195,7 @@ const printSlip = () => window.print();
             <!-- History -->
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden print:hidden">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Search History</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Verification History</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -215,7 +215,7 @@ const printSlip = () => window.print();
                                 <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ h.name || '-' }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 capitalize">{{ h.slip_type }}</td>
                                 <td class="px-4 py-3"><span :class="['inline-flex px-2 py-0.5 text-xs rounded-full font-medium capitalize', statusClass(h.status)]">{{ h.status }}</span></td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">₦{{ Number(h.price || 0).toLocaleString() }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">â‚¦{{ Number(h.price || 0).toLocaleString() }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ fmtDate(h.created_at) }}</td>
                             </tr>
                         </tbody>
@@ -223,7 +223,7 @@ const printSlip = () => window.print();
                 </div>
                 <div v-if="history.data.length === 0" class="py-10 text-center text-gray-400">No BVN searches yet.</div>
                 <div v-if="history.total > 0" class="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <p class="text-sm text-gray-500">Showing {{ history.from }}–{{ history.to }} of {{ history.total }}</p>
+                    <p class="text-sm text-gray-500">Showing {{ history.from }}â€“{{ history.to }} of {{ history.total }}</p>
                     <div class="flex gap-2">
                         <button @click="goToPage(history.prev_page_url)" :disabled="!history.prev_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Prev</button>
                         <button @click="goToPage(history.next_page_url)" :disabled="!history.next_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Next</button>

@@ -10,7 +10,6 @@ const props = defineProps({
     filters: Object,
 });
 
-const provider = ref('v1');
 const nin = ref('');
 const isSubmitting = ref(false);
 const formError = ref('');
@@ -25,8 +24,7 @@ const submit = () => {
     if (nin.value.length !== 11) { formError.value = 'NIN must be exactly 11 characters'; return; }
     formError.value = '';
     isSubmitting.value = true;
-    const routeName = provider.value === 'v1' ? 'nin.validation.v1' : 'nin.validation.v2';
-    router.post(route(routeName), { nin: nin.value }, {
+    router.post(route('nin.validation.store'), { nin: nin.value }, {
         preserveScroll: true,
         onSuccess: () => { nin.value = ''; isSubmitting.value = false; },
         onError: (errors) => { formError.value = errors.nin || errors.message || 'Failed to submit NIN'; isSubmitting.value = false; },
@@ -102,14 +100,6 @@ const pagination = computed(() => ({
 
                 <div v-if="formError" class="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ formError }}</div>
                 <div v-if="$page.props.flash?.success" class="mb-4 p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg text-sm">{{ $page.props.flash.success }}</div>
-
-                <!-- Provider Tabs -->
-                <div class="flex gap-2 mb-6">
-                    <button v-for="v in ['v1', 'v2']" :key="v" @click="provider = v"
-                        :class="['px-5 py-2 rounded-lg text-sm font-semibold transition-colors', provider === v ? 'bg-cyan-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200']">
-                        {{ v === 'v1' ? 'V1' : 'V2' }}
-                    </button>
-                </div>
 
                 <form @submit.prevent="submit" class="space-y-4 max-w-lg">
                     <div>

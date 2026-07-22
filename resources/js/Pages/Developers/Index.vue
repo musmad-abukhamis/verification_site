@@ -150,7 +150,7 @@ return body["data"]`,
 
 const ninSuccess = `{
   "success": true,
-  "provider": "prembly",
+  "provider": "auto",
   "method": "nin",
   "reference": "NIN_1753100000_4821",
   "data": {

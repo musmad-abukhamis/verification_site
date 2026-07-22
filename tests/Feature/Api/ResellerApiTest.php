@@ -7,6 +7,7 @@ use App\Models\ServicePrice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\ConfiguresVerificationProviders;
 use Tests\TestCase;
 
 /**
@@ -15,7 +16,16 @@ use Tests\TestCase;
  */
 class ResellerApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfiguresVerificationProviders, RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Verification has no hardcoded providers any more, so a routed chain
+        // is a precondition for any lookup reaching a provider at all.
+        $this->routeProviderFor(['nin.verify', 'nin.phone', 'nin.demographic', 'bvn.verify']);
+    }
 
     private const TOKEN = 'sk_live_reseller_token';
 
@@ -192,7 +202,9 @@ class ResellerApiTest extends TestCase
 
         $response = $this->apiCall('GET', '/api/v1/nin/providers')->assertOk();
 
+        // One entry now — routing, not the caller, picks the upstream provider.
         $this->assertNotEmpty($response->json('data.providers'));
+        $this->assertSame('auto', $response->json('data.providers.0.key'));
         $this->assertArrayHasKey('methods', $response->json('data.providers.0'));
     }
 

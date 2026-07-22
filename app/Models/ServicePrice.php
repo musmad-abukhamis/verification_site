@@ -39,6 +39,7 @@ class ServicePrice extends Model
      */
     public const SERVICES = [
         'nin.verify' => ['label' => 'NIN Verification', 'group' => 'verification'],
+        'bvn.verify' => ['label' => 'BVN Verification', 'group' => 'verification'],
         'nin.phone' => ['label' => 'Phone Verification', 'group' => 'verification'],
         'nin.demographic' => ['label' => 'Demographic Verification', 'group' => 'verification'],
         'nin.ipe' => ['label' => 'IPE Clearance', 'group' => 'verification'],
