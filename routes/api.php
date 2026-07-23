@@ -32,13 +32,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('/nin/phone', [NinVerificationController::class, 'verifyPhone'])
         ->name('api.nin.phone');
     
-    // IPE Submission
-    Route::post('/nin/ipe', [NinVerificationController::class, 'submitIpe'])
-        ->name('api.nin.ipe.submit');
-
-    // Get All IPE Submissions
-    Route::get('/nin/ipe', [NinVerificationController::class, 'getAllIpeSubmissions'])
-        ->name('api.nin.ipe.all');
+    // IPE submission and listing live in the reseller group below: both groups
+    // are prefixed `v1`, so the later registration owned those two URIs anyway,
+    // and the listing here returned every user's submissions, not the caller's.
     
     // Check IPE Status (ArewaSmart)
     Route::get('/nin/ipe/arewa/status', [NinVerificationController::class, 'checkIpeStatus'])
@@ -80,6 +76,17 @@ Route::middleware('api.token')->prefix('v1')->group(function () {
 
     Route::get('/nin/providers', [\App\Http\Controllers\Api\Reseller\NinController::class, 'providers'])->name('api.nin.providers');
     Route::post('/nin/verify', [\App\Http\Controllers\Api\Reseller\NinController::class, 'verify'])->name('api.nin.verify');
+
+    // Validation is its own service, priced apart from verification.
+    Route::post('/nin/validate', [\App\Http\Controllers\Api\Reseller\ValidationController::class, 'store'])->name('api.nin.validate');
+
+    // IPE clearance: a submission, so it gets a read-back endpoint. An
+    // integrator whose call timed out reconciles here instead of resubmitting.
+    Route::post('/nin/ipe', [\App\Http\Controllers\Api\Reseller\IpeController::class, 'submit'])->name('api.nin.ipe.store');
+    Route::get('/nin/ipe', [\App\Http\Controllers\Api\Reseller\IpeController::class, 'index'])->name('api.nin.ipe.list');
+    Route::get('/nin/ipe/{submission}', [\App\Http\Controllers\Api\Reseller\IpeController::class, 'show'])
+        ->where('submission', '[A-Za-z0-9_-]+')
+        ->name('api.nin.ipe.show');
 
     Route::post('/bvn/verify', [\App\Http\Controllers\Api\Reseller\BvnController::class, 'verify'])->name('api.bvn.verify');
 });

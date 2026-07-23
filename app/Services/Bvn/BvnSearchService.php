@@ -6,6 +6,7 @@ use App\Models\NinDetail;
 use App\Models\ServicePrice;
 use App\Models\User;
 use App\Services\Verification\VerificationDispatcher;
+use App\Support\BankDirectory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -230,8 +231,16 @@ class BvnSearchService
             'state_of_origin' => $d['state_of_origin'] ?? null,
             'lga_of_origin' => $d['lga_of_origin'] ?? null,
             'registration_date' => $d['registration_date'] ?? null,
-            'enrollment_bank' => $d['enrollment_bank'] ?? null,
-            'enrollment_bank_branch' => $d['enrollment_bank_branch'] ?? null,
+            // Providers report these as CBN codes; the slip needs names.
+            //
+            // The branch deliberately resolves against the same institution
+            // table: in the records we get, the branch field carries an
+            // institution code rather than a branch-level one. The trade-off is
+            // known -- a genuine branch code that happens to collide with a bank
+            // code will read as that bank's name. If branch codes ever arrive in
+            // their own numbering, this needs its own table, not this one.
+            'enrollment_bank' => BankDirectory::name($d['enrollment_bank'] ?? null),
+            'enrollment_bank_branch' => BankDirectory::name($d['enrollment_bank_branch'] ?? null),
             // Capital A retained: the slip components already bind this name.
             'residential_Address' => $d['residence_address'] ?? null,
             'nationality' => $d['nationality'] ?? null,
