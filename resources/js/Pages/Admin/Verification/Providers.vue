@@ -185,7 +185,7 @@ const inputLabel = (name) => name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.t
                         Add a NIN/BVN provider by choosing its service types, header style and body shape — no deploy needed.
                     </p>
                 </div>
-                <button @click="openCreate" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                <button disabled @click="openCreate" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                     + New provider
                 </button>
             </div>
@@ -252,18 +252,18 @@ const inputLabel = (name) => name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.t
                         <div class="grid gap-3 sm:grid-cols-2">
                             <div>
                                 <label class="text-sm text-gray-600 dark:text-gray-300">Name</label>
-                                <input v-model="form.name" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="Prembly" />
+                                <input v-model="form.name" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="Softel" />
                                 <p v-if="form.errors.name" class="text-xs text-red-500">{{ form.errors.name }}</p>
                             </div>
                             <div>
                                 <label class="text-sm text-gray-600 dark:text-gray-300">Slug</label>
-                                <input v-model="form.slug" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="prembly" />
+                                <input v-model="form.slug" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="softel" />
                                 <p v-if="form.errors.slug" class="text-xs text-red-500">{{ form.errors.slug }}</p>
                             </div>
                         </div>
                         <div>
                             <label class="text-sm text-gray-600 dark:text-gray-300">Base URL</label>
-                            <input v-model="form.base_url" class="mt-1 w-full rounded-lg border-gray-300 font-mono text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="https://api.prembly.com" />
+                            <input v-model="form.base_url" class="mt-1 w-full rounded-lg border-gray-300 font-mono text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" placeholder="https://api.softel.ng" />
                             <p v-if="form.errors.base_url" class="text-xs text-red-500">{{ form.errors.base_url }}</p>
                         </div>
                         <div class="grid gap-3 sm:grid-cols-3">
