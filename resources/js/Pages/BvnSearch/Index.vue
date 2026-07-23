@@ -120,7 +120,7 @@ const printSlip = () => window.print();
                 <div class="flex items-center justify-between print:hidden">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">Verification Result</h2>
                     <div class="flex gap-2">
-                        <button @click="printSlip" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white text-sm font-medium rounded-lg">Print Slip</button>
+                        <button disabled ="printSlip" class="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white text-sm font-medium rounded-lg">Print Slip</button>
                         <button @click="reset" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm rounded-lg text-gray-600 dark:text-gray-300">Verify Another</button>
                     </div>
                 </div>
@@ -179,13 +179,13 @@ const printSlip = () => window.print();
                             <div><dt class="text-gray-500">Date of Birth</dt><dd class="font-medium">{{ fmtDate(result.dob) }}</dd></div>
                             <div><dt class="text-gray-500">Gender</dt><dd class="font-medium">{{ result.gender || '-' }}</dd></div>
                             <div><dt class="text-gray-500">Phone Number</dt><dd class="font-medium">{{ result.phone || '-' }}</dd></div>
-                            <div><dt class="text-gray-500">Email</dt><dd class="font-medium break-all">{{ result.email || 'N/A' }}</dd></div>
+                            <!-- <div><dt class="text-gray-500">Email</dt><dd class="font-medium break-all">{{ result.email || 'N/A' }}</dd></div>
                             <div><dt class="text-gray-500">Marital Status</dt><dd class="font-medium">{{ result.marital_status || '-' }}</dd></div>
                             <div><dt class="text-gray-500">State of Origin</dt><dd class="font-medium">{{ result.state_of_origin || '-' }}</dd></div>
                             <div><dt class="text-gray-500">LGA of Origin</dt><dd class="font-medium">{{ result.lga_of_origin || '-' }}</dd></div>
                             <div><dt class="text-gray-500">Registration Date</dt><dd class="font-medium">{{ fmtDate(result.registration_date) }}</dd></div>
                             <div class="col-span-2"><dt class="text-gray-500">Enrollment Bank</dt><dd class="font-medium">{{ result.enrollment_bank || '-' }} <span v-if="result.enrollment_bank_branch">({{ result.enrollment_bank_branch }})</span></dd></div>
-                            <div class="col-span-2"><dt class="text-gray-500">Residential Address</dt><dd class="font-medium">{{ result.residential_Address || '-' }}</dd></div>
+                            <div class="col-span-2"><dt class="text-gray-500">Residential Address</dt><dd class="font-medium">{{ result.residential_Address || '-' }}</dd></div> -->
                         </dl>
                     </div>
                     <div class="bg-gray-50 px-6 py-2 text-center text-xs text-gray-400 border-t">Generated {{ fmtDate(new Date()) }}</div>
