@@ -15,6 +15,14 @@ use Illuminate\Http\Request;
  */
 class BvnController extends Controller
 {
+    /**
+     * The slip an integrator gets when they do not ask for one. Premium is the
+     * full slip -- the product listed simply as "BVN Slip" -- so omitting the
+     * field gives the complete record rather than a partial one the caller then
+     * has to pay a second time to complete.
+     */
+    private const DEFAULT_SLIP = 'premium';
+
     public function __construct(private BvnSearchService $search)
     {
     }
@@ -23,10 +31,12 @@ class BvnController extends Controller
     {
         $validated = $request->validate([
             'bvn' => ['required', 'string', 'regex:/^\d{11}$/'],
-            'slip_type' => ['required', 'string', 'in:'.implode(',', array_keys(BvnSearchService::SLIP_SERVICES))],
+            'slip_type' => ['nullable', 'string', 'in:'.implode(',', array_keys(BvnSearchService::SLIP_SERVICES))],
         ]);
 
-        $result = $this->search->search($request->user(), $validated['bvn'], $validated['slip_type']);
+        $slipType = $validated['slip_type'] ?? self::DEFAULT_SLIP;
+
+        $result = $this->search->search($request->user(), $validated['bvn'], $slipType);
 
         if (! $result['success']) {
             return response()->json([
@@ -40,6 +50,8 @@ class BvnController extends Controller
         return response()->json([
             'status' => 'success',
             'reference' => $result['reference'],
+            // Echoed because it can be defaulted, and it decides the price.
+            'slip_type' => $slipType,
             'amount' => $result['price'],
             'data' => $result['data'],
         ]);

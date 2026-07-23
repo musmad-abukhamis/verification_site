@@ -9,16 +9,48 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 /**
  * Validates a NIN verification request for any provider.
  *
- * Rules are conditional on `method`:
+ * Rules are conditional on the lookup method:
  *   nin         -> nin   (exactly 11 digits)
  *   phone       -> phone (exactly 11 digits)
  *   demographic -> first_name, last_name, gender, date_of_birth (YYYY-MM-DD)
+ *
+ * Callers do not send the method: it follows from the identifier they supply,
+ * which is the only thing they actually have. Asking an integrator to name it
+ * as well just adds a field they can contradict -- `method: phone` with a `nin`
+ * in the body has no sensible reading. The verification screens still send it
+ * explicitly, and an explicit value is always honoured.
  */
 class ProviderVerifyRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return $this->user() !== null;
+    }
+
+    /**
+     * Fill in the method from whichever identifier was sent.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('method')) {
+            return;
+        }
+
+        $this->merge(['method' => $this->inferMethod()]);
+    }
+
+    /**
+     * NIN first, then phone: if a caller sends both, the NIN is the stronger
+     * identifier and the one they are asking us about.
+     */
+    private function inferMethod(): ?string
+    {
+        return match (true) {
+            $this->filled('nin') => 'nin',
+            $this->filled('phone') => 'phone',
+            $this->filled('first_name') || $this->filled('last_name') => 'demographic',
+            default => null,
+        };
     }
 
     public function rules(): array
@@ -47,6 +79,10 @@ class ProviderVerifyRequest extends FormRequest
     public function messages(): array
     {
         return [
+            // Reached when nothing identifiable was sent, so the message names
+            // the choices rather than a `method` field the caller never sees.
+            'method.required' => 'Send a nin, a phone number, or first_name, last_name, gender and date_of_birth.',
+            'method.in' => 'Send a nin, a phone number, or first_name, last_name, gender and date_of_birth.',
             'nin.regex'              => 'The NIN must be exactly 11 digits.',
             'phone.regex'            => 'The phone number must be exactly 11 digits.',
             'date_of_birth.date_format' => 'The date of birth must be in YYYY-MM-DD format.',

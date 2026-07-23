@@ -53,7 +53,8 @@ const generatePDF = async () => {
     const lineHeight = 18;
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([width, height]);
+    // Reassigned if the details table needs a second page.
+    let page = pdfDoc.addPage([width, height]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const black = rgb(0, 0, 0);
@@ -84,21 +85,65 @@ const generatePDF = async () => {
         borderColor: black, borderWidth: 0.5,
     });
 
-    const wrapText = (text, maxWidth, f, size) => {
-        const words = text.split(' ');
-        const lines = [];
+    /**
+     * Split a single token that is itself wider than the column — a long email
+     * or an address run together without spaces. Without this a word-only wrap
+     * emits it as one over-long line, which is the overflow all over again.
+     */
+    const breakToken = (token, maxWidth, f, size) => {
+        const chunks = [];
         let current = '';
-        for (const word of words) {
-            const test = current ? `${current} ${word}` : word;
-            if (f.widthOfTextAtSize(test, size) <= maxWidth) {
+
+        for (const char of token) {
+            const test = current + char;
+
+            // `current === ''` guards a glyph wider than the column: keep it
+            // rather than loop forever trying to make it fit.
+            if (current === '' || f.widthOfTextAtSize(test, size) <= maxWidth) {
                 current = test;
             } else {
-                if (current) lines.push(current);
-                current = word;
+                chunks.push(current);
+                current = char;
             }
         }
+
+        if (current) chunks.push(current);
+
+        return chunks;
+    };
+
+    const wrapText = (text, maxWidth, f, size) => {
+        const lines = [];
+        let current = '';
+
+        for (const word of String(text ?? '').split(/\s+/).filter(Boolean)) {
+            const test = current ? `${current} ${word}` : word;
+
+            if (f.widthOfTextAtSize(test, size) <= maxWidth) {
+                current = test;
+                continue;
+            }
+
+            if (current) {
+                lines.push(current);
+                current = '';
+            }
+
+            if (f.widthOfTextAtSize(word, size) <= maxWidth) {
+                current = word;
+                continue;
+            }
+
+            // Carry the tail forward so the next word can share its line.
+            const chunks = breakToken(word, maxWidth, f, size);
+            current = chunks.pop() ?? '';
+            lines.push(...chunks);
+        }
+
         if (current) lines.push(current);
-        return lines;
+
+        // One empty line, so a blank field still draws a normal-height row.
+        return lines.length ? lines : [''];
     };
 
     const headerLines = wrapText(
@@ -173,21 +218,55 @@ const generatePDF = async () => {
     ];
 
     const labelWidth = detailsColumnWidth * 0.4;
+
+    // Text is inset 5pt from the cell edge, so the usable width is 10pt less
+    // than the cell. Wrapping to the full cell width would push the last
+    // characters onto (and past) the border.
+    const cellPadding = 5;
+    const labelTextWidth = labelWidth - cellPadding * 2;
+    const valueTextWidth = detailsColumnWidth - labelWidth - cellPadding * 2;
+
     let cursorY = detailsHeaderY - lineHeight;
+
     details.forEach(([label, value]) => {
+        // A row is as tall as its tallest cell. Addresses routinely need two or
+        // three lines; drawing them into a fixed 18pt row is what sent the text
+        // off the edge of the page, since pdf-lib does not clip.
+        const labelLines = wrapText(label, labelTextWidth, font, fontSize);
+        const valueLines = wrapText(value, valueTextWidth, font, fontSize);
+        const rowHeight = Math.max(labelLines.length, valueLines.length) * lineHeight;
+
+        // Enough rows wrapped could otherwise run off the bottom of the page.
+        if (cursorY - rowHeight < margin) {
+            page = pdfDoc.addPage([width, height]);
+            cursorY = height - margin;
+        }
+
         // Row border.
         page.drawRectangle({
-            x: detailsColumnX, y: cursorY - lineHeight, width: detailsColumnWidth, height: lineHeight,
+            x: detailsColumnX, y: cursorY - rowHeight, width: detailsColumnWidth, height: rowHeight,
             borderColor: black, borderWidth: 0.5,
         });
         // Vertical divider.
         page.drawRectangle({
-            x: detailsColumnX + labelWidth, y: cursorY - lineHeight, width: 1, height: lineHeight, color: black,
+            x: detailsColumnX + labelWidth, y: cursorY - rowHeight, width: 1, height: rowHeight, color: black,
         });
-        // Label + value.
-        page.drawText(String(label), { x: detailsColumnX + 5, y: cursorY - 12, size: fontSize, font, color: black });
-        page.drawText(String(value || ''), { x: detailsColumnX + labelWidth + 5, y: cursorY - 12, size: fontSize, font, color: black });
-        cursorY -= lineHeight;
+
+        // Label + value, both top-aligned within the row.
+        labelLines.forEach((line, i) => {
+            page.drawText(line, {
+                x: detailsColumnX + cellPadding, y: cursorY - 12 - i * lineHeight,
+                size: fontSize, font, color: black,
+            });
+        });
+        valueLines.forEach((line, i) => {
+            page.drawText(line, {
+                x: detailsColumnX + labelWidth + cellPadding, y: cursorY - 12 - i * lineHeight,
+                size: fontSize, font, color: black,
+            });
+        });
+
+        cursorY -= rowHeight;
     });
 
     const pdfBytes = await pdfDoc.save();

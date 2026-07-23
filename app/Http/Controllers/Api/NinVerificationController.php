@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\NinDemoVerificationRequest;
-use App\Http\Requests\Api\NinIpeSubmissionRequest;
 use App\Http\Requests\Api\NinPhoneVerificationRequest;
 use App\Http\Requests\Api\NinVerificationRequest;
-use App\Models\Ipe;
 use App\Models\Validation;
 use App\Services\NinVerificationService;
 use Illuminate\Http\Request;
@@ -155,26 +153,6 @@ class NinVerificationController extends Controller
     }
 
     /**
-     * IPE Submission. One endpoint — routed like everything else.
-     */
-    public function submitIpe(NinIpeSubmissionRequest $request)
-    {
-        return $this->processIpeSubmission($request);
-    }
-
-    /**
-     * Get All IPE Submissions
-     */
-    public function getAllIpeSubmissions()
-    {
-        $submissions = Ipe::with('user')
-            ->orderByDesc('createdAt')
-            ->get();
-
-        return response()->json(['data' => $submissions], 200);
-    }
-
-    /**
      * Check IPE Status (ArewaSmart)
      */
     public function checkIpeStatus(Request $request)
@@ -244,80 +222,6 @@ class NinVerificationController extends Controller
                 'error' => 'NIN Verification Failed',
                 'message' => $result['message'] ?? 'Verification failed',
             ], 404);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json(['error' => 'Network error: '.$e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * Charge, submit the IPE through the routed chain, refund on failure.
-     */
-    protected function processIpeSubmission(NinIpeSubmissionRequest $request)
-    {
-        $user = Auth::user();
-        $price = $this->verificationService->getIpePrice($user);
-
-        if ($price === null) {
-            return $this->unpricedService();
-        }
-
-        if ((float) $user->balance < $price) {
-            return response()->json(['error' => 'Insufficient balance'], 402);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $oldBalance = (float) $user->balance;
-            $user->debit($price, false, ['fundingtype' => 'nin_ipe']);
-
-            // Either spelling the two old versioned endpoints accepted.
-            $trackingId = $request->trkid ?: $request->tracking_id;
-
-            $result = $this->verificationService->submitIpe(
-                $trackingId,
-                $request->description ?? 'My Reference'
-            );
-
-            if ($result['success']) {
-                $ipeClearance = Ipe::create([
-                    'trkid' => $trackingId,
-                    'status' => 'processing',
-                    'result' => 'Pending',
-                    'comment' => 'Submitted to '.($result['provider'] ?? 'provider'),
-                    'oldBal' => $oldBalance,
-                    'newBal' => (float) $user->balance,
-                    'userId' => $user->id,
-                ]);
-
-                DB::commit();
-
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'id' => $ipeClearance->id,
-                        'trkid' => $trackingId,
-                        'result' => 'Pending',
-                        'status' => 'processing',
-                        'comment' => $ipeClearance->comment,
-                        'user_id' => $user->id,
-                        'oldBal' => $oldBalance,
-                        'newBal' => (float) $user->balance,
-                        'created_at' => $ipeClearance->createdAt,
-                        'updated_at' => $ipeClearance->updatedAt,
-                    ],
-                ], 201);
-            }
-
-            // Refund on failure
-            $user->credit($price, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            DB::commit();
-
-            return response()->json([
-                'error' => $result['message'] ?? 'IPE submission failed',
-            ], 400);
         } catch (\Exception $e) {
             DB::rollBack();
 
