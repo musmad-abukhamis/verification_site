@@ -152,6 +152,40 @@ class VerificationNormalizerTest extends TestCase
         $this->assertSame('98765432109', $data['nin']);
     }
 
+    public function test_it_normalizes_a_phone_response_double_wrapped_in_api_response(): void
+    {
+        // Some NIN-by-phone providers bury the person two levels down, under a
+        // non-`data` envelope: api_response -> data -> data -> {person}.
+        $data = $this->normalizer->normalize([
+            'status' => true,
+            'message' => 'NIN Phone Verification Successful',
+            'api_response' => [
+                'status' => true,
+                'data' => [
+                    'status' => true,
+                    'message' => 'success',
+                    'data' => [
+                        'birthdate' => '25-05-1995',
+                        'centralID' => '2IR10CVS8Z004AZ',
+                        'firstname' => 'MADUGU',
+                        'middlename' => 'M',
+                        'nin' => '10740861707',
+                        'gender' => 'm',
+                        'photo' => '/9j/4AAQSkZJRgABAgAAAQAB',
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('MADUGU', $data['first_name']);
+        $this->assertSame('M', $data['middle_name']);
+        $this->assertSame('MALE', $data['gender']);
+        $this->assertSame('1995-05-25', $data['date_of_birth']);
+        $this->assertSame('10740861707', $data['nin']);
+        $this->assertSame('2IR10CVS8Z004AZ', $data['central_id']);
+        $this->assertSame('/9j/4AAQSkZJRgABAgAAAQAB', $data['photo']);
+    }
+
     public function test_a_seeded_input_never_overwrites_what_the_provider_returned(): void
     {
         $data = $this->normalizer->normalize(
