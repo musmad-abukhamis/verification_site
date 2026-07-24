@@ -203,8 +203,6 @@ const downloadSlip = async (slipCode) => {
 // ---- History table --------------------------------------------------------
 const sortField = ref('created_at');
 const sortDirection = ref('desc');
-const showDetailsModal = ref(false);
-const detailsRecord = ref(null);
 
 const handleSort = (field) => {
     if (sortField.value === field) {
@@ -220,16 +218,6 @@ const goToPage = (url) => {
     if (!url) return;
     router.visit(url, { preserveState: true, preserveScroll: false, only: ['transactions'] });
 };
-
-const openDetails = (tx) => {
-    detailsRecord.value = tx;
-    showDetailsModal.value = true;
-};
-
-const parsedResult = computed(() => {
-    if (!detailsRecord.value?.result) return null;
-    try { return JSON.parse(detailsRecord.value.result); } catch { return detailsRecord.value.result; }
-});
 
 // ---- Formatting helpers ---------------------------------------------------
 const now = new Date();
@@ -663,7 +651,7 @@ const pagination = computed(() => ({
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th v-for="col in [{field:'id',label:'ID'},{field:'nin',label:'NIN/Phone'},{field:'status',label:'Status'},{field:null,label:'Comment'},{field:null,label:'Old Bal'},{field:null,label:'New Bal'},{field:'created_at',label:'Date'},{field:null,label:''}]"
+                                <th v-for="col in [{field:'id',label:'ID'},{field:'nin',label:'NIN/Phone'},{field:'status',label:'Status'},{field:null,label:'Comment'},{field:null,label:'Old Bal'},{field:null,label:'New Bal'},{field:'created_at',label:'Date'}]"
                                     :key="col.label"
                                     @click="col.field && handleSort(col.field)"
                                     :class="['px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase', col.field ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600' : '']">
@@ -682,9 +670,6 @@ const pagination = computed(() => ({
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.old_balance || 0).toLocaleString() }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.new_balance || 0).toLocaleString() }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(tx.created_at) }}</td>
-                                <td class="px-4 py-3">
-                                    <button @click="openDetails(tx)" class="text-xs text-lime-600 dark:text-lime-400 hover:underline">Details</button>
-                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -733,46 +718,5 @@ const pagination = computed(() => ({
             </div>
         </div>
 
-        <!-- Details Modal -->
-        <div v-if="showDetailsModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div class="p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Transaction Details</h3>
-                        <button @click="showDetailsModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-                    <div class="space-y-3 text-sm">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="bg-gray-50 dark:bg-gray-700 rounded p-3">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Reference</p>
-                                <p class="font-mono font-medium text-gray-900 dark:text-white break-all">{{ detailsRecord?.reference || '-' }}</p>
-                            </div>
-                            <div class="bg-gray-50 dark:bg-gray-700 rounded p-3">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Status</p>
-                                <span :class="['inline-flex px-2 py-0.5 text-xs rounded-full font-medium', getStatusClass(detailsRecord?.status)]">{{ detailsRecord?.status }}</span>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 dark:bg-gray-700 rounded p-3">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Comment / Error Message</p>
-                            <p class="text-gray-900 dark:text-white">{{ detailsRecord?.comment || 'No message' }}</p>
-                        </div>
-                        <div v-if="parsedResult" class="bg-gray-50 dark:bg-gray-700 rounded p-3">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Full API Response</p>
-                            <div v-if="typeof parsedResult === 'object'" class="space-y-1">
-                                <div v-for="(val, key) in parsedResult" :key="key" class="flex justify-between py-1 border-b border-gray-200 dark:border-gray-600 last:border-0">
-                                    <span class="text-gray-500 dark:text-gray-400 capitalize text-xs">{{ String(key).replace(/_/g, ' ') }}</span>
-                                    <span class="text-gray-900 dark:text-white text-xs font-medium text-right max-w-[60%] break-words">{{ val ?? 'null' }}</span>
-                                </div>
-                            </div>
-                            <pre v-else class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-all">{{ parsedResult }}</pre>
-                        </div>
-                        <div v-else class="bg-gray-50 dark:bg-gray-700 rounded p-3 text-gray-400 text-xs text-center">No API response stored</div>
-                    </div>
-                    <button @click="showDetailsModal = false" class="mt-5 w-full bg-lime-600 text-white py-2 rounded-lg hover:bg-lime-700 font-medium">Close</button>
-                </div>
-            </div>
-        </div>
     </AuthenticatedLayout>
 </template>
