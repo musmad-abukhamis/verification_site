@@ -111,6 +111,18 @@ class ResponseNormalizer
     private const IGNORED = ['pmiddlename', 'psurname', 'pfirstname'];
 
     /**
+     * The canonical field names the normalizer can produce — the only valid
+     * left-hand side of a `response_map` override. Exposed so the admin form can
+     * reject an override that targets a field name nothing downstream reads.
+     *
+     * @return list<string>
+     */
+    public static function canonicalFields(): array
+    {
+        return array_keys(self::ALIASES);
+    }
+
+    /**
      * @param  array<string, mixed>  $raw  the decoded provider response
      * @param  array<string, string>  $overrides  canonical name => dotted path
      * @param  array<string, mixed>  $seed  values the caller already knows (the
