@@ -3,12 +3,21 @@
 namespace App\Http\Requests\Admin;
 
 use App\Services\Verification\AuthStyle;
+use App\Services\Verification\ResponseNormalizer;
 use App\Services\Verification\ServiceCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class VerificationProviderRequest extends FormRequest
 {
+    /**
+     * A dotted JSON path: one or more `letter/digit/underscore` segments joined
+     * by single dots — `status`, `api_response.data.data`. Rejects spaces,
+     * leading/trailing/double dots and punctuation, so a mistyped path is caught
+     * on save instead of silently reading nothing at runtime.
+     */
+    private const DOTTED_PATH = 'regex:/^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/';
+
     public function authorize(): bool
     {
         return $this->user()?->isAdmin() ?? false;
@@ -71,14 +80,14 @@ class VerificationProviderRequest extends FormRequest
             'endpoints.*.static_fields.*.value' => ['nullable', 'string', 'max:500'],
 
             'endpoints.*.success_rule' => ['array'],
-            'endpoints.*.success_rule.path' => ['nullable', 'string', 'max:120'],
+            'endpoints.*.success_rule.path' => ['nullable', 'string', 'max:120', self::DOTTED_PATH],
             'endpoints.*.success_rule.in' => ['nullable', 'string', 'max:255'],
-            'endpoints.*.success_rule.error_path' => ['nullable', 'string', 'max:120'],
-            'endpoints.*.success_rule.data_path' => ['nullable', 'string', 'max:120'],
+            'endpoints.*.success_rule.error_path' => ['nullable', 'string', 'max:120', self::DOTTED_PATH],
+            'endpoints.*.success_rule.data_path' => ['nullable', 'string', 'max:120', self::DOTTED_PATH],
 
             'endpoints.*.response_map' => ['array'],
-            'endpoints.*.response_map.*.field' => ['nullable', 'string', 'max:60'],
-            'endpoints.*.response_map.*.path' => ['nullable', 'string', 'max:255'],
+            'endpoints.*.response_map.*.field' => ['nullable', 'string', 'max:60', Rule::in(ResponseNormalizer::canonicalFields())],
+            'endpoints.*.response_map.*.path' => ['nullable', 'string', 'max:255', self::DOTTED_PATH],
         ];
     }
 
@@ -87,6 +96,11 @@ class VerificationProviderRequest extends FormRequest
         return [
             'slug.regex' => 'The slug may only contain lowercase letters, numbers, hyphens and underscores.',
             'endpoints.*.service.in' => 'Unknown service type.',
+            'endpoints.*.success_rule.path.regex' => 'Use a dotted path like status or api_response.data.status — no spaces or punctuation.',
+            'endpoints.*.success_rule.error_path.regex' => 'Use a dotted path like error or api_response.data.error — no spaces or punctuation.',
+            'endpoints.*.success_rule.data_path.regex' => 'Use a dotted path like data or api_response.data.data — no spaces or punctuation.',
+            'endpoints.*.response_map.*.path.regex' => 'Use a dotted path like data.surname — no spaces or punctuation.',
+            'endpoints.*.response_map.*.field.in' => 'The override name must be a canonical field the normalizer produces (e.g. last_name, date_of_birth).',
         ];
     }
 
