@@ -26,13 +26,15 @@ namespace App\Services\Verification;
 class ResponseNormalizer
 {
     /**
-     * Wrapper keys to look inside, in order, when the person's fields are not
-     * at the top level.
+     * Wrapper keys to look inside, in priority order, when the person's fields
+     * are not at the top level. Listed in normalized form (lowercased, no
+     * separators) and matched case- and separator-insensitively, so `user_data`
+     * covers `userData`/`USER_DATA` and `apiresponse` covers `api_response`.
      */
     private const WRAPPERS = [
-        'data', 'user_data', 'userData', 'response', 'result', 'results',
+        'data', 'userdata', 'response', 'result', 'results',
         'details', 'detail', 'record', 'payload', 'person', 'customer',
-        'verification', 'bvn_data', 'nin_data', 'entity',
+        'verification', 'bvndata', 'nindata', 'entity', 'apiresponse',
     ];
 
     /**
@@ -172,11 +174,13 @@ class ResponseNormalizer
         $current = $payload;
 
         // Bounded, because a hostile or odd reply could nest `data` forever.
-        for ($i = 0; $i < 4; $i++) {
+        // Deeper than the two-level `api_response`→`data`→`data` envelope some
+        // providers use.
+        for ($i = 0; $i < 5; $i++) {
             $next = null;
 
             foreach (self::WRAPPERS as $wrapper) {
-                $candidate = $current[$wrapper] ?? null;
+                $candidate = $this->childByNormalizedKey($current, $wrapper);
 
                 // A list response (`results: [...]`) is answered by its first row.
                 if (is_array($candidate) && array_is_list($candidate)) {
@@ -197,6 +201,23 @@ class ResponseNormalizer
         }
 
         return $current;
+    }
+
+    /**
+     * Fetch a child whose key matches the wrapper after normalization, so
+     * `api_response`, `apiResponse` and `API_RESPONSE` are all the same wrapper.
+     *
+     * @param  array<string, mixed>  $node
+     */
+    protected function childByNormalizedKey(array $node, string $normalizedWrapper): mixed
+    {
+        foreach ($node as $key => $value) {
+            if ($this->normalizeKey((string) $key) === $normalizedWrapper) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**
