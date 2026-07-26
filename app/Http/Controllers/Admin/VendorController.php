@@ -16,6 +16,16 @@ class VendorController extends Controller
         ['value' => 'oauth', 'label' => 'OAuth (client credentials → token)'],
     ];
 
+    /**
+     * The Authorization prefix. Independent of the driver — vendors send the
+     * same payload behind either scheme — so it is picked separately rather
+     * than doubling the driver list.
+     */
+    private const AUTH_SCHEMES = [
+        ['value' => 'Token', 'label' => 'Token  (Authorization: Token <key>)'],
+        ['value' => 'Bearer', 'label' => 'Bearer (Authorization: Bearer <key>)'],
+    ];
+
     /** Fields whose values are masked in the UI, per driver. */
     private const SECRET_FIELDS = ['key', 'client_secret'];
 
@@ -29,6 +39,8 @@ class VendorController extends Controller
                 'name' => $v->name,
                 'base_url' => $v->base_url,
                 'driver' => $v->driver,
+                // Non-secret, so it round-trips into the edit form.
+                'auth_scheme' => $v->credentials['scheme'] ?? 'Token',
                 'is_active' => $v->is_active,
                 'priority' => $v->priority,
                 'routes_count' => $v->routes_count,
@@ -38,6 +50,7 @@ class VendorController extends Controller
         return Inertia::render('Admin/Vendors/Index', [
             'vendors' => $vendors,
             'drivers' => self::DRIVERS,
+            'authSchemes' => self::AUTH_SCHEMES,
         ]);
     }
 

@@ -23,6 +23,8 @@ class VendorRequest extends FormRequest
             // on edit. Which ones matter depends on the driver.
             'credentials' => ['array'],
             'credentials.key' => ['nullable', 'string', 'max:500'],
+            // Not a secret: the Authorization prefix. Token or Bearer.
+            'credentials.scheme' => ['nullable', 'in:Token,Bearer'],
             'credentials.client_id' => ['nullable', 'string', 'max:500'],
             'credentials.client_secret' => ['nullable', 'string', 'max:500'],
             'credentials.token_url' => ['nullable', 'string', 'max:255'],

@@ -211,6 +211,43 @@ class DataPurchaseTest extends TestCase
     }
 
     /**
+     * A vendor configured before the auth scheme existed has no `scheme` in its
+     * credentials and must keep sending `Authorization: Token`.
+     */
+    public function test_auth_scheme_defaults_to_token(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Token secret-va'));
+    }
+
+    /**
+     * Scheme is independent of the driver: a style-A payload can go out behind
+     * Bearer without needing a separate driver.
+     */
+    public function test_bearer_scheme_is_sent_with_the_style_a_payload(): void
+    {
+        $a = $this->vendor('va');
+        $a->update(['credentials' => ['key' => 'secret-va', 'scheme' => 'Bearer']]);
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(function ($request) {
+            return $request->hasHeader('Authorization', 'Bearer secret-va')
+                && $request['phone'] === '08031234567'
+                && $request['data_plan'] === '2';
+        });
+    }
+
+    /**
      * Only a call that got NO response is ambiguous. A dropped connection could
      * still have been delivered, so it must neither fail over nor refund.
      */

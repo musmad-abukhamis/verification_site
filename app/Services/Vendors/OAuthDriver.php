@@ -30,7 +30,7 @@ class OAuthDriver extends AbstractHttpDriver
 
         return $this->post(
             $baseUrl,
-            ['Authorization' => 'Token '.$token],
+            $this->authHeader($credentials, $token),
             $this->describePayload($txn, $externalPlanId, $externalNetworkCode),
         );
     }
@@ -45,7 +45,7 @@ class OAuthDriver extends AbstractHttpDriver
 
         return $this->post(
             rtrim($baseUrl, '/').'/status',
-            ['Authorization' => 'Token '.$token],
+            $this->authHeader($credentials, $token),
             ['request-id' => $txn->getKey()],
             errorResponseIsFail: false,
         );

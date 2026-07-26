@@ -23,7 +23,7 @@ class TokenStyleBDriver extends AbstractHttpDriver
     ): VendorResult {
         return $this->post(
             $baseUrl,
-            ['Authorization' => 'Token '.($credentials['key'] ?? '')],
+            $this->authHeader($credentials),
             $this->describePayload($txn, $externalPlanId, $externalNetworkCode),
         );
     }
@@ -32,7 +32,7 @@ class TokenStyleBDriver extends AbstractHttpDriver
     {
         return $this->post(
             rtrim($baseUrl, '/').'/status',
-            ['Authorization' => 'Token '.($credentials['key'] ?? '')],
+            $this->authHeader($credentials),
             ['request-id' => $txn->getKey()],
             errorResponseIsFail: false,
         );

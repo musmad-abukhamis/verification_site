@@ -6,6 +6,7 @@ import { ref, computed } from 'vue';
 const props = defineProps({
     vendors: { type: Array, default: () => [] },
     drivers: { type: Array, default: () => [] },
+    authSchemes: { type: Array, default: () => [] },
 });
 
 const editingId = ref(null);
@@ -17,7 +18,7 @@ const form = useForm({
     driver: 'token_style_a',
     priority: 100,
     is_active: true,
-    credentials: { key: '', client_id: '', client_secret: '', token_url: '' },
+    credentials: { key: '', client_id: '', client_secret: '', token_url: '', scheme: 'Token' },
 });
 
 const isOauth = computed(() => form.driver === 'oauth');
@@ -36,7 +37,9 @@ const openEdit = (v) => {
     form.driver = v.driver;
     form.priority = v.priority;
     form.is_active = v.is_active;
-    form.credentials = { key: '', client_id: '', client_secret: '', token_url: '' };
+    // Secrets stay blank (blank = keep the stored value), but the scheme is not
+    // a secret and must round-trip or editing a vendor would silently reset it.
+    form.credentials = { key: '', client_id: '', client_secret: '', token_url: '', scheme: v.auth_scheme ?? 'Token' };
     form.clearErrors();
     showForm.value = true;
 };
@@ -87,7 +90,10 @@ const destroy = (v) => {
                                 <p class="font-medium text-gray-900 dark:text-gray-100">{{ v.name }}</p>
                                 <p class="text-xs text-gray-400">{{ v.base_url }}</p>
                             </td>
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ v.driver }}</td>
+                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300">
+                                {{ v.driver }}
+                                <span class="block text-xs text-gray-400">{{ v.auth_scheme }} auth</span>
+                            </td>
                             <td class="px-4 py-3">{{ v.priority }}</td>
                             <td class="px-4 py-3 text-gray-500">{{ v.routes_count }} / {{ v.plan_mappings_count }}</td>
                             <td class="px-4 py-3">
@@ -135,6 +141,14 @@ const destroy = (v) => {
                         </div>
 
                         <!-- credentials -->
+                        <div>
+                            <label class="text-sm text-gray-600 dark:text-gray-300">Auth scheme</label>
+                            <select v-model="form.credentials.scheme" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                <option v-for="s in authSchemes" :key="s.value" :value="s.value">{{ s.label }}</option>
+                            </select>
+                            <p class="mt-1 text-xs text-gray-400">The Authorization prefix this vendor expects. Independent of the driver.</p>
+                            <p v-if="form.errors['credentials.scheme']" class="text-xs text-red-500">{{ form.errors['credentials.scheme'] }}</p>
+                        </div>
                         <div v-if="!isOauth">
                             <label class="text-sm text-gray-600 dark:text-gray-300">API key <span v-if="editingId" class="text-xs text-gray-400">(leave blank to keep)</span></label>
                             <input v-model="form.credentials.key" type="password" autocomplete="off" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />

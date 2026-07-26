@@ -61,6 +61,28 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
     }
 
     /**
+     * The Authorization header for a token, honouring the vendor's scheme.
+     *
+     * Scheme and body shape are independent: vendors in this market mix
+     * `Authorization: Token {key}` and `Authorization: Bearer {key}` across
+     * identical payloads. Keeping the scheme as vendor config rather than baking
+     * it into the driver avoids a token_style_a_bearer / token_style_b_bearer
+     * combinatorial explosion.
+     *
+     * Defaults to Token so vendors configured before the scheme existed keep
+     * working untouched.
+     *
+     * @param  array<string, mixed>  $credentials
+     * @return array<string, string>
+     */
+    protected function authHeader(array $credentials, ?string $token = null): array
+    {
+        $scheme = trim((string) ($credentials['scheme'] ?? '')) ?: 'Token';
+
+        return ['Authorization' => $scheme.' '.($token ?? $credentials['key'] ?? '')];
+    }
+
+    /**
      * @param  array<string, mixed>  $json
      */
     protected function isSuccess(array $json): bool
