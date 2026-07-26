@@ -9,10 +9,12 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class RegisteredUserController extends Controller
 {
@@ -70,7 +72,21 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        event(new Registered($user));
+        // The Registered listener sends the email-verification notification
+        // synchronously, so a mail failure (bad Brevo key, unverified sender,
+        // API unreachable) would 500 the request *after* the account row is
+        // already committed -- the user sees an error page but their account
+        // exists. Verification is not required to reach the dashboard, so a
+        // failure here must not block sign-in; log it and carry on. The user
+        // can request a fresh link from the verification prompt.
+        try {
+            event(new Registered($user));
+        } catch (TransportExceptionInterface $e) {
+            Log::error('Verification email failed to send on registration', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         Auth::login($user);
 

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Symfony\Component\Mailer\Envelope;
 use Symfony\Component\Mailer\Exception\TransportException;
@@ -34,12 +35,22 @@ class BrevoApiTransport extends AbstractTransport
         $email = MessageConverter::toEmail($message->getOriginalMessage());
         $envelope = $message->getEnvelope();
 
-        $response = Http::timeout(30)
-            ->withHeaders([
-                'api-key' => $this->key,
-                'accept' => 'application/json',
-            ])
-            ->post($this->endpoint, $this->payload($email, $envelope));
+        try {
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'api-key' => $this->key,
+                    'accept' => 'application/json',
+                ])
+                ->post($this->endpoint, $this->payload($email, $envelope));
+        } catch (ConnectionException $e) {
+            // A DNS failure or timeout reaching Brevo surfaces as an HTTP-client
+            // exception, which is not a TransportExceptionInterface -- it would
+            // sail past every caller that guards mail sending against transport
+            // errors and become a 500. Restate it as the transport error it is.
+            throw new TransportException(
+                'Could not reach Brevo: '.$e->getMessage(), 0, $e
+            );
+        }
 
         if (! $response->successful()) {
             // Throwing TransportException (not a bare exception) matters:
