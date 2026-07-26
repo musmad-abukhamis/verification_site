@@ -211,6 +211,52 @@ class DataPurchaseTest extends TestCase
     }
 
     /**
+     * Laravel-based vendors content-negotiate: without Accept, a validation
+     * failure comes back as a 302 to the SPA rather than a 422, and the client
+     * follows it into an HTML page reported as 200.
+     */
+    public function test_requests_ask_for_json(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Accept', 'application/json'));
+    }
+
+    /**
+     * A 2xx carrying HTML is a misrouted call, not a vendor rejection. It must
+     * stay ambiguous -- failing over on it would re-send a request whose fate is
+     * unknown -- and the body must survive into the audit.
+     */
+    public function test_non_json_success_response_is_ambiguous_and_kept(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response('<!DOCTYPE html><html><body>Server Error</body></html>', 200),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+
+        $attempt = \App\Models\DataTransactionAttempt::latest('created_at')->first();
+        $this->assertStringContainsString('non-JSON', (string) $attempt->message);
+        $this->assertStringContainsString('DOCTYPE', $attempt->response['_non_json_body'] ?? '');
+    }
+
+    /**
      * A vendor configured before the auth scheme existed has no `scheme` in its
      * credentials and must keep sending `Authorization: Token`.
      */

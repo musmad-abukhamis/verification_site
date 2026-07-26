@@ -3,6 +3,7 @@
 namespace App\Services\Vendors;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 /**
  * Shared HTTP plumbing + success/ambiguity classification for token-style
@@ -35,29 +36,55 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
     {
         try {
             $response = Http::timeout(30)
-                ->withHeaders($headers + ['Content-Type' => 'application/json'])
+                ->withHeaders($headers + [
+                    'Content-Type' => 'application/json',
+                    // Accept is not optional. A Laravel-based vendor (this app
+                    // resells through a sibling deployment) content-negotiates
+                    // on it: without Accept a validation failure is a 302 back
+                    // to the SPA, which the HTTP client follows and reports as
+                    // a 200 full of HTML. The vendor's real complaint is lost,
+                    // the body parses to [], and the call reads as a bare
+                    // rejection with no message.
+                    'Accept' => 'application/json',
+                ])
                 ->post($url, $payload);
         } catch (\Throwable $e) {
             return VendorResult::timeout('Vendor request failed: '.$e->getMessage());
         }
 
-        $json = $response->json() ?? [];
+        $decoded = $response->json();
+        $json = is_array($decoded) ? $decoded : [];
         $status = $response->status();
 
+        // Keep something of a non-JSON reply. Discarding it is what made a
+        // misrouted call unreadable in the audit: an empty response and a null
+        // message look identical whether the vendor said nothing or answered
+        // with an HTML error page.
+        $isJson = is_array($decoded);
+        $raw = $isJson ? $json : ['_non_json_body' => Str::limit($response->body(), 1000)];
+        $nonJsonNote = 'Vendor returned a non-JSON response (HTTP '.$status.')';
+
         if (! $response->successful()) {
-            $message = $this->messageFrom($json) ?? ('HTTP '.$status);
-            $body = is_array($json) ? $json : [];
+            $message = $this->messageFrom($json) ?? ($isJson ? 'HTTP '.$status : $nonJsonNote);
 
             return $errorResponseIsFail
-                ? VendorResult::fail($message, $body, $status, failoverSafe: $status < 500)
-                : VendorResult::timeout($message, $body, $status);
+                ? VendorResult::fail($message, $raw, $status, failoverSafe: $status < 500)
+                : VendorResult::timeout($message, $raw, $status);
         }
 
         if ($this->isSuccess($json)) {
-            return VendorResult::success($this->referenceFrom($json), $json, $this->messageFrom($json), $status);
+            return VendorResult::success($this->referenceFrom($json), $raw, $this->messageFrom($json), $status);
         }
 
-        return VendorResult::fail($this->messageFrom($json) ?? 'Vendor rejected the transaction', $json, $status);
+        // A 2xx that is not JSON is not a rejection -- it is a misrouted call
+        // (a followed redirect, a captive portal, a WAF page). Treating it as an
+        // explicit fail would let failover fire on a request whose fate is
+        // unknown, so it stays ambiguous.
+        if (! $isJson) {
+            return VendorResult::timeout($nonJsonNote, $raw, $status);
+        }
+
+        return VendorResult::fail($this->messageFrom($json) ?? 'Vendor rejected the transaction', $raw, $status);
     }
 
     /**

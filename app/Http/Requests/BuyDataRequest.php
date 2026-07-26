@@ -36,7 +36,14 @@ class BuyDataRequest extends FormRequest
             // The PUBLIC plan id (plans.code), not the internal primary key --
             // that is the number quoted in the developer docs and stored in
             // integrators' own plan tables.
-            'plan_id' => ['required', 'integer', 'exists:plans,code'],
+            //
+            // `bail` and the range bound are load-bearing, not decoration:
+            // plans.code is an unsignedSmallInteger, which Postgres stores as a
+            // signed smallint capped at 32767. Without them, `exists` runs on an
+            // out-of-range value and Postgres raises SQLSTATE[22003] -- an
+            // integrator with a stale plan id gets a 500 instead of being told
+            // their plan id is invalid.
+            'plan_id' => ['bail', 'required', 'integer', 'min:1', 'max:32767', 'exists:plans,code'],
             // The server NEVER validates the phone against network prefixes —
             // the user-selected network is authoritative (ported lines / new
             // NCC prefixes make prefix checks unreliable server-side).
@@ -83,6 +90,8 @@ class BuyDataRequest extends FormRequest
     {
         return [
             'phone.digits' => 'Enter a valid 11-digit phone number.',
+            'plan_id.max' => 'Unknown plan id.',
+            'plan_id.min' => 'Unknown plan id.',
             'network.in' => 'Unknown network. Use 1 (MTN), 2 (Airtel), 3 (Glo) or 4 (9mobile), or the network name.',
         ];
     }

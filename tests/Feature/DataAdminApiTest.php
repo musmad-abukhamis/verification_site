@@ -204,6 +204,26 @@ class DataAdminApiTest extends TestCase
         ])->assertStatus(422);
     }
 
+    /**
+     * plans.code is an unsignedSmallInteger, so Postgres caps it at 32767. An
+     * integrator posting a stale or mistyped id above that must get a 422, not
+     * the SQLSTATE[22003] the `exists` lookup would otherwise raise.
+     */
+    public function test_an_out_of_range_plan_id_is_rejected_not_fatal(): void
+    {
+        $this->seedRouting();
+        Http::fake();
+
+        User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'network' => 1,
+            'phone' => '08031234567',
+            'data_plan' => 999999,
+            'client_ref' => (string) Str::uuid(),
+        ])->assertStatus(422)->assertJsonValidationErrors('plan_id');
+    }
+
     /* ------------------------------------------------- public plan id (code) */
 
     public function test_a_new_plan_gets_a_short_public_id(): void
