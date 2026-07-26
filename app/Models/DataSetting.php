@@ -54,6 +54,28 @@ class DataSetting extends Model
         return $value === null ? $default : (int) $value;
     }
 
+    /**
+     * How often reconciliation requeries pending purchases, in seconds.
+     *
+     * Async vendors settle in seconds, so a minute-granular knob was too coarse
+     * -- a buyer waited minutes for something already delivered. Falls back to
+     * the old `requery_interval_minutes` so an existing install keeps its
+     * configured cadence until an admin saves the new field.
+     *
+     * Floored at 5s: reconciliation requeries every pending purchase on each
+     * run, so a tighter loop is a self-inflicted flood on the vendor.
+     */
+    public static function requeryIntervalSeconds(): int
+    {
+        $seconds = self::int('requery_interval_seconds', 0);
+
+        if ($seconds <= 0) {
+            $seconds = self::int('requery_interval_minutes', 5) * 60;
+        }
+
+        return max(5, min(3600, $seconds));
+    }
+
     public static function put(string $key, mixed $value): void
     {
         static::query()->updateOrCreate(

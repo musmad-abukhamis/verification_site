@@ -42,7 +42,7 @@ class DataRoutingController extends Controller
                 'failover_enabled' => DataSetting::bool('failover_enabled'),
                 'failover_max_attempts' => DataSetting::int('failover_max_attempts'),
                 'reconcile_cutoff_minutes' => DataSetting::int('reconcile_cutoff_minutes', 120),
-                'requery_interval_minutes' => DataSetting::int('requery_interval_minutes', 5),
+                'requery_interval_seconds' => DataSetting::requeryIntervalSeconds(),
             ],
             'prefixes' => NetworkPrefix::map(),
         ]);
@@ -107,13 +107,17 @@ class DataRoutingController extends Controller
             'failover_enabled' => ['boolean'],
             'failover_max_attempts' => ['integer', 'min:0', 'max:20'],
             'reconcile_cutoff_minutes' => ['integer', 'min:5', 'max:1440'],
-            'requery_interval_minutes' => ['integer', 'min:1', 'max:120'],
+            // Floored at 5s: each run requeries every pending purchase, so a
+            // tighter loop just floods the vendor.
+            'requery_interval_seconds' => ['integer', 'min:5', 'max:3600'],
         ]);
 
         DataSetting::put('failover_enabled', $request->boolean('failover_enabled'));
         DataSetting::put('failover_max_attempts', (int) $validated['failover_max_attempts']);
         DataSetting::put('reconcile_cutoff_minutes', (int) $validated['reconcile_cutoff_minutes']);
-        DataSetting::put('requery_interval_minutes', (int) $validated['requery_interval_minutes']);
+        DataSetting::put('requery_interval_seconds', (int) $validated['requery_interval_seconds']);
+        // The superseded minute key would otherwise win on the next fallback.
+        DataSetting::put('requery_interval_minutes', 0);
 
         return back()->with('success', 'Settings saved.');
     }

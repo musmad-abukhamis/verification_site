@@ -20,7 +20,7 @@ const settingsForm = useForm({
     failover_enabled: !!props.settings.failover_enabled,
     failover_max_attempts: props.settings.failover_max_attempts ?? 0,
     reconcile_cutoff_minutes: props.settings.reconcile_cutoff_minutes ?? 120,
-    requery_interval_minutes: props.settings.requery_interval_minutes ?? 5,
+    requery_interval_seconds: props.settings.requery_interval_seconds ?? 60,
 });
 const saveSettings = () => settingsForm.put(route('admin.data.settings.update'), { preserveScroll: true });
 
@@ -105,8 +105,10 @@ const removePrefix = (network, prefix) => router.delete(route('admin.data.prefix
                         <input v-model.number="settingsForm.reconcile_cutoff_minutes" type="number" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
                     </div>
                     <div>
-                        <label class="text-xs text-gray-500">Requery interval (min)</label>
-                        <input v-model.number="settingsForm.requery_interval_minutes" type="number" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+                        <label class="text-xs text-gray-500">Requery interval (sec)</label>
+                        <input v-model.number="settingsForm.requery_interval_seconds" type="number" min="5" max="3600" class="mt-1 w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+                        <p class="mt-1 text-xs text-gray-400">How often pending purchases are rechecked. 5–3600s.</p>
+                        <p v-if="settingsForm.errors.requery_interval_seconds" class="text-xs text-red-500">{{ settingsForm.errors.requery_interval_seconds }}</p>
                     </div>
                 </div>
                 <button @click="saveSettings" :disabled="settingsForm.processing" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Save settings</button>

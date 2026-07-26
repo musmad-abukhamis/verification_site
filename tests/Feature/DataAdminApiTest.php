@@ -439,17 +439,38 @@ class DataAdminApiTest extends TestCase
         $this->assertSame($vendor->id, VendorRoute::where('network', 'mtn')->where('type', 'SME')->where('position', 2)->value('vendor_id'));
     }
 
+    /**
+     * An install configured before the seconds field existed keeps its cadence
+     * from the old minute key rather than silently jumping to the default.
+     */
+    public function test_requery_interval_falls_back_to_the_legacy_minute_setting(): void
+    {
+        DataSetting::put('requery_interval_minutes', 2);
+        DataSetting::flushCache();
+
+        $this->assertSame(120, DataSetting::requeryIntervalSeconds());
+
+        // Saving the new field supersedes it.
+        $this->actingAs($this->admin())->put(route('admin.data.settings.update'), [
+            'failover_enabled' => false, 'failover_max_attempts' => 0,
+            'reconcile_cutoff_minutes' => 120, 'requery_interval_seconds' => 20,
+        ])->assertRedirect();
+
+        $this->assertSame(20, DataSetting::requeryIntervalSeconds());
+    }
+
     public function test_admin_settings_and_prefixes(): void
     {
         $admin = $this->admin();
 
         $this->actingAs($admin)->put(route('admin.data.settings.update'), [
             'failover_enabled' => true, 'failover_max_attempts' => 3,
-            'reconcile_cutoff_minutes' => 90, 'requery_interval_minutes' => 10,
+            'reconcile_cutoff_minutes' => 90, 'requery_interval_seconds' => 15,
         ])->assertRedirect();
 
         $this->assertTrue(DataSetting::bool('failover_enabled'));
         $this->assertSame(90, DataSetting::int('reconcile_cutoff_minutes'));
+        $this->assertSame(15, DataSetting::requeryIntervalSeconds());
 
         $this->actingAs($admin)->post(route('admin.data.prefixes.add'), ['network' => 'mtn', 'prefix' => '0999'])->assertRedirect();
         $this->assertDatabaseHas('network_prefixes', ['network' => 'mtn', 'prefix' => '0999']);
