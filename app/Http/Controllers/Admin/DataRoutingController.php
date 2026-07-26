@@ -43,6 +43,7 @@ class DataRoutingController extends Controller
                 'failover_max_attempts' => DataSetting::int('failover_max_attempts'),
                 'reconcile_cutoff_minutes' => DataSetting::int('reconcile_cutoff_minutes', 120),
                 'requery_interval_seconds' => DataSetting::requeryIntervalSeconds(),
+                'inline_settle_seconds' => DataSetting::int('inline_settle_seconds', 30),
             ],
             'prefixes' => NetworkPrefix::map(),
         ]);
@@ -110,12 +111,19 @@ class DataRoutingController extends Controller
             // Floored at 5s: each run requeries every pending purchase, so a
             // tighter loop just floods the vendor.
             'requery_interval_seconds' => ['integer', 'min:5', 'max:3600'],
+            // Capped at 45s: this holds a queue worker and must finish inside
+            // the worker's per-job timeout, or the job is killed and retried.
+            'inline_settle_seconds' => ['integer', 'min:0', 'max:45'],
         ]);
 
+        // Every field is optional, so each one is read with its current value as
+        // the default. Indexing $validated directly would 500 on any partial
+        // post -- an older client, or a form that has not been rebuilt yet.
         DataSetting::put('failover_enabled', $request->boolean('failover_enabled'));
-        DataSetting::put('failover_max_attempts', (int) $validated['failover_max_attempts']);
-        DataSetting::put('reconcile_cutoff_minutes', (int) $validated['reconcile_cutoff_minutes']);
-        DataSetting::put('requery_interval_seconds', (int) $validated['requery_interval_seconds']);
+        DataSetting::put('failover_max_attempts', (int) ($validated['failover_max_attempts'] ?? DataSetting::int('failover_max_attempts')));
+        DataSetting::put('reconcile_cutoff_minutes', (int) ($validated['reconcile_cutoff_minutes'] ?? DataSetting::int('reconcile_cutoff_minutes', 120)));
+        DataSetting::put('requery_interval_seconds', (int) ($validated['requery_interval_seconds'] ?? DataSetting::requeryIntervalSeconds()));
+        DataSetting::put('inline_settle_seconds', (int) ($validated['inline_settle_seconds'] ?? DataSetting::int('inline_settle_seconds', 30)));
         // The superseded minute key would otherwise win on the next fallback.
         DataSetting::put('requery_interval_minutes', 0);
 

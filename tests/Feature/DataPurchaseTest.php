@@ -243,6 +243,58 @@ class DataPurchaseTest extends TestCase
     }
 
     /**
+     * With a settle budget, an accepted-pending purchase resolves inside the
+     * job -- the buyer gets a final answer immediately instead of waiting for
+     * the next reconcile tick.
+     */
+    public function test_an_accepted_purchase_settles_inline(): void
+    {
+        $this->settings(['inline_settle_seconds' => '5']);
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        Http::fakeSequence()
+            ->push([
+                'status' => 'success',
+                'transaction_status' => 'pending',
+                'data' => ['reference' => 'REMOTE-REF-9', 'status' => 'pending'],
+            ], 201)
+            ->push([
+                'status' => 'success',
+                'transaction_status' => 'success',
+                'data' => ['reference' => 'REMOTE-REF-9', 'status' => 'success'],
+            ], 200);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('success', $txn->status);
+        $this->assertSame('REMOTE-REF-9', $txn->vendor_reference);
+    }
+
+    /**
+     * A budget of 0 keeps the old hand-off: settle purely by reconciliation.
+     */
+    public function test_inline_settling_can_be_disabled(): void
+    {
+        $this->settings(['inline_settle_seconds' => '0']);
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        Http::fake(['va.test/*' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'pending',
+            'data' => ['reference' => 'REMOTE-REF-8', 'status' => 'pending'],
+        ], 201)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        $this->assertSame('REMOTE-REF-8', $txn->vendor_reference);
+    }
+
+    /**
      * Reconciliation asks the reseller GET {base}/{reference} -- its status is a
      * resource, not the POST {base}/status the other drivers probe.
      */

@@ -29,7 +29,25 @@ try {
 $reconcile = Schedule::command('data:reconcile');
 
 if ($requerySeconds < 60) {
-    $reconcile->everyMinute()->repeatEvery($requerySeconds);
+    // Laravel exposes only a fixed set of sub-minute helpers (repeatEvery is
+    // protected), so the configured value snaps DOWN to the nearest supported
+    // step -- never up, or the buyer would wait longer than the admin asked.
+    $steps = [
+        30 => 'everyThirtySeconds',
+        20 => 'everyTwentySeconds',
+        15 => 'everyFifteenSeconds',
+        10 => 'everyTenSeconds',
+        5 => 'everyFiveSeconds',
+        2 => 'everyTwoSeconds',
+        1 => 'everySecond',
+    ];
+
+    foreach ($steps as $seconds => $method) {
+        if ($requerySeconds >= $seconds) {
+            $reconcile->{$method}();
+            break;
+        }
+    }
 } else {
     $reconcile->cron('*/'.max(1, min(59, intdiv($requerySeconds, 60))).' * * * *');
 }

@@ -7,6 +7,7 @@ use App\Models\DataSetting;
 use App\Models\DataTransaction;
 use App\Models\NetworkVendorMapping;
 use App\Models\PlanVendorMapping;
+use App\Models\Vendor;
 use App\Models\VendorRoute;
 use App\Services\Vendors\VendorDispatcher;
 use App\Services\WalletLedger;
@@ -126,6 +127,16 @@ class ProcessDataPurchase implements ShouldQueue
                     'raw_response' => $result->raw,
                 ], fn ($value) => $value !== null));
 
+                // An async vendor that accepted the order usually settles within
+                // seconds. Waiting for the next reconcile tick would leave the
+                // buyer on a spinner long after the data landed, so poll briefly
+                // here and give them the same immediate answer a synchronous
+                // vendor would. Reconciliation stays the safety net for anything
+                // still unresolved when the budget runs out.
+                if ($result->reference) {
+                    $this->settleInline($txn, $vendor, $dispatcher, $ledger);
+                }
+
                 return;
             }
 
@@ -148,6 +159,63 @@ class ProcessDataPurchase implements ShouldQueue
         }
 
         $this->refund($txn, $ledger, 'refunded');
+    }
+
+    /**
+     * Poll an accepted-but-pending order until it resolves or the budget runs
+     * out, so the buyer gets a final answer in this request rather than on the
+     * next reconcile tick.
+     *
+     * The budget is deliberately small and bounded: this occupies a queue
+     * worker for its duration, and it must finish well inside the worker's
+     * per-job timeout (60s by default) or the job is killed mid-flight and
+     * retried -- which on a purchase means a second charge.
+     *
+     * Leaving the transaction `processing` on expiry is the correct outcome,
+     * not a failure: reconciliation picks it up unchanged.
+     */
+    private function settleInline(
+        DataTransaction $txn,
+        Vendor $vendor,
+        VendorDispatcher $dispatcher,
+        WalletLedger $ledger,
+    ): void {
+        $budget = max(0, min(45, DataSetting::int('inline_settle_seconds', 30)));
+
+        if ($budget === 0) {
+            return;
+        }
+
+        // Fixed iteration count rather than a wall-clock deadline: comparing
+        // elapsed time against the budget makes the final poll a race with
+        // itself, so a budget equal to one interval would poll or not depending
+        // on scheduling jitter.
+        $interval = min(5, $budget);
+        $polls = max(1, intdiv($budget, $interval));
+
+        for ($i = 0; $i < $polls; $i++) {
+            sleep($interval);
+
+            $result = $dispatcher->requery($txn->fresh(), $vendor);
+
+            if ($result->isSuccess()) {
+                $txn->update([
+                    'status' => 'success',
+                    'vendor_reference' => $result->reference ?: $txn->vendor_reference,
+                    'raw_response' => $result->raw ?: $txn->raw_response,
+                ]);
+                $this->saveBeneficiary($txn);
+
+                return;
+            }
+
+            if ($result->isFail()) {
+                $txn->update(['raw_response' => $result->raw ?: $txn->raw_response]);
+                $this->refund($txn, $ledger, 'refunded');
+
+                return;
+            }
+        }
     }
 
     private function refund(DataTransaction $txn, WalletLedger $ledger, string $status): void
