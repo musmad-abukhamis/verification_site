@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DataSetting;
+use App\Models\DataTransactionAttempt;
 use App\Models\NetworkPrefix;
 use App\Models\NetworkVendorMapping;
 use App\Models\Plan;
@@ -115,6 +116,102 @@ class DataRoutingController extends Controller
         DataSetting::put('requery_interval_minutes', (int) $validated['requery_interval_minutes']);
 
         return back()->with('success', 'Settings saved.');
+    }
+
+    /**
+     * Admin > Data (VTU) > Vendor Calls — every hop at one upstream vendor,
+     * failed-over ones included. The counterpart to the verification module's
+     * Provider Calls screen, and the only place a vendor that is quietly
+     * rejecting everything shows up: failover hides it from the buyer.
+     */
+    public function attempts(Request $request)
+    {
+        $query = DataTransactionAttempt::query()
+            ->with(['transaction:id,user_id,network,type,plan_name,phone,price,status', 'transaction.user:id,name,email']);
+
+        if ($vendorId = $request->input('vendor_id')) {
+            $query->where('vendor_id', $vendorId);
+        }
+
+        if ($outcome = $request->input('outcome')) {
+            $query->where('outcome', $outcome);
+        }
+
+        if ($network = $request->input('network')) {
+            $query->whereHas('transaction', fn ($q) => $q->where('network', $network));
+        }
+
+        // The transaction id doubles as the customer-facing reference, so one
+        // box covers "what happened to Data_...?" and "what happened to that
+        // phone number?" -- the two things support actually gets asked.
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('data_transaction_id', 'like', "%{$search}%")
+                    ->orWhereHas('transaction', fn ($t) => $t->where('phone', 'like', "%{$search}%"));
+            });
+        }
+
+        $attempts = $query->orderByDesc('created_at')
+            ->paginate(25)
+            ->through(fn (DataTransactionAttempt $a) => [
+                'id' => $a->id,
+                'reference' => $a->data_transaction_id,
+                'vendor' => $a->vendor_name ?? '—',
+                'user' => $a->transaction?->user?->name ?? $a->transaction?->user?->email,
+                'network' => $a->transaction?->network,
+                'plan' => $a->transaction?->plan_name,
+                'phone' => $a->transaction?->phone,
+                'txn_status' => $a->transaction?->status,
+                'outcome' => $a->outcome,
+                'http_status' => $a->http_status,
+                'duration_ms' => $a->duration_ms,
+                'message' => $a->message,
+                'request_payload' => $a->request_payload,
+                'response' => $a->response,
+                'created_at' => $a->created_at,
+            ])
+            ->withQueryString();
+
+        return Inertia::render('Admin/Data/Attempts', [
+            'attempts' => $attempts,
+            'networks' => self::NETWORKS,
+            'vendors' => Vendor::orderBy('name')->get(['id', 'name']),
+            'filters' => $request->only(['vendor_id', 'outcome', 'network', 'search']),
+            'summary' => $this->attemptSummary(),
+        ]);
+    }
+
+    /**
+     * Per-vendor success rate over the last 24 hours.
+     *
+     * Grouped on the denormalized vendor_name so deleted vendors still appear
+     * rather than collapsing into one nameless bucket.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function attemptSummary(): array
+    {
+        return DataTransactionAttempt::query()
+            ->where('created_at', '>=', now()->subDay())
+            ->selectRaw('vendor_name, outcome, count(*) as total, avg(duration_ms) as avg_ms')
+            ->groupBy('vendor_name', 'outcome')
+            ->get()
+            ->groupBy('vendor_name')
+            ->map(function ($rows, $vendor) {
+                $total = $rows->sum('total');
+                $success = $rows->firstWhere('outcome', 'success')->total ?? 0;
+
+                return [
+                    'vendor' => $vendor ?: 'Unknown',
+                    'total' => $total,
+                    'success' => $success,
+                    'success_rate' => $total > 0 ? round($success / $total * 100) : 0,
+                    'avg_ms' => (int) round($rows->avg('avg_ms') ?? 0),
+                ];
+            })
+            ->sortByDesc('total')
+            ->values()
+            ->all();
     }
 
     public function addPrefix(Request $request)

@@ -33,6 +33,7 @@ class TokenStyleADriver extends AbstractHttpDriver
             rtrim($baseUrl, '/').'/status',
             ['Authorization' => 'Token '.($credentials['key'] ?? '')],
             ['request-id' => $txn->getKey()],
+            errorResponseIsFail: false,
         );
     }
 

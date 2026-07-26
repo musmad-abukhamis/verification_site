@@ -42,6 +42,8 @@ class VendorDispatcher
     ): VendorResult {
         $driver = $this->driverFor($vendor);
 
+        $startedAt = microtime(true);
+
         $result = $driver->purchase(
             $txn,
             $externalPlanId,
@@ -55,6 +57,7 @@ class VendorDispatcher
             $vendor,
             $driver->describePayload($txn, $externalPlanId, $externalNetworkCode),
             $result,
+            $startedAt,
         );
 
         return $result;
@@ -64,24 +67,37 @@ class VendorDispatcher
     {
         $driver = $this->driverFor($vendor);
 
+        $startedAt = microtime(true);
+
         $result = $driver->requery($txn, $vendor->base_url, (array) $vendor->credentials);
 
-        $this->logAttempt($txn, $vendor, ['requery' => $txn->getKey()], $result);
+        $this->logAttempt($txn, $vendor, ['requery' => $txn->getKey()], $result, $startedAt);
 
         return $result;
     }
 
     /**
      * @param  array<string, mixed>  $requestPayload  already credential-free
+     * @param  float  $startedAt  microtime(true) taken immediately before the call
      */
-    private function logAttempt(DataTransaction $txn, Vendor $vendor, array $requestPayload, VendorResult $result): void
-    {
+    private function logAttempt(
+        DataTransaction $txn,
+        Vendor $vendor,
+        array $requestPayload,
+        VendorResult $result,
+        float $startedAt,
+    ): void {
         DataTransactionAttempt::create([
             'data_transaction_id' => $txn->getKey(),
             'vendor_id' => $vendor->getKey(),
+            // Denormalized so the audit still names the vendor after deletion.
+            'vendor_name' => $vendor->name,
             'request_payload' => $requestPayload,
             'response' => $result->raw,
             'outcome' => $result->outcome,
+            'http_status' => $result->httpStatus,
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'message' => $result->message,
         ]);
     }
 }

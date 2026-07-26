@@ -16,6 +16,7 @@ use App\Models\VendorRoute;
 use App\Models\WalletEntry;
 use App\Services\DataPurchaseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -209,7 +210,11 @@ class DataPurchaseTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
     }
 
-    public function test_timeout_does_not_failover_and_stays_processing(): void
+    /**
+     * Only a call that got NO response is ambiguous. A dropped connection could
+     * still have been delivered, so it must neither fail over nor refund.
+     */
+    public function test_no_response_does_not_failover_and_stays_processing(): void
     {
         $this->settings(['failover_enabled' => '1']);
         $a = $this->vendor('va', priority: 1);
@@ -218,7 +223,7 @@ class DataPurchaseTest extends TestCase
         $this->route($b, 2);
 
         Http::fake([
-            'va.test/*' => Http::response('gateway error', 500), // ambiguous
+            'va.test/*' => fn () => throw new ConnectionException('cURL error 28: timed out'),
             'vb.test/*' => Http::response(['status' => 'success'], 200),
         ]);
 
@@ -228,6 +233,57 @@ class DataPurchaseTest extends TestCase
         $this->assertSame('processing', $txn->status);
         $this->assertSame(4300.0, (float) $user->fresh()->balance); // not refunded
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * A 5xx is an answer, so the buyer must not be left watching a spinner: the
+     * purchase is settled and refunded now. But the vendor may have delivered
+     * before breaking, so it must NOT be retried on the next vendor.
+     */
+    public function test_server_error_refunds_without_failing_over(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response('gateway error', 500),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('refunded', $txn->status);
+        $this->assertTrue($txn->isTerminal());
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * A 4xx means the vendor rejected the request outright — nothing was
+     * delivered, so the next vendor is safe to try.
+     */
+    public function test_client_error_fails_over(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response(['message' => 'invalid plan'], 422),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('success', $txn->status);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'vb.test'));
     }
 
     public function test_reconciliation_marks_success(): void
@@ -259,11 +315,33 @@ class DataPurchaseTest extends TestCase
         $this->assertSame(5000.0, (float) $user->fresh()->balance);
     }
 
+    /**
+     * A purchase treats an error response as a verdict, but a requery must not:
+     * most vendors have no requery contract, so a 404 there means "no such
+     * endpoint", not "the purchase failed". Refunding on it would settle a
+     * possibly-delivered purchase as a clean failure.
+     */
+    public function test_requery_error_response_stays_unconfirmed(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response('not found', 404)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a); // inside the cutoff
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        // Held, not refunded: still ambiguous until the cutoff passes.
+        $this->assertSame('processing', $txn->fresh()->status);
+    }
+
     public function test_reconciliation_refunds_unconfirmed_after_cutoff(): void
     {
         $a = $this->vendor('va');
         $this->route($a, 1);
-        Http::fake(['va.test/*' => Http::response('still down', 500)]); // ambiguous
+        // Still no response on requery, so delivery stays unconfirmed.
+        Http::fake(['va.test/*' => fn () => throw new ConnectionException('still down')]);
 
         $user = User::factory()->create(['balance' => 5000]);
         $txn = $this->stuckProcessing($user, $a, minutesAgo: 200); // older than 120 cutoff

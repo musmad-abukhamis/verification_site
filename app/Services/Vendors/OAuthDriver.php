@@ -47,6 +47,7 @@ class OAuthDriver extends AbstractHttpDriver
             rtrim($baseUrl, '/').'/status',
             ['Authorization' => 'Token '.$token],
             ['request-id' => $txn->getKey()],
+            errorResponseIsFail: false,
         );
     }
 

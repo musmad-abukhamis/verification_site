@@ -64,6 +64,7 @@ const menuItems = [
             { name: 'Plans', route: 'admin.dataplan.index' },
             { name: 'Vendors', route: 'admin.vendors.index' },
             { name: 'Routing & Settings', route: 'admin.data.routing.index' },
+            { name: 'Vendor Calls', route: 'admin.data-attempts.index' },
             { name: 'Transactions', route: 'admin.data-transactions.index' },
             { name: 'Wallet Adjustments', route: 'admin.data-wallet.index' },
         ]

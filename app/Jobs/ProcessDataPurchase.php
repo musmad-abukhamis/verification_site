@@ -21,9 +21,13 @@ use Illuminate\Queue\SerializesModels;
  * (network, type), with admin-gated failover and automatic refunds.
  *
  * Failover rules (safety first):
- *  - explicit vendor fail → try the next vendor (only if failover is enabled).
+ *  - explicit vendor fail → try the next vendor (only if failover is enabled
+ *    AND the fail is failover-safe; a 5xx may already have been delivered, so
+ *    it ends the run and refunds instead of being retried).
  *  - timeout / ambiguous  → STOP and leave the txn `processing` for
- *    reconciliation. Re-sending could double-deliver.
+ *    reconciliation. Re-sending could double-deliver. Only a call that got no
+ *    response at all lands here; anything the vendor actually answered is
+ *    resolved now rather than left pending.
  */
 class ProcessDataPurchase implements ShouldQueue
 {
@@ -120,10 +124,12 @@ class ProcessDataPurchase implements ShouldQueue
                 return;
             }
 
-            // Explicit fail.
+            // Explicit fail. Terminal either way — the buyer is told — but a
+            // fail the vendor may still have delivered (a 5xx) must not be
+            // retried elsewhere.
             $lastFail = ['vendor_id' => $vendor->getKey(), 'raw' => $result->raw];
 
-            if (! $failoverEnabled) {
+            if (! $failoverEnabled || ! $result->failoverSafe) {
                 break;
             }
         }

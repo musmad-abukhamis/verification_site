@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Models\DataSetting;
 use App\Models\DataTransaction;
+use App\Models\DataTransactionAttempt;
 use App\Models\NetworkVendorMapping;
 use App\Models\Plan;
 use App\Models\PlanVendorMapping;
@@ -15,6 +16,7 @@ use App\Services\DataCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class DataAdminApiTest extends TestCase
@@ -463,5 +465,77 @@ class DataAdminApiTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user)->get(route('admin.vendors.index'))->assertRedirect();
+    }
+
+    /* --------------------------------------------------- Vendor calls audit */
+
+    /**
+     * A purchase records one attempt row per hop with the vendor, the timing and
+     * the HTTP status, and the Vendor Calls screen lists them.
+     */
+    public function test_vendor_calls_page_lists_attempts_with_call_detail(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'plan_id' => $plan->id, 'phone' => '08031234567', 'client_ref' => (string) Str::uuid(),
+        ])->assertStatus(201);
+
+        $attempt = DataTransactionAttempt::firstOrFail();
+
+        $this->assertSame('va', $attempt->vendor_name);
+        $this->assertSame('success', $attempt->outcome);
+        $this->assertSame(200, (int) $attempt->http_status);
+        $this->assertNotNull($attempt->duration_ms);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.data-attempts.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/Data/Attempts')
+                ->has('attempts.data', 1)
+                ->where('attempts.data.0.vendor', 'va')
+                ->where('attempts.data.0.outcome', 'success')
+                ->where('attempts.data.0.http_status', 200)
+                ->where('summary.0.vendor', 'va')
+                ->where('summary.0.success_rate', 100)
+            );
+    }
+
+    /**
+     * The reference box has to match on the customer-facing reference, which is
+     * the transaction id, and on the phone number -- support gets asked both.
+     */
+    public function test_vendor_calls_page_filters(): void
+    {
+        [$plan] = $this->seedRouting();
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['role' => UserRole::API, 'apitoken' => 'tok-api', 'balance' => 5000]);
+
+        $this->withToken('tok-api')->postJson('/api/v1/data', [
+            'plan_id' => $plan->id, 'phone' => '08031234567', 'client_ref' => (string) Str::uuid(),
+        ])->assertStatus(201);
+
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.data-attempts.index', ['search' => '08031234567']))
+            ->assertInertia(fn (Assert $page) => $page->has('attempts.data', 1));
+
+        $this->actingAs($admin)
+            ->get(route('admin.data-attempts.index', ['search' => '08039999999']))
+            ->assertInertia(fn (Assert $page) => $page->has('attempts.data', 0));
+
+        $this->actingAs($admin)
+            ->get(route('admin.data-attempts.index', ['outcome' => 'fail']))
+            ->assertInertia(fn (Assert $page) => $page->has('attempts.data', 0));
+
+        $this->actingAs($admin)
+            ->get(route('admin.data-attempts.index', ['network' => 'glo']))
+            ->assertInertia(fn (Assert $page) => $page->has('attempts.data', 0));
     }
 }

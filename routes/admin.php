@@ -122,6 +122,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/data/prefixes', [DataRoutingController::class, 'addPrefix'])->name('data.prefixes.add');
     Route::delete('/data/prefixes', [DataRoutingController::class, 'removePrefix'])->name('data.prefixes.remove');
 
+    // Per-hop audit of every vendor call, failed-over hops included.
+    Route::get('/data-attempts', [DataRoutingController::class, 'attempts'])->name('data-attempts.index');
+
     // Data transactions (all users) + attempt drill-down
     Route::get('/data-transactions', [DataTransactionController::class, 'index'])->name('data-transactions.index');
     Route::get('/data-transactions/{dataTransaction}', [DataTransactionController::class, 'show'])->name('data-transactions.show');

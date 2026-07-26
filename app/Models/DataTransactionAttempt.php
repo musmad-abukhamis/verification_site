@@ -10,7 +10,8 @@ class DataTransactionAttempt extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'data_transaction_id', 'vendor_id', 'request_payload', 'response', 'outcome',
+        'data_transaction_id', 'vendor_id', 'vendor_name', 'request_payload', 'response',
+        'outcome', 'http_status', 'duration_ms', 'message',
     ];
 
     protected function casts(): array

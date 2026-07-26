@@ -17,21 +17,28 @@ class VendorResult
         public readonly ?string $message = null,
         public readonly ?string $reference = null,
         public readonly array $raw = [],
+        // Null when the call never produced a response (connection error, or a
+        // token exchange that failed before the purchase was attempted).
+        public readonly ?int $httpStatus = null,
+        // False when the vendor may already have delivered despite answering
+        // with an error (a 5xx). Such a call is still terminal -- the buyer gets
+        // an answer -- but retrying it on another vendor could double-deliver.
+        public readonly bool $failoverSafe = true,
     ) {}
 
-    public static function success(?string $reference, array $raw, ?string $message = null): self
+    public static function success(?string $reference, array $raw, ?string $message = null, ?int $httpStatus = null): self
     {
-        return new self('success', $message, $reference, $raw);
+        return new self('success', $message, $reference, $raw, $httpStatus);
     }
 
-    public static function fail(?string $message, array $raw = []): self
+    public static function fail(?string $message, array $raw = [], ?int $httpStatus = null, bool $failoverSafe = true): self
     {
-        return new self('fail', $message, null, $raw);
+        return new self('fail', $message, null, $raw, $httpStatus, $failoverSafe);
     }
 
-    public static function timeout(?string $message, array $raw = []): self
+    public static function timeout(?string $message, array $raw = [], ?int $httpStatus = null): self
     {
-        return new self('timeout', $message, null, $raw);
+        return new self('timeout', $message, null, $raw, $httpStatus);
     }
 
     public function isSuccess(): bool

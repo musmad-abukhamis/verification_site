@@ -285,12 +285,26 @@ const statusColor = computed(() => {
                         <div class="flex justify-between"><dt class="text-gray-500">Reference</dt><dd class="font-mono text-xs">{{ transaction.reference }}</dd></div>
                     </dl>
 
+                    <!--
+                        Only offered once the transaction is terminal. Leaving it
+                        live during processing invites a second purchase before
+                        the first has resolved.
+                    -->
                     <Link
+                        v-if="transaction.terminal"
                         :href="route('buy-data')"
                         class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
                     >
                         Buy more data
                     </Link>
+                    <button
+                        v-else
+                        type="button"
+                        disabled
+                        class="mt-6 inline-flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-gray-300 px-4 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                    >
+                        Please wait…
+                    </button>
                 </div>
             </div>
 

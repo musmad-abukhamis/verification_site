@@ -36,6 +36,14 @@ abstract class TestCase extends BaseTestCase
             'cache.default' => 'array',
             'session.driver' => 'array',
             'mail.default' => 'array',
+            // inertia.ssr.enabled defaults to TRUE and this project publishes no
+            // config/inertia.php, so once `npm run build` has produced
+            // bootstrap/ssr/ssr.js the gateway POSTs every rendered page to the
+            // SSR server. Under Http::fake() that POST is answered by whatever
+            // catch-all stub the test set up, and the gateway then dies on the
+            // missing 'head' key -- turning any page assertion into a 500 that
+            // has nothing to do with the code under test.
+            'inertia.ssr.enabled' => false,
         ]);
 
         // Purge any pgsql connection opened during bootstrap so the pinned

@@ -15,13 +15,23 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
      *
      * A 2xx response whose status field is success/successful → success.
      * A 2xx response with any other status → explicit fail (safe to fail over).
-     * A connection error, timeout, or non-2xx HTTP status → timeout (ambiguous,
-     * must NOT fail over — could still be delivered).
+     * A non-2xx HTTP status → explicit fail: the vendor answered, so the buyer
+     * gets a verdict now instead of waiting on reconciliation. 4xx is safe to
+     * fail over (the vendor rejected the request outright); 5xx is not, because
+     * it may have been delivered before the vendor broke.
+     * A connection error or read timeout → timeout (genuinely ambiguous: no
+     * response at all, so it must NOT fail over — could still be delivered).
+     *
+     * $errorResponseIsFail must be false for requery probes. A requery has no
+     * agreed contract at most vendors -- a 404 there means "no such endpoint",
+     * not "the purchase failed" -- so treating it as an explicit fail would make
+     * reconciliation refund a delivered purchase instead of holding it as
+     * unconfirmed for the admin exceptions report.
      *
      * @param  array<string, string>  $headers
      * @param  array<string, mixed>  $payload
      */
-    protected function post(string $url, array $headers, array $payload): VendorResult
+    protected function post(string $url, array $headers, array $payload, bool $errorResponseIsFail = true): VendorResult
     {
         try {
             $response = Http::timeout(30)
@@ -32,19 +42,22 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
         }
 
         $json = $response->json() ?? [];
+        $status = $response->status();
 
         if (! $response->successful()) {
-            return VendorResult::timeout(
-                $this->messageFrom($json) ?? ('HTTP '.$response->status()),
-                is_array($json) ? $json : [],
-            );
+            $message = $this->messageFrom($json) ?? ('HTTP '.$status);
+            $body = is_array($json) ? $json : [];
+
+            return $errorResponseIsFail
+                ? VendorResult::fail($message, $body, $status, failoverSafe: $status < 500)
+                : VendorResult::timeout($message, $body, $status);
         }
 
         if ($this->isSuccess($json)) {
-            return VendorResult::success($this->referenceFrom($json), $json, $this->messageFrom($json));
+            return VendorResult::success($this->referenceFrom($json), $json, $this->messageFrom($json), $status);
         }
 
-        return VendorResult::fail($this->messageFrom($json) ?? 'Vendor rejected the transaction', $json);
+        return VendorResult::fail($this->messageFrom($json) ?? 'Vendor rejected the transaction', $json, $status);
     }
 
     /**
