@@ -4,17 +4,14 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class RegisteredUserController extends Controller
 {
@@ -72,21 +69,21 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        // The Registered listener sends the email-verification notification
-        // synchronously, so a mail failure (bad Brevo key, unverified sender,
-        // API unreachable) would 500 the request *after* the account row is
-        // already committed -- the user sees an error page but their account
-        // exists. Verification is not required to reach the dashboard, so a
-        // failure here must not block sign-in; log it and carry on. The user
-        // can request a fresh link from the verification prompt.
-        try {
-            event(new Registered($user));
-        } catch (TransportExceptionInterface $e) {
-            Log::error('Verification email failed to send on registration', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        // Deliberately NOT dispatching Illuminate\Auth\Events\Registered here.
+        //
+        // User implements MustVerifyEmail, so that event's listener sends the
+        // verification notification synchronously -- and a mail failure then
+        // 500s the request *after* the account row is committed, leaving the
+        // user staring at an error page for an account that does exist.
+        //
+        // Verification is not required to reach the dashboard (see the note on
+        // the dashboard route), so the email buys nothing at signup. Users who
+        // need a link can request one from the verification prompt, which goes
+        // through verification.send.
+        //
+        // To re-enable, restore `event(new Registered($user));` -- but wrap it
+        // in a try/catch on TransportExceptionInterface, or you reintroduce the
+        // 500, and make sure BREVO_API_KEY is a valid v3 API key first.
 
         Auth::login($user);
 

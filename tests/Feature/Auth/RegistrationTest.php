@@ -4,7 +4,6 @@ namespace Tests\Feature\Auth;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class RegistrationTest extends TestCase
@@ -34,15 +33,14 @@ class RegistrationTest extends TestCase
     }
 
     /**
-     * The verification notification is sent synchronously, so a mail outage
-     * used to 500 the request after the account row had already been written:
-     * the user got an error page for an account that in fact existed.
+     * Registration deliberately sends no verification email: the notification
+     * went out synchronously, so a mail outage 500'd the request after the
+     * account row had already been written -- the user got an error page for
+     * an account that in fact existed.
      */
-    public function test_registration_survives_a_failing_mail_transport(): void
+    public function test_registration_sends_no_verification_email(): void
     {
-        Notification::shouldReceive('send')
-            ->once()
-            ->andThrow(new TransportException('Brevo rejected the message: 401'));
+        Notification::fake();
 
         $response = $this->post('/register', [
             'name' => 'Test User',
@@ -52,6 +50,8 @@ class RegistrationTest extends TestCase
             'password' => 'password',
             'password_confirmation' => 'password',
         ]);
+
+        Notification::assertNothingSent();
 
         $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
         $this->assertAuthenticated();
