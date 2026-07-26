@@ -34,8 +34,28 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
      */
     protected function post(string $url, array $headers, array $payload, bool $errorResponseIsFail = true): VendorResult
     {
+        return $this->send('post', $url, $headers, $payload, $errorResponseIsFail);
+    }
+
+    /**
+     * GET and classify identically. Used by requery against vendors that expose
+     * order status as a resource (GET {base}/{reference}) rather than a POST.
+     *
+     * @param  array<string, string>  $headers
+     */
+    protected function get(string $url, array $headers, bool $errorResponseIsFail = false): VendorResult
+    {
+        return $this->send('get', $url, $headers, [], $errorResponseIsFail);
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     * @param  array<string, mixed>  $payload
+     */
+    private function send(string $method, string $url, array $headers, array $payload, bool $errorResponseIsFail): VendorResult
+    {
         try {
-            $response = Http::timeout(30)
+            $request = Http::timeout(30)
                 ->withHeaders($headers + [
                     'Content-Type' => 'application/json',
                     // Accept is not optional. A Laravel-based vendor (this app
@@ -46,8 +66,11 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
                     // the body parses to [], and the call reads as a bare
                     // rejection with no message.
                     'Accept' => 'application/json',
-                ])
-                ->post($url, $payload);
+                ]);
+
+            $response = $method === 'get'
+                ? $request->get($url)
+                : $request->post($url, $payload);
         } catch (\Throwable $e) {
             return VendorResult::timeout('Vendor request failed: '.$e->getMessage());
         }
@@ -74,6 +97,18 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
 
         if ($this->isSuccess($json)) {
             return VendorResult::success($this->referenceFrom($json), $raw, $this->messageFrom($json), $status);
+        }
+
+        // Accepted but not delivered yet. Ambiguous, so the purchase stays
+        // `processing` and reconciliation settles it -- the reference is carried
+        // through because requery needs the vendor's own handle for the order.
+        if ($this->isPending($json)) {
+            return VendorResult::timeout(
+                $this->messageFrom($json) ?? 'Vendor accepted the order; delivery pending',
+                $raw,
+                $status,
+                $this->referenceFrom($json),
+            );
         }
 
         // A 2xx that is not JSON is not a rejection -- it is a misrouted call
@@ -110,13 +145,65 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
     }
 
     /**
+     * The DELIVERY state, which is not always the envelope status.
+     *
+     * Asynchronous vendors answer `status: success` to mean "order accepted"
+     * and carry the real state in `transaction_status` or `data.status`. Reading
+     * the envelope as delivery marks a purchase complete the moment it is
+     * queued -- so if the vendor later fails and refunds, we have already told
+     * the buyer it worked and kept their money.
+     *
+     * Only a RECOGNISED nested state wins. A vendor using `data.status` for
+     * something unrelated must not be misread, so anything unfamiliar falls
+     * back to the envelope.
+     *
+     * @param  array<string, mixed>  $json
+     */
+    protected function deliveryStatus(array $json): string
+    {
+        $known = [
+            'success', 'successful', 'completed', 'delivered',
+            'fail', 'failed', 'error', 'rejected',
+            'pending', 'processing', 'queued', 'in_progress', 'initiated',
+        ];
+
+        foreach ([$json['transaction_status'] ?? null, $json['data']['status'] ?? null] as $candidate) {
+            $candidate = strtolower(trim((string) $candidate));
+
+            if ($candidate !== '' && in_array($candidate, $known, true)) {
+                return $candidate;
+            }
+        }
+
+        return strtolower((string) ($json['status'] ?? $json['Status'] ?? ''));
+    }
+
+    /**
      * @param  array<string, mixed>  $json
      */
     protected function isSuccess(array $json): bool
     {
-        $status = strtolower((string) ($json['status'] ?? $json['Status'] ?? ''));
+        return in_array(
+            $this->deliveryStatus($json),
+            ['success', 'successful', 'completed', 'delivered'],
+            true,
+        );
+    }
 
-        return in_array($status, ['success', 'successful'], true);
+    /**
+     * Accepted but not yet delivered. Ambiguous by definition: the order is
+     * live at the vendor, so it must never be failed over or refunded on the
+     * spot -- it is left for reconciliation to settle.
+     *
+     * @param  array<string, mixed>  $json
+     */
+    protected function isPending(array $json): bool
+    {
+        return in_array(
+            $this->deliveryStatus($json),
+            ['pending', 'processing', 'queued', 'in_progress', 'initiated'],
+            true,
+        );
     }
 
     /**
@@ -138,9 +225,21 @@ abstract class AbstractHttpDriver implements VendorDriverInterface
      */
     protected function referenceFrom(array $json): ?string
     {
-        foreach (['reference', 'request-id', 'request_id', 'id', 'transaction_id', 'transactionId'] as $key) {
-            if (! empty($json[$key])) {
-                return (string) $json[$key];
+        $keys = ['reference', 'request-id', 'request_id', 'id', 'transaction_id', 'transactionId'];
+
+        // `data` first: an async vendor returns its own reference nested there,
+        // and that is the handle reconciliation needs later. The top level of
+        // such a reply echoes OUR request id back, which is useless for a
+        // requery -- it identifies the order on our side, not theirs.
+        foreach ([$json['data'] ?? null, $json] as $scope) {
+            if (! is_array($scope)) {
+                continue;
+            }
+
+            foreach ($keys as $key) {
+                if (! empty($scope[$key])) {
+                    return (string) $scope[$key];
+                }
             }
         }
 

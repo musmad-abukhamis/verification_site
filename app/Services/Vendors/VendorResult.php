@@ -36,9 +36,14 @@ class VendorResult
         return new self('fail', $message, null, $raw, $httpStatus, $failoverSafe);
     }
 
-    public static function timeout(?string $message, array $raw = [], ?int $httpStatus = null): self
+    /**
+     * $reference is populated when the vendor accepted the order and told us
+     * its own handle for it (an async "pending" reply). Reconciliation needs
+     * that handle to ask what became of it.
+     */
+    public static function timeout(?string $message, array $raw = [], ?int $httpStatus = null, ?string $reference = null): self
     {
-        return new self('timeout', $message, null, $raw, $httpStatus);
+        return new self('timeout', $message, $reference, $raw, $httpStatus);
     }
 
     public function isSuccess(): bool

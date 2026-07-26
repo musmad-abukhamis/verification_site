@@ -116,10 +116,15 @@ class ProcessDataPurchase implements ShouldQueue
 
             if ($result->isTimeout()) {
                 // Ambiguous — never fail over. Leave `processing` for reconcile.
-                $txn->update([
+                // An async vendor that accepted the order returns its own
+                // reference here; without storing it reconciliation has no
+                // handle to requery and the purchase can only ever time out
+                // into refunded_unconfirmed.
+                $txn->update(array_filter([
                     'vendor_id' => $vendor->getKey(),
+                    'vendor_reference' => $result->reference,
                     'raw_response' => $result->raw,
-                ]);
+                ], fn ($value) => $value !== null));
 
                 return;
             }

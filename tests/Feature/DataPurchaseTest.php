@@ -211,6 +211,86 @@ class DataPurchaseTest extends TestCase
     }
 
     /**
+     * An async vendor answers `status: success` to mean "accepted" and carries
+     * the delivery state in transaction_status / data.status. Reading the
+     * envelope as delivery marks the purchase complete while it is still only
+     * queued upstream.
+     */
+    public function test_accepted_but_pending_is_not_treated_as_delivered(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', driver: 'reseller', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake(['va.test/*' => Http::response([
+            'status' => 'success',                       // envelope: accepted
+            'transaction_status' => 'pending',           // real delivery state
+            'message' => '500MB to 07078298019 is being processed.',
+            'data' => ['reference' => 'REMOTE-REF-1', 'status' => 'pending'],
+        ], 201)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        $this->assertFalse($txn->isTerminal());
+        // The upstream handle must be kept or reconciliation cannot ask.
+        $this->assertSame('REMOTE-REF-1', $txn->vendor_reference);
+        $this->assertSame(4300.0, (float) $user->fresh()->balance); // not refunded
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * Reconciliation asks the reseller GET {base}/{reference} -- its status is a
+     * resource, not the POST {base}/status the other drivers probe.
+     */
+    public function test_reseller_requery_settles_a_pending_purchase(): void
+    {
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+        $txn->update(['vendor_reference' => 'REMOTE-REF-1']);
+
+        Http::fake(['va.test/api/data/REMOTE-REF-1' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'success',
+            'data' => ['reference' => 'REMOTE-REF-1', 'status' => 'success'],
+        ], 200)]);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('success', $txn->fresh()->status);
+    }
+
+    /**
+     * And when upstream reports the order failed, the buyer is refunded.
+     */
+    public function test_reseller_requery_refunds_a_failed_purchase(): void
+    {
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+        $txn->update(['vendor_reference' => 'REMOTE-REF-2']);
+
+        Http::fake(['va.test/api/data/REMOTE-REF-2' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'refunded',
+            'data' => ['reference' => 'REMOTE-REF-2', 'status' => 'failed'],
+        ], 200)]);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('refunded', $txn->fresh()->status);
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+    }
+
+    /**
      * Laravel-based vendors content-negotiate: without Accept, a validation
      * failure comes back as a 302 to the SPA rather than a 422, and the client
      * follows it into an HTML page reported as 200.

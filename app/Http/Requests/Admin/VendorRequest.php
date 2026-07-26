@@ -16,7 +16,7 @@ class VendorRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:100'],
             'base_url' => ['required', 'url', 'max:255'],
-            'driver' => ['required', 'in:token_style_a,token_style_b,oauth'],
+            'driver' => ['required', 'in:token_style_a,token_style_b,oauth,reseller'],
             'is_active' => ['boolean'],
             'priority' => ['required', 'integer', 'min:0', 'max:1000'],
             // Credential fields — all optional so secrets can be left unchanged

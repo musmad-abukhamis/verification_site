@@ -21,6 +21,7 @@ class VendorDispatcher
         'token_style_a' => TokenStyleADriver::class,
         'token_style_b' => TokenStyleBDriver::class,
         'oauth' => OAuthDriver::class,
+        'reseller' => ResellerDriver::class,
     ];
 
     public function driverFor(Vendor $vendor): VendorDriverInterface

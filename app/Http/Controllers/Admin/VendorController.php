@@ -14,6 +14,7 @@ class VendorController extends Controller
         ['value' => 'token_style_a', 'label' => 'Token style A ({network,phone,bypass,data_plan})'],
         ['value' => 'token_style_b', 'label' => 'Token style B ({network,mobile_number,plan,Ported_number})'],
         ['value' => 'oauth', 'label' => 'OAuth (client credentials → token)'],
+        ['value' => 'reseller', 'label' => 'Reseller (another deployment of this app — async, GET status)'],
     ];
 
     /**
