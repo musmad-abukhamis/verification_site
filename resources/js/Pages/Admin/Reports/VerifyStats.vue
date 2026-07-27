@@ -144,36 +144,40 @@ const maxIdtype = computed(() => Math.max(1, ...props.idtypeCounts.map((x) => x.
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 class="font-semibold text-gray-800 dark:text-white mb-4">By Channel</h3>
                     <div v-if="channelCounts.length === 0" class="text-center py-6 text-gray-400">No channel data</div>
-                    <table v-else class="min-w-full text-sm">
-                        <tbody>
-                            <tr v-for="item in channelCounts" :key="item.label" class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="py-2 text-gray-700 dark:text-gray-200">{{ item.label }}</td>
-                                <td class="py-2 text-right font-medium text-gray-900 dark:text-white">{{ item.count }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div v-else class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <tbody>
+                                <tr v-for="item in channelCounts" :key="item.label" class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="py-2 text-gray-700 dark:text-gray-200">{{ item.label }}</td>
+                                    <td class="py-2 text-right font-medium text-gray-900 dark:text-white">{{ item.count }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- ID type x status matrix -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 class="font-semibold text-gray-800 dark:text-white mb-4">ID Type × Status</h3>
                     <div v-if="idtypeStatus.length === 0" class="text-center py-6 text-gray-400">No data</div>
-                    <table v-else class="min-w-full text-sm">
-                        <thead>
-                            <tr class="text-left text-gray-500 dark:text-gray-400">
-                                <th class="py-2">ID Type</th>
-                                <th class="py-2">Status</th>
-                                <th class="py-2 text-right">Count</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(item, i) in idtypeStatus" :key="i" class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="py-2 text-gray-700 dark:text-gray-200">{{ item.idtype }}</td>
-                                <td class="py-2 capitalize text-gray-700 dark:text-gray-200">{{ item.status }}</td>
-                                <td class="py-2 text-right font-medium text-gray-900 dark:text-white">{{ item.count }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div v-else class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-gray-500 dark:text-gray-400">
+                                    <th class="py-2">ID Type</th>
+                                    <th class="py-2">Status</th>
+                                    <th class="py-2 text-right">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, i) in idtypeStatus" :key="i" class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="py-2 text-gray-700 dark:text-gray-200">{{ item.idtype }}</td>
+                                    <td class="py-2 capitalize text-gray-700 dark:text-gray-200">{{ item.status }}</td>
+                                    <td class="py-2 text-right font-medium text-gray-900 dark:text-white">{{ item.count }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

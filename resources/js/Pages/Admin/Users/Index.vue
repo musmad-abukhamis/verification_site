@@ -99,83 +99,149 @@ const roleBadge = (value) => ({
 
             <!-- Users Table -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Phone</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wallet Balance</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <tr v-for="user in users.data" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td class="px-6 py-4">
-                                <div class="flex items-center">
-                                    <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                                        <span class="text-indigo-600 dark:text-indigo-400 font-medium">
-                                            {{ user.name.charAt(0).toUpperCase() }}
-                                        </span>
+                <!-- Desktop table -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Phone</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wallet Balance</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr v-for="user in users.data" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 shrink-0 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                            <span class="text-indigo-600 dark:text-indigo-400 font-medium">
+                                                {{ user.name.charAt(0).toUpperCase() }}
+                                            </span>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="font-medium text-gray-900 dark:text-white">{{ user.name }}</div>
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">{{ user.email }}</div>
+                                        </div>
                                     </div>
-                                    <div class="ml-4">
-                                        <div class="font-medium text-gray-900 dark:text-white">{{ user.name }}</div>
-                                        <div class="text-sm text-gray-500 dark:text-gray-400">{{ user.email }}</div>
-                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white">{{ user.phone || 'N/A' }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white">₦{{ user.wallet_balance.toLocaleString() }}</td>
+                                <td class="px-6 py-4">
+                                    <!-- Your own role is read-only: demoting yourself
+                                         would lock you out of this page. -->
+                                    <span
+                                        v-if="user.id === currentUserId"
+                                        :class="roleBadge(user.role)"
+                                        class="px-2 py-1 text-xs rounded-full"
+                                        title="You cannot change your own role"
+                                    >
+                                        {{ user.role }}
+                                    </span>
+                                    <select
+                                        v-else
+                                        :value="user.role"
+                                        @change="updateRole(user, $event)"
+                                        class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1"
+                                    >
+                                        <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
+                                    </select>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span
+                                        :class="user.email_verified
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'"
+                                        class="px-2 py-1 text-xs rounded-full"
+                                    >
+                                        {{ user.email_verified ? 'Active' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <Link
+                                        :href="route('admin.users.show', user.id)"
+                                        class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                    >
+                                        View
+                                    </Link>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile cards: the same row, stacked, so nothing needs scrolling -->
+                <div class="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                    <div v-for="user in users.data" :key="user.id" class="p-4 space-y-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex min-w-0 items-center">
+                                <div class="w-10 h-10 shrink-0 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                    <span class="text-indigo-600 dark:text-indigo-400 font-medium">
+                                        {{ user.name.charAt(0).toUpperCase() }}
+                                    </span>
                                 </div>
-                            </td>
-                            <td class="px-6 py-4 text-gray-900 dark:text-white">{{ user.phone || 'N/A' }}</td>
-                            <td class="px-6 py-4 text-gray-900 dark:text-white">₦{{ user.wallet_balance.toLocaleString() }}</td>
-                            <td class="px-6 py-4">
-                                <!-- Your own role is read-only: demoting yourself
-                                     would lock you out of this page. -->
-                                <span
-                                    v-if="user.id === currentUserId"
-                                    :class="roleBadge(user.role)"
-                                    class="px-2 py-1 text-xs rounded-full"
-                                    title="You cannot change your own role"
-                                >
-                                    {{ user.role }}
-                                </span>
-                                <select
-                                    v-else
-                                    :value="user.role"
-                                    @change="updateRole(user, $event)"
-                                    class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1"
-                                >
-                                    <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
-                                </select>
-                            </td>
-                            <td class="px-6 py-4">
-                                <span
-                                    :class="user.email_verified
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'"
-                                    class="px-2 py-1 text-xs rounded-full"
-                                >
-                                    {{ user.email_verified ? 'Active' : 'Inactive' }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4">
-                                <Link
-                                    :href="route('admin.users.show', user.id)"
-                                    class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                >
-                                    View
-                                </Link>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                <div class="ml-3 min-w-0">
+                                    <div class="font-medium text-gray-900 dark:text-white truncate">{{ user.name }}</div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 truncate">{{ user.email }}</div>
+                                </div>
+                            </div>
+                            <span
+                                :class="user.email_verified
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'"
+                                class="shrink-0 px-2 py-1 text-xs rounded-full"
+                            >
+                                {{ user.email_verified ? 'Active' : 'Inactive' }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400">Phone</p>
+                                <p class="font-medium text-gray-900 dark:text-white">{{ user.phone || 'N/A' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400">Wallet Balance</p>
+                                <p class="font-medium text-gray-900 dark:text-white">₦{{ user.wallet_balance.toLocaleString() }}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <span
+                                v-if="user.id === currentUserId"
+                                :class="roleBadge(user.role)"
+                                class="px-2 py-1 text-xs rounded-full"
+                                title="You cannot change your own role"
+                            >
+                                {{ user.role }}
+                            </span>
+                            <select
+                                v-else
+                                :value="user.role"
+                                @change="updateRole(user, $event)"
+                                class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1"
+                            >
+                                <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
+                            </select>
+                            <Link
+                                :href="route('admin.users.show', user.id)"
+                                class="text-sm font-medium text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            >
+                                View
+                            </Link>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Pagination -->
                 <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p class="text-sm text-gray-500 dark:text-gray-400">
                             Showing {{ users.from }} to {{ users.to }} of {{ users.total }} results
                         </p>
-                        <div class="flex gap-2">
+                        <div class="flex flex-wrap gap-2">
                             <Link
                                 v-for="link in users.links"
                                 :key="link.label"

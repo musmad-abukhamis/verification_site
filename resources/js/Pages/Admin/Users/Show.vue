@@ -253,30 +253,54 @@ const statusColors = {
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Recent Transactions</h3>
                 </div>
-                <table v-if="user.transactions.length" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Reference</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Amount</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <tr v-for="transaction in user.transactions" :key="transaction.id">
-                            <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">{{ transaction.reference }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">{{ transaction.type }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">₦{{ transaction.amount.toLocaleString() }}</td>
-                            <td class="px-6 py-4">
-                                <span :class="['px-2 py-1 text-xs rounded-full', statusColors[transaction.status]]">
+                <template v-if="user.transactions.length">
+                    <!-- Desktop table -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Reference</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Amount</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr v-for="transaction in user.transactions" :key="transaction.id">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.reference }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ transaction.type }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">₦{{ transaction.amount.toLocaleString() }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="['px-2 py-1 text-xs rounded-full', statusColors[transaction.status]]">
+                                            {{ transaction.status }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ transaction.created_at }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile cards -->
+                    <div class="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                        <div v-for="transaction in user.transactions" :key="transaction.id" class="p-4 space-y-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">{{ transaction.reference }}</p>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-white">₦{{ transaction.amount.toLocaleString() }}</p>
+                                </div>
+                                <span :class="['shrink-0 px-2 py-1 text-xs rounded-full', statusColors[transaction.status]]">
                                     {{ transaction.status }}
                                 </span>
-                            </td>
-                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">{{ transaction.created_at }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 text-sm">
+                                <span class="text-gray-900 dark:text-white">{{ transaction.type }}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ transaction.created_at }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
                 <div v-else class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     No transactions found
                 </div>

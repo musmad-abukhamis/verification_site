@@ -79,53 +79,89 @@ const statusColors = {
 
             <!-- Transactions Table -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Reference</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        <tr v-for="transaction in transactions.data" :key="transaction.id">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                {{ transaction.reference }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                {{ transaction.user }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                {{ transaction.type }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                ₦{{ transaction.amount?.toLocaleString() }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', statusColors[transaction.status]]">
-                                    {{ transaction.status }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                {{ transaction.created_at }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <Link :href="route('admin.transactions.show', transaction.id)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">
-                                    View
-                                </Link>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <!-- Desktop table -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Reference</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr v-for="transaction in transactions.data" :key="transaction.id">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ transaction.reference }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    {{ transaction.user }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    {{ transaction.type }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                    ₦{{ transaction.amount?.toLocaleString() }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', statusColors[transaction.status]]">
+                                        {{ transaction.status }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    {{ transaction.created_at }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <Link :href="route('admin.transactions.show', transaction.id)" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">
+                                        View
+                                    </Link>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile cards -->
+                <div class="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                    <div v-for="transaction in transactions.data" :key="transaction.id" class="p-4 space-y-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">{{ transaction.reference }}</p>
+                                <p class="text-lg font-semibold text-gray-900 dark:text-white">₦{{ transaction.amount?.toLocaleString() }}</p>
+                            </div>
+                            <span :class="['shrink-0 px-2 inline-flex text-xs leading-5 font-semibold rounded-full', statusColors[transaction.status]]">
+                                {{ transaction.status }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400">User</p>
+                                <p class="font-medium text-gray-900 dark:text-white truncate">{{ transaction.user }}</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400">Type</p>
+                                <p class="font-medium text-gray-900 dark:text-white">{{ transaction.type }}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ transaction.created_at }}</span>
+                            <Link :href="route('admin.transactions.show', transaction.id)" class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">
+                                View
+                            </Link>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Pagination -->
             <div class="flex justify-center">
-                <div class="flex gap-2">
+                <div class="flex flex-wrap justify-center gap-2">
                     <Link
                         v-for="link in transactions.links"
                         :key="link.label"

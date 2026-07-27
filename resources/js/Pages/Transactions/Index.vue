@@ -66,36 +66,68 @@ const badge = (s) => ({
             </div>
 
             <div class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-gray-800">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900/40">
-                        <tr>
-                            <th class="px-4 py-3">Plan</th>
-                            <th class="px-4 py-3">Phone</th>
-                            <th class="px-4 py-3">Amount</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 text-sm dark:divide-gray-700">
-                        <tr v-for="t in transactions.data" :key="t.reference">
-                            <td class="px-4 py-3">
-                                <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.network?.toUpperCase() }} · {{ t.plan_name }}</p>
-                                <p class="font-mono text-xs text-gray-400">{{ t.reference }}</p>
-                            </td>
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ t.phone }}</td>
-                            <td class="px-4 py-3 font-medium">{{ money(t.price) }}</td>
-                            <td class="px-4 py-3">
-                                <span class="rounded-full px-2 py-1 text-xs font-semibold capitalize" :class="badge(t.status)">
+                <p v-if="!transactions.data.length" class="px-4 py-10 text-center text-gray-500">No purchases yet.</p>
+
+                <template v-else>
+                    <!-- Desktop table -->
+                    <div class="hidden overflow-x-auto md:block">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900/40">
+                                <tr>
+                                    <th class="px-4 py-3">Plan</th>
+                                    <th class="px-4 py-3">Phone</th>
+                                    <th class="px-4 py-3">Amount</th>
+                                    <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-sm dark:divide-gray-700">
+                                <tr v-for="t in transactions.data" :key="t.reference">
+                                    <td class="px-4 py-3">
+                                        <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.network?.toUpperCase() }} · {{ t.plan_name }}</p>
+                                        <p class="font-mono text-xs text-gray-400">{{ t.reference }}</p>
+                                    </td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{{ t.phone }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 font-medium">{{ money(t.price) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3">
+                                        <span class="rounded-full px-2 py-1 text-xs font-semibold capitalize" :class="badge(t.status)">
+                                            {{ t.status.replace('_', ' ') }}
+                                        </span>
+                                    </td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-500 dark:text-gray-400">{{ t.date }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile cards -->
+                    <div class="divide-y divide-gray-100 dark:divide-gray-700 md:hidden">
+                        <div v-for="t in transactions.data" :key="t.reference" class="space-y-3 p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.network?.toUpperCase() }} · {{ t.plan_name }}</p>
+                                    <p class="truncate font-mono text-xs text-gray-400">{{ t.reference }}</p>
+                                </div>
+                                <span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold capitalize" :class="badge(t.status)">
                                     {{ t.status.replace('_', ' ') }}
                                 </span>
-                            </td>
-                            <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ t.date }}</td>
-                        </tr>
-                        <tr v-if="!transactions.data.length">
-                            <td colspan="5" class="px-4 py-10 text-center text-gray-500">No purchases yet.</td>
-                        </tr>
-                    </tbody>
-                </table>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400">Phone</p>
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.phone }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400">Amount</p>
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ money(t.price) }}</p>
+                                </div>
+                            </div>
+
+                            <p class="text-right text-xs text-gray-400">{{ t.date }}</p>
+                        </div>
+                    </div>
+                </template>
             </div>
 
             <div v-if="transactions.links && transactions.links.length > 3" class="mt-4 flex flex-wrap gap-1">

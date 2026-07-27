@@ -83,7 +83,7 @@ const typeLabels = {
             </div>
 
             <!-- Logs Table -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-50 dark:bg-gray-700">
                         <tr>
@@ -130,7 +130,7 @@ const typeLabels = {
 
             <!-- Pagination -->
             <div class="flex justify-center">
-                <div class="flex gap-2">
+                <div class="flex flex-wrap justify-center gap-2">
                     <Link
                         v-for="link in logs.links"
                         :key="link.label"
