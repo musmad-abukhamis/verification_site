@@ -1,0 +1,631 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Enums\UserRole;
+use App\Jobs\ProcessDataPurchase;
+use App\Jobs\ReconcilePendingTransactions;
+use App\Models\DataSetting;
+use App\Models\DataTransaction;
+use App\Models\NetworkVendorMapping;
+use App\Models\Plan;
+use App\Models\PlanVendorMapping;
+use App\Models\User;
+use App\Models\Vendor;
+use App\Models\VendorRoute;
+use App\Models\WalletEntry;
+use App\Services\DataPurchaseService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use Tests\TestCase;
+
+class DataPurchaseTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Plan $plan;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->plan = Plan::create([
+            'id' => 1,
+            'network' => 'mtn',
+            'type' => 'SME',
+            'name' => '1GB',
+            'price' => 700,
+            'agent_price' => 650,
+            'api_price' => 600,
+            'validity' => '30 Days',
+            'status' => 'on',
+            'plan_status' => 'on',
+        ]);
+
+        $this->settings([
+            'failover_enabled' => '0',
+            'failover_max_attempts' => '0',
+            'reconcile_cutoff_minutes' => '120',
+        ]);
+    }
+
+    /* ------------------------------------------------------------- helpers */
+
+    private function settings(array $values): void
+    {
+        foreach ($values as $k => $v) {
+            DataSetting::updateOrCreate(['key' => $k], ['value' => $v]);
+        }
+        DataSetting::flushCache();
+    }
+
+    private function vendor(string $host, string $driver = 'token_style_a', bool $active = true, int $priority = 1): Vendor
+    {
+        return Vendor::create([
+            'name' => $host,
+            'base_url' => "https://{$host}.test/api/data",
+            'driver' => $driver,
+            'credentials' => ['key' => 'secret-'.$host],
+            'is_active' => $active,
+            'priority' => $priority,
+        ]);
+    }
+
+    private function route(Vendor $vendor, int $position, string $planCode = '2', string $netCode = '1'): void
+    {
+        PlanVendorMapping::create(['plan_id' => $this->plan->id, 'vendor_id' => $vendor->id, 'external_plan_id' => $planCode]);
+        NetworkVendorMapping::firstOrCreate(['network' => 'mtn', 'vendor_id' => $vendor->id], ['external_network_code' => $netCode]);
+        VendorRoute::create(['network' => 'mtn', 'type' => 'SME', 'vendor_id' => $vendor->id, 'position' => $position]);
+    }
+
+    private function purchase(User $user, array $overrides = []): DataTransaction
+    {
+        return app(DataPurchaseService::class)->initiate($user, array_merge([
+            'plan_id' => $this->plan->id,
+            'phone' => '08031234567',
+            'ported' => false,
+            'client_ref' => (string) Str::uuid(),
+        ], $overrides));
+    }
+
+    /* --------------------------------------------------------------- tests */
+
+    public function test_price_is_resolved_from_role_server_side(): void
+    {
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $agent = User::factory()->create(['role' => UserRole::AGENT, 'balance' => 5000]);
+        $txn = $this->purchase($agent);
+
+        $this->assertSame(650.0, (float) $txn->price); // agent_price, not price(700)/api_price(600)
+    }
+
+    public function test_insufficient_balance_is_rejected(): void
+    {
+        $user = User::factory()->create(['balance' => 100]);
+
+        $this->actingAs($user)
+            ->post(route('buy-data.store'), [
+                'plan_id' => $this->plan->id,
+                'phone' => '08031234567',
+                'ported' => false,
+                'client_ref' => (string) Str::uuid(),
+            ])
+            ->assertSessionHasErrors('balance');
+
+        $this->assertSame(100.0, (float) $user->fresh()->balance);
+        $this->assertDatabaseCount('data_transactions', 0);
+    }
+
+    public function test_duplicate_client_ref_is_idempotent(): void
+    {
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $ref = (string) Str::uuid();
+
+        $first = $this->purchase($user, ['client_ref' => $ref]);
+        $second = $this->purchase($user, ['client_ref' => $ref]);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertDatabaseCount('data_transactions', 1);
+        // Charged only once.
+        $this->assertSame(4300.0, (float) $user->fresh()->balance);
+    }
+
+    public function test_purchase_is_queued_and_starts_pending(): void
+    {
+        Queue::fake();
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user);
+
+        $this->assertSame('pending', $txn->status);
+        Queue::assertPushed(ProcessDataPurchase::class);
+        // Debited immediately, even though fulfilment is queued.
+        $this->assertSame(4300.0, (float) $user->fresh()->balance);
+    }
+
+    public function test_successful_purchase_saves_beneficiary_and_ledger(): void
+    {
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+        Http::fake(['*' => Http::response(['status' => 'successful', 'reference' => 'X1'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user);
+
+        $this->assertSame('success', $txn->fresh()->status);
+        $this->assertDatabaseHas('beneficiaries', ['user_id' => $user->id, 'phone' => '08031234567']);
+        $this->assertSame(1, WalletEntry::where('user_id', $user->id)->where('direction', 'debit')->count());
+    }
+
+    public function test_explicit_fail_triggers_failover_when_enabled(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response(['status' => 'failed', 'message' => 'no'], 200),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('success', $txn->status);
+        $this->assertSame($b->id, $txn->vendor_id);
+        $this->assertSame(2, $txn->attempts);
+    }
+
+    public function test_no_failover_when_disabled_refunds_after_first_fail(): void
+    {
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response(['status' => 'failed'], 200),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('refunded', $txn->status);
+        $this->assertSame(5000.0, (float) $user->fresh()->balance); // fully refunded
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * An async vendor answers `status: success` to mean "accepted" and carries
+     * the delivery state in transaction_status / data.status. Reading the
+     * envelope as delivery marks the purchase complete while it is still only
+     * queued upstream.
+     */
+    public function test_accepted_but_pending_is_not_treated_as_delivered(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', driver: 'reseller', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake(['va.test/*' => Http::response([
+            'status' => 'success',                       // envelope: accepted
+            'transaction_status' => 'pending',           // real delivery state
+            'message' => '500MB to 07078298019 is being processed.',
+            'data' => ['reference' => 'REMOTE-REF-1', 'status' => 'pending'],
+        ], 201)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        $this->assertFalse($txn->isTerminal());
+        // The upstream handle must be kept or reconciliation cannot ask.
+        $this->assertSame('REMOTE-REF-1', $txn->vendor_reference);
+        $this->assertSame(4300.0, (float) $user->fresh()->balance); // not refunded
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * With a settle budget, an accepted-pending purchase resolves inside the
+     * job -- the buyer gets a final answer immediately instead of waiting for
+     * the next reconcile tick.
+     */
+    public function test_an_accepted_purchase_settles_inline(): void
+    {
+        $this->settings(['inline_settle_seconds' => '5']);
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        Http::fakeSequence()
+            ->push([
+                'status' => 'success',
+                'transaction_status' => 'pending',
+                'data' => ['reference' => 'REMOTE-REF-9', 'status' => 'pending'],
+            ], 201)
+            ->push([
+                'status' => 'success',
+                'transaction_status' => 'success',
+                'data' => ['reference' => 'REMOTE-REF-9', 'status' => 'success'],
+            ], 200);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('success', $txn->status);
+        $this->assertSame('REMOTE-REF-9', $txn->vendor_reference);
+    }
+
+    /**
+     * A budget of 0 keeps the old hand-off: settle purely by reconciliation.
+     */
+    public function test_inline_settling_can_be_disabled(): void
+    {
+        $this->settings(['inline_settle_seconds' => '0']);
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        Http::fake(['va.test/*' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'pending',
+            'data' => ['reference' => 'REMOTE-REF-8', 'status' => 'pending'],
+        ], 201)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        $this->assertSame('REMOTE-REF-8', $txn->vendor_reference);
+    }
+
+    /**
+     * Reconciliation asks the reseller GET {base}/{reference} -- its status is a
+     * resource, not the POST {base}/status the other drivers probe.
+     */
+    public function test_reseller_requery_settles_a_pending_purchase(): void
+    {
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+        $txn->update(['vendor_reference' => 'REMOTE-REF-1']);
+
+        Http::fake(['va.test/api/data/REMOTE-REF-1' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'success',
+            'data' => ['reference' => 'REMOTE-REF-1', 'status' => 'success'],
+        ], 200)]);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('success', $txn->fresh()->status);
+    }
+
+    /**
+     * And when upstream reports the order failed, the buyer is refunded.
+     */
+    public function test_reseller_requery_refunds_a_failed_purchase(): void
+    {
+        $a = $this->vendor('va', driver: 'reseller');
+        $this->route($a, 1);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+        $txn->update(['vendor_reference' => 'REMOTE-REF-2']);
+
+        Http::fake(['va.test/api/data/REMOTE-REF-2' => Http::response([
+            'status' => 'success',
+            'transaction_status' => 'refunded',
+            'data' => ['reference' => 'REMOTE-REF-2', 'status' => 'failed'],
+        ], 200)]);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('refunded', $txn->fresh()->status);
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+    }
+
+    /**
+     * Laravel-based vendors content-negotiate: without Accept, a validation
+     * failure comes back as a 302 to the SPA rather than a 422, and the client
+     * follows it into an HTML page reported as 200.
+     */
+    public function test_requests_ask_for_json(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Accept', 'application/json'));
+    }
+
+    /**
+     * A 2xx carrying HTML is a misrouted call, not a vendor rejection. It must
+     * stay ambiguous -- failing over on it would re-send a request whose fate is
+     * unknown -- and the body must survive into the audit.
+     */
+    public function test_non_json_success_response_is_ambiguous_and_kept(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response('<!DOCTYPE html><html><body>Server Error</body></html>', 200),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+
+        $attempt = \App\Models\DataTransactionAttempt::latest('created_at')->first();
+        $this->assertStringContainsString('non-JSON', (string) $attempt->message);
+        $this->assertStringContainsString('DOCTYPE', $attempt->response['_non_json_body'] ?? '');
+    }
+
+    /**
+     * A vendor configured before the auth scheme existed has no `scheme` in its
+     * credentials and must keep sending `Authorization: Token`.
+     */
+    public function test_auth_scheme_defaults_to_token(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Token secret-va'));
+    }
+
+    /**
+     * Scheme is independent of the driver: a style-A payload can go out behind
+     * Bearer without needing a separate driver.
+     */
+    public function test_bearer_scheme_is_sent_with_the_style_a_payload(): void
+    {
+        $a = $this->vendor('va');
+        $a->update(['credentials' => ['key' => 'secret-va', 'scheme' => 'Bearer']]);
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $this->purchase($user);
+
+        Http::assertSent(function ($request) {
+            return $request->hasHeader('Authorization', 'Bearer secret-va')
+                && $request['phone'] === '08031234567'
+                && $request['data_plan'] === '2';
+        });
+    }
+
+    /**
+     * Only a call that got NO response is ambiguous. A dropped connection could
+     * still have been delivered, so it must neither fail over nor refund.
+     */
+    public function test_no_response_does_not_failover_and_stays_processing(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => fn () => throw new ConnectionException('cURL error 28: timed out'),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('processing', $txn->status);
+        $this->assertSame(4300.0, (float) $user->fresh()->balance); // not refunded
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * A 5xx is an answer, so the buyer must not be left watching a spinner: the
+     * purchase is settled and refunded now. But the vendor may have delivered
+     * before breaking, so it must NOT be retried on the next vendor.
+     */
+    public function test_server_error_refunds_without_failing_over(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response('gateway error', 500),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('refunded', $txn->status);
+        $this->assertTrue($txn->isTerminal());
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    /**
+     * A 4xx means the vendor rejected the request outright — nothing was
+     * delivered, so the next vendor is safe to try.
+     */
+    public function test_client_error_fails_over(): void
+    {
+        $this->settings(['failover_enabled' => '1']);
+        $a = $this->vendor('va', priority: 1);
+        $b = $this->vendor('vb', priority: 2);
+        $this->route($a, 1);
+        $this->route($b, 2);
+
+        Http::fake([
+            'va.test/*' => Http::response(['message' => 'invalid plan'], 422),
+            'vb.test/*' => Http::response(['status' => 'success'], 200),
+        ]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user)->fresh();
+
+        $this->assertSame('success', $txn->status);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'vb.test'));
+    }
+
+    public function test_reconciliation_marks_success(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('success', $txn->fresh()->status);
+    }
+
+    public function test_reconciliation_refunds_explicit_failure(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response(['status' => 'failed'], 200)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a);
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('refunded', $txn->fresh()->status);
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+    }
+
+    /**
+     * A purchase treats an error response as a verdict, but a requery must not:
+     * most vendors have no requery contract, so a 404 there means "no such
+     * endpoint", not "the purchase failed". Refunding on it would settle a
+     * possibly-delivered purchase as a clean failure.
+     */
+    public function test_requery_error_response_stays_unconfirmed(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        Http::fake(['va.test/*' => Http::response('not found', 404)]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a); // inside the cutoff
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        // Held, not refunded: still ambiguous until the cutoff passes.
+        $this->assertSame('processing', $txn->fresh()->status);
+    }
+
+    public function test_reconciliation_refunds_unconfirmed_after_cutoff(): void
+    {
+        $a = $this->vendor('va');
+        $this->route($a, 1);
+        // Still no response on requery, so delivery stays unconfirmed.
+        Http::fake(['va.test/*' => fn () => throw new ConnectionException('still down')]);
+
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->stuckProcessing($user, $a, minutesAgo: 200); // older than 120 cutoff
+
+        app(ReconcilePendingTransactions::class)->handle(app(\App\Services\Vendors\VendorDispatcher::class), app(\App\Services\WalletLedger::class));
+
+        $this->assertSame('refunded_unconfirmed', $txn->fresh()->status);
+        $this->assertSame(5000.0, (float) $user->fresh()->balance);
+    }
+
+    public function test_concurrent_purchases_cannot_overspend_one_balance(): void
+    {
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        $user = User::factory()->create(['balance' => 700]); // exactly one plan
+
+        $this->purchase($user); // ok, balance -> 0
+
+        $this->expectException(\App\Exceptions\InsufficientBalanceException::class);
+        $this->purchase($user); // must be rejected
+    }
+
+    public function test_ported_number_succeeds_against_contradicting_network(): void
+    {
+        $this->vendor('va');
+        $this->route(Vendor::first(), 1);
+        Http::fake(['*' => Http::response(['status' => 'success'], 200)]);
+
+        // Phone starts 0805 (a GLO prefix) but the plan/network is MTN. The server
+        // must NOT reject on prefix, and must persist the ported choice.
+        $user = User::factory()->create(['balance' => 5000]);
+        $txn = $this->purchase($user, ['phone' => '08051234567', 'ported' => true])->fresh();
+
+        $this->assertSame('success', $txn->status);
+        $this->assertTrue((bool) $txn->ported);
+        $this->assertDatabaseHas('beneficiaries', [
+            'user_id' => $user->id,
+            'phone' => '08051234567',
+            'is_ported' => true,
+        ]);
+    }
+
+    private function stuckProcessing(User $user, Vendor $vendor, int $minutesAgo = 1): DataTransaction
+    {
+        // Debit then leave in the ambiguous processing state, as the job would.
+        app(\App\Services\WalletLedger::class)->debit($user, 700, 'purchase');
+
+        $txn = DataTransaction::create([
+            'id' => 'Data_'.now()->timestamp.'_'.Str::upper(Str::random(6)),
+            'user_id' => $user->id,
+            'plan_id' => $this->plan->id,
+            'status' => 'processing',
+            'network' => 'mtn',
+            'type' => 'SME',
+            'plan_name' => '1GB',
+            'price' => 700,
+            'phone' => '08031234567',
+            'ported' => false,
+            'attempts' => 1,
+            'oldbal' => 5000,
+            'newbal' => 4300,
+            'vendor_id' => $vendor->id,
+        ]);
+
+        // created_at isn't fillable, so back-date it explicitly for cutoff tests.
+        $txn->forceFill(['created_at' => now()->subMinutes($minutesAgo)])->save();
+
+        return $txn;
+    }
+}

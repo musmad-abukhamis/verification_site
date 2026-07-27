@@ -1,0 +1,100 @@
+<?php
+
+use App\Http\Controllers\Admin\DataPlanController;
+use App\Http\Controllers\Admin\DataPlanApiController;
+use Illuminate\Support\Facades\Route;
+
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataPurchaseController;
+use App\Http\Controllers\NinIpeClearanceController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ValidationController;
+use App\Http\Controllers\VtuController;
+use App\Http\Controllers\VerificationController;
+use App\Http\Controllers\WalletController;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+Route::get('/', function () {
+    return Inertia::render('Welcome', [
+        'canLogin' => Route::has('login'),
+        'canRegister' => Route::has('register'),
+        'laravelVersion' => Application::VERSION,
+        'phpVersion' => PHP_VERSION,
+    ]);
+});
+
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // VTU Routes
+    Route::get('/vtu/airtime', [VtuController::class, 'airtime'])->name('vtu.airtime');
+    Route::post('/vtu/airtime', [VtuController::class, 'purchaseAirtime'])->name('vtu.airtime.purchase');
+    Route::get('/vtu/data', [VtuController::class, 'data'])->name('vtu.data');
+    Route::post('/vtu/data', [VtuController::class, 'purchaseData'])->name('vtu.data.purchase');
+    Route::post('/vtu/verify-phone', [VtuController::class, 'verifyPhone'])->name('vtu.verify-phone');
+    
+    // Buy Data Routes
+    Route::get('/buy-data', [DataPurchaseController::class, 'index'])->name('buy-data');
+    Route::post('/buy-data', [DataPurchaseController::class, 'buyData'])->name('buy-data.purchase');
+    
+    // API Routes for Buy Data
+    Route::get('/api/plans/{network}', [VtuController::class, 'getDataTypes']);
+    Route::get('/api/plans/{network}/{type}', [VtuController::class, 'getDataPlans']);
+    
+    // Verification Routes
+    Route::get('/verification/nin', [VerificationController::class, 'nin'])->name('verification.nin');
+    Route::post('/verification/nin', [VerificationController::class, 'verifyNin'])->name('verification.nin.verify');
+    Route::get('/verification/bvn', [VerificationController::class, 'bvn'])->name('verification.bvn');
+    Route::post('/verification/bvn', [VerificationController::class, 'verifyBvn'])->name('verification.bvn.verify');
+    Route::get('/verification/history', [VerificationController::class, 'history'])->name('verification.history');
+
+    // Wallet Routes
+    Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
+    Route::get('/wallet/fund', [WalletController::class, 'fund'])->name('wallet.fund');
+    Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
+
+    // NIN Validation Routes
+    Route::get('/validation', [ValidationController::class, 'index'])->name('validation.index');
+    Route::post('/validation', [ValidationController::class, 'store'])->name('validation.store');
+    Route::post('/validation/{validation}/check', [ValidationController::class, 'checkStatus'])->name('validation.check');
+
+    // NIN IPE Clearance Routes
+    Route::get('/nin-ipe-clearance', [NinIpeClearanceController::class, 'index'])->name('nin-ipe-clearance.index');
+    Route::post('/nin-ipe-clearance', [NinIpeClearanceController::class, 'store'])->name('nin-ipe-clearance.store');
+    Route::post('/nin-ipe-clearance/{clearance}/check', [NinIpeClearanceController::class, 'checkStatus'])->name('nin-ipe-clearance.check');
+});
+
+Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
+    Route::get('/', function () {
+        return Inertia::render('Admin/Dashboard');
+    })->name('admin.dashboard');
+
+    Route::get('/users', function () {
+        return Inertia::render('Admin/Users');
+    })->name('admin.users');
+
+    Route::get('/settings', function () {
+        return Inertia::render('Admin/Settings');
+    })->name('admin.settings');
+
+    // Data Plan Management Routes
+    Route::resource('dataplan', DataPlanController::class);
+    Route::get('dataplanlist', [DataPlanController::class, 'index'])->name('admin.dataplan.list');
+});
+
+Route::prefix('api/admin')->middleware(['auth', 'admin'])->group(function () {
+    Route::get('dataplan', [DataPlanApiController::class, 'getAll']);
+    Route::get('dataplan/{id}', [DataPlanApiController::class, 'getById']);
+});
+
+require __DIR__.'/auth.php';
+
+
