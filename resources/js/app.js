@@ -22,6 +22,6 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#4B5563',
+        color: '#B8863B', // brass — the one accent, used for "something is happening"
     },
 });

@@ -1,5 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
+import StatusPill from '@/Components/StatusPill.vue';
+import EmptyState from '@/Components/EmptyState.vue';
+import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -34,51 +38,50 @@ const clearFilters = () => {
     applyFilters();
 };
 
-const goToPage = (url) => {
-    if (url) router.visit(url, { preserveState: true, preserveScroll: true });
-};
-
 const formatDate = (date) => {
-    if (!date) return '-';
+    if (!date) return '—';
     return new Date(date).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const statusClass = (s) => {
-    const map = {
-        modified: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        picked: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-        rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        pending: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    };
-    return map[s?.toLowerCase()] || map.pending;
-};
+const money = (amount) =>
+    amount === null || amount === undefined
+        ? '—'
+        : new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount));
 </script>
 
 <template>
     <Head title="My BVN Modification Requests" />
+
     <AuthenticatedLayout>
         <div class="space-y-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">My BVN Modification Requests</h1>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">View and track your submitted BVN modification requests.</p>
-                </div>
-                <Link :href="route('bvn-modification.index')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
-                    New Request
-                </Link>
-            </div>
+            <PageHeader
+                eyebrow="BVN services"
+                title="My modification requests"
+                description="Track the requests you've submitted and what came back."
+            >
+                <template #actions>
+                    <Link :href="route('bvn-modification.index')" class="btn btn-primary">New request</Link>
+                </template>
+            </PageHeader>
 
             <!-- Filters -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-4">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="card card-pad">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
-                        <input v-model="search" type="text" placeholder="Search by BVN, NIN..." @keyup.enter="applyFilters"
-                            class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                        <label for="search" class="eyebrow">Search</label>
+                        <input
+                            id="search"
+                            v-model="search"
+                            type="search"
+                            placeholder="BVN or NIN…"
+                            @keyup.enter="applyFilters"
+                            class="mt-1.5 block w-full font-mono"
+                        />
                     </div>
+
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                        <select v-model="status" @change="applyFilters" class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                        <label for="status" class="eyebrow">Status</label>
+                        <select id="status" v-model="status" @change="applyFilters" class="mt-1.5 block w-full">
                             <option value="all">All statuses</option>
                             <option value="pending">Pending</option>
                             <option value="modified">Modified</option>
@@ -86,81 +89,94 @@ const statusClass = (s) => {
                             <option value="picked">Picked</option>
                         </select>
                     </div>
+
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Service Type</label>
-                        <select v-model="serviceType" @change="applyFilters" class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                        <label for="serviceType" class="eyebrow">Service type</label>
+                        <select id="serviceType" v-model="serviceType" @change="applyFilters" class="mt-1.5 block w-full">
                             <option value="all">All types</option>
-                            <option value="modify-name">Name Modification</option>
-                            <option value="modify-dob">DOB Modification</option>
-                            <option value="modify-name-dob">Name & DOB Modification</option>
-                            <option value="modify-phone">Phone Modification</option>
-                            <option value="modify-name-dob-phone">Name, DOB & Phone Modification</option>
+                            <option value="modify-name">Name modification</option>
+                            <option value="modify-dob">DOB modification</option>
+                            <option value="modify-name-dob">Name &amp; DOB modification</option>
+                            <option value="modify-phone">Phone modification</option>
+                            <option value="modify-name-dob-phone">Name, DOB &amp; phone modification</option>
                         </select>
                     </div>
+
                     <div class="flex items-end gap-2">
-                        <button @click="applyFilters" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg">Search</button>
-                        <button @click="showAdvanced = !showAdvanced" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300">Filters</button>
+                        <button @click="applyFilters" class="btn btn-primary flex-1">Search</button>
+                        <button
+                            @click="showAdvanced = !showAdvanced"
+                            :aria-expanded="showAdvanced"
+                            class="btn btn-secondary"
+                        >
+                            Dates
+                        </button>
                     </div>
                 </div>
-                <div v-if="showAdvanced" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 dark:bg-gray-700/40 rounded-lg">
+
+                <div v-if="showAdvanced" class="mt-4 grid grid-cols-1 gap-4 rounded-lg border rule bg-ink-50 p-4 dark:bg-ink-950/40 md:grid-cols-3">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date From</label>
-                        <input v-model="dateFrom" type="date" @change="applyFilters" class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                        <label for="dateFrom" class="eyebrow">Date from</label>
+                        <input id="dateFrom" v-model="dateFrom" type="date" @change="applyFilters" class="mt-1.5 block w-full" />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date To</label>
-                        <input v-model="dateTo" type="date" @change="applyFilters" class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                        <label for="dateTo" class="eyebrow">Date to</label>
+                        <input id="dateTo" v-model="dateTo" type="date" @change="applyFilters" class="mt-1.5 block w-full" />
                     </div>
                     <div class="flex items-end">
-                        <button @click="clearFilters" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300">Clear All Filters</button>
+                        <button @click="clearFilters" class="btn btn-secondary w-full">Clear all filters</button>
                     </div>
                 </div>
             </div>
 
             <!-- Table -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">BVN</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comment</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prev. Bal</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Bal</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr v-for="r in requests.data" :key="r.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{{ r.bvn }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.service_label }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-[160px] truncate">{{ r.comment || 'No comment' }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(r.created_at) }}</td>
-                                <td class="px-4 py-3">
-                                    <span :class="['inline-flex px-2 py-0.5 text-xs rounded-full font-medium capitalize', statusClass(r.status)]">{{ r.status }}</span>
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{{ r.old_balance ?? 'N/A' }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{{ r.new_balance ?? 'N/A' }}</td>
-                                <td class="px-4 py-3">
-                                    <Link :href="route('bvn-modification.show', r.id)" class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 text-sm font-medium">View Details</Link>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-if="requests.data.length === 0" class="py-10 text-center text-gray-400">No BVN modification requests found.</div>
-
-                <div v-if="requests.total > 0" class="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <p class="text-sm text-gray-500">Showing {{ requests.from }}–{{ requests.to }} of {{ requests.total }}</p>
-                    <div class="flex gap-2">
-                        <button @click="goToPage(requests.prev_page_url)" :disabled="!requests.prev_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Prev</button>
-                        <button @click="goToPage(requests.next_page_url)" :disabled="!requests.next_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Next</button>
+            <section class="card overflow-hidden">
+                <template v-if="requests.data.length">
+                    <div class="scroll-slim overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="t-head">
+                                <tr>
+                                    <th>BVN</th>
+                                    <th>Service type</th>
+                                    <th>Comment</th>
+                                    <th>Submitted</th>
+                                    <th>Status</th>
+                                    <th>Prev. balance</th>
+                                    <th>New balance</th>
+                                    <th><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y rule">
+                                <tr v-for="r in requests.data" :key="r.id" class="t-row">
+                                    <td class="font-mono font-semibold text-ink-950 dark:text-white">{{ r.bvn }}</td>
+                                    <td class="text-ink-700 dark:text-ink-200">{{ r.service_label }}</td>
+                                    <td class="max-w-[160px] truncate text-ink-600 dark:text-ink-300" :title="r.comment">
+                                        {{ r.comment || '—' }}
+                                    </td>
+                                    <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ formatDate(r.created_at) }}</td>
+                                    <td><StatusPill :status="r.status" /></td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ money(r.old_balance) }}</td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ money(r.new_balance) }}</td>
+                                    <td class="text-right">
+                                        <Link :href="route('bvn-modification.show', r.id)" class="link text-sm">View</Link>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </div>
+
+                    <Pagination :paginator="requests" label="requests" />
+                </template>
+
+                <EmptyState
+                    v-else
+                    title="No modification requests"
+                    description="Nothing matches these filters yet. Submit a request and you can track it from here."
+                    icon="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                >
+                    <Link :href="route('bvn-modification.index')" class="btn btn-primary btn-sm">New request</Link>
+                </EmptyState>
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

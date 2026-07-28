@@ -6,9 +6,15 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
-        <!-- Fonts -->
+        <meta name="theme-color" content="#10402F" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#0A1512" media="(prefers-color-scheme: dark)">
+
+        {{-- Space Grotesk: display. Public Sans: UI. IBM Plex Mono: IDs, refs, money. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <link
+            href="https://fonts.bunny.net/css?family=space-grotesk:500,600,700|public-sans:400,500,600,700|ibm-plex-mono:400,500,600&display=swap"
+            rel="stylesheet"
+        />
 
         <!-- Dark Mode Script - Prevents Flash -->
         <script>

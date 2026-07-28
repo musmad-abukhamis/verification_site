@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 
 const isDark = ref(false);
 
@@ -21,14 +21,14 @@ const updateDarkMode = () => {
 onMounted(() => {
     // Check localStorage first
     const stored = localStorage.getItem('darkMode');
-    
+
     if (stored !== null) {
         isDark.value = stored === 'true';
     } else {
         // Check system preference
         isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    
+
     updateDarkMode();
 });
 
@@ -46,17 +46,15 @@ if (typeof window !== 'undefined') {
 <template>
     <button
         @click="toggleDarkMode"
-        class="relative inline-flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white"
         :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+        :aria-pressed="isDark"
     >
-        <!-- Sun Icon (Light Mode) -->
-        <svg
-            v-if="isDark"
-            class="w-5 h-5 text-yellow-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
+        <span class="sr-only">{{ isDark ? 'Switch to light mode' : 'Switch to dark mode' }}</span>
+
+        <!-- Sun -->
+        <svg v-if="isDark" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -64,14 +62,9 @@ if (typeof window !== 'undefined') {
                 d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
             />
         </svg>
-        <!-- Moon Icon (Dark Mode) -->
-        <svg
-            v-else
-            class="w-5 h-5 text-gray-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
+
+        <!-- Moon -->
+        <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

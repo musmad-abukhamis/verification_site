@@ -1,5 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
+import StatusPill from '@/Components/StatusPill.vue';
+import EmptyState from '@/Components/EmptyState.vue';
+import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -23,130 +27,119 @@ watch([search, status], () => {
     }, 300);
 });
 
-const money = (n) => '₦' + Number(n ?? 0).toLocaleString('en-NG');
-
-const badge = (s) => ({
-    success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-    pending: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
-    processing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    fail: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    refunded: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    refunded_unconfirmed: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-}[s] || 'bg-gray-100 text-gray-700');
+const money = (n) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(n ?? 0));
 </script>
 
 <template>
     <Head title="My Data Purchases" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">My Data Purchases</h2>
-        </template>
+        <div class="space-y-6">
+            <PageHeader
+                eyebrow="Data"
+                title="My data purchases"
+                description="Every bundle you've sent, with the vendor reference for anything you need to dispute."
+            >
+                <template #actions>
+                    <Link :href="route('buy-data')" class="btn btn-primary">Buy data</Link>
+                </template>
+            </PageHeader>
 
-        <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-            <div class="mb-4 flex flex-col gap-3 sm:flex-row">
-                <input
-                    v-model="search"
-                    type="text"
-                    placeholder="Search reference, plan, phone…"
-                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                />
-                <select
-                    v-model="status"
-                    class="rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                >
-                    <option value="all">All statuses</option>
-                    <option value="success">Success</option>
-                    <option value="processing">Processing</option>
-                    <option value="pending">Pending</option>
-                    <option value="fail">Failed</option>
-                    <option value="refunded">Refunded</option>
-                    <option value="refunded_unconfirmed">Refunded (unconfirmed)</option>
-                </select>
+            <div class="card card-pad">
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <input
+                        v-model="search"
+                        type="search"
+                        placeholder="Search reference, plan, phone…"
+                        class="w-full"
+                        aria-label="Search purchases"
+                    />
+                    <select v-model="status" aria-label="Filter by status">
+                        <option value="all">All statuses</option>
+                        <option value="success">Success</option>
+                        <option value="processing">Processing</option>
+                        <option value="pending">Pending</option>
+                        <option value="fail">Failed</option>
+                        <option value="refunded">Refunded</option>
+                        <option value="refunded_unconfirmed">Refunded (unconfirmed)</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-gray-800">
-                <p v-if="!transactions.data.length" class="px-4 py-10 text-center text-gray-500">No purchases yet.</p>
-
-                <template v-else>
-                    <!-- Desktop table -->
-                    <div class="hidden overflow-x-auto md:block">
-                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900/40">
+            <section class="card overflow-hidden">
+                <template v-if="transactions.data.length">
+                    <!-- Desktop -->
+                    <div class="scroll-slim hidden overflow-x-auto md:block">
+                        <table class="min-w-full">
+                            <thead class="t-head">
                                 <tr>
-                                    <th class="px-4 py-3">Plan</th>
-                                    <th class="px-4 py-3">Phone</th>
-                                    <th class="px-4 py-3">Amount</th>
-                                    <th class="px-4 py-3">Status</th>
-                                    <th class="px-4 py-3">Date</th>
+                                    <th>Plan</th>
+                                    <th>Phone</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100 text-sm dark:divide-gray-700">
-                                <tr v-for="t in transactions.data" :key="t.reference">
-                                    <td class="px-4 py-3">
-                                        <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.network?.toUpperCase() }} · {{ t.plan_name }}</p>
-                                        <p class="font-mono text-xs text-gray-400">{{ t.reference }}</p>
+                            <tbody class="divide-y rule">
+                                <tr v-for="t in transactions.data" :key="t.reference" class="t-row">
+                                    <td>
+                                        <p class="font-semibold text-ink-900 dark:text-ink-100">
+                                            {{ t.network?.toUpperCase() }} · {{ t.plan_name }}
+                                        </p>
+                                        <p class="mt-0.5 font-mono text-xs text-ink-400 dark:text-ink-500">{{ t.reference }}</p>
                                     </td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-gray-300">{{ t.phone }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 font-medium">{{ money(t.price) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3">
-                                        <span class="rounded-full px-2 py-1 text-xs font-semibold capitalize" :class="badge(t.status)">
-                                            {{ t.status.replace('_', ' ') }}
-                                        </span>
+                                    <td class="whitespace-nowrap font-mono text-ink-600 dark:text-ink-300">{{ t.phone }}</td>
+                                    <td class="whitespace-nowrap font-mono font-semibold text-ink-950 dark:text-white">
+                                        {{ money(t.price) }}
                                     </td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-gray-500 dark:text-gray-400">{{ t.date }}</td>
+                                    <td><StatusPill :status="t.status" /></td>
+                                    <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ t.date }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <!-- Mobile cards -->
-                    <div class="divide-y divide-gray-100 dark:divide-gray-700 md:hidden">
-                        <div v-for="t in transactions.data" :key="t.reference" class="space-y-3 p-4">
+                    <!-- Mobile -->
+                    <div class="divide-y rule md:hidden">
+                        <article v-for="t in transactions.data" :key="t.reference" class="space-y-3 p-4">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.network?.toUpperCase() }} · {{ t.plan_name }}</p>
-                                    <p class="truncate font-mono text-xs text-gray-400">{{ t.reference }}</p>
+                                    <p class="font-semibold text-ink-900 dark:text-ink-100">
+                                        {{ t.network?.toUpperCase() }} · {{ t.plan_name }}
+                                    </p>
+                                    <p class="mt-0.5 truncate font-mono text-xs text-ink-400 dark:text-ink-500">{{ t.reference }}</p>
                                 </div>
-                                <span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold capitalize" :class="badge(t.status)">
-                                    {{ t.status.replace('_', ' ') }}
-                                </span>
+                                <StatusPill :status="t.status" />
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <p class="text-gray-500 dark:text-gray-400">Phone</p>
-                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ t.phone }}</p>
+                                    <p class="eyebrow">Phone</p>
+                                    <p class="mt-0.5 font-mono text-sm text-ink-800 dark:text-ink-100">{{ t.phone }}</p>
                                 </div>
                                 <div>
-                                    <p class="text-gray-500 dark:text-gray-400">Amount</p>
-                                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ money(t.price) }}</p>
+                                    <p class="eyebrow">Amount</p>
+                                    <p class="mt-0.5 font-mono text-sm font-semibold text-ink-950 dark:text-white">{{ money(t.price) }}</p>
                                 </div>
                             </div>
 
-                            <p class="text-right text-xs text-gray-400">{{ t.date }}</p>
-                        </div>
+                            <p class="text-right text-xs text-ink-400 dark:text-ink-500">{{ t.date }}</p>
+                        </article>
                     </div>
-                </template>
-            </div>
 
-            <div v-if="transactions.links && transactions.links.length > 3" class="mt-4 flex flex-wrap gap-1">
-                <template v-for="(link, i) in transactions.links" :key="i">
-                    <Link
-                        v-if="link.url"
-                        :href="link.url"
-                        preserve-scroll
-                        class="rounded-lg px-3 py-1 text-sm"
-                        :class="link.active ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300'"
-                        v-html="link.label"
-                    />
-                    <span
-                        v-else
-                        class="rounded-lg px-3 py-1 text-sm text-gray-300"
-                        v-html="link.label"
-                    />
+                    <Pagination :paginator="transactions" label="purchases" />
                 </template>
-            </div>
+
+                <EmptyState
+                    v-else
+                    title="No purchases yet"
+                    description="Bundles you send will be listed here with their vendor reference and delivery status."
+                    icon="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+                >
+                    <Link :href="route('buy-data')" class="btn btn-primary btn-sm">Buy data</Link>
+                </EmptyState>
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

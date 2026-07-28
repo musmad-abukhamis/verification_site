@@ -70,7 +70,7 @@ const timeRemaining = (iso) => {
     <Teleport to="body">
         <div v-if="visible && latest" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click="close">
             <div class="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden" @click.stop>
-                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+                <div class="absolute left-0 top-0 h-1 w-full bg-brass-500"></div>
 
                 <div class="p-6 pb-4 flex items-start justify-between">
                     <div class="flex items-center gap-3">

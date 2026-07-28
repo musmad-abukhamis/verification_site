@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { SignalIcon } from '@heroicons/vue/24/outline';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
@@ -24,11 +25,13 @@ const phone = ref('');
 const ported = ref(false);
 const manualNetwork = ref(false);
 
+// The operators' own colours — the one place non-system colour is allowed,
+// because these are marks a user recognises before they read the label.
 const brandTint = {
-    mtn: 'text-yellow-500',
-    airtel: 'text-red-600',
-    glo: 'text-green-600',
-    '9mobile': 'text-emerald-600',
+    mtn: 'text-warning-500',
+    airtel: 'text-danger-600',
+    glo: 'text-success-600',
+    '9mobile': 'text-success-700',
 };
 
 const money = (n) => '₦' + Number(n ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 0 });
@@ -125,7 +128,7 @@ const submit = async (plan = selectedPlan.value) => {
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Buy now',
-        confirmButtonColor: '#2563eb',
+        confirmButtonColor: '#10402F',
     });
 
     if (!result.isConfirmed) return;
@@ -239,13 +242,14 @@ onBeforeUnmount(stopPolling);
 const statusColor = computed(() => {
     switch (props.transaction?.status) {
         case 'success':
-            return 'text-green-600 dark:text-green-400';
+            return 'text-success-700 dark:text-success-400';
         case 'refunded':
         case 'refunded_unconfirmed':
+            return 'text-refund-700 dark:text-refund-300';
         case 'fail':
-            return 'text-red-600 dark:text-red-400';
+            return 'text-danger-700 dark:text-danger-400';
         default:
-            return 'text-blue-600 dark:text-blue-400';
+            return 'text-info-700 dark:text-info-300';
     }
 });
 </script>
@@ -254,37 +258,47 @@ const statusColor = computed(() => {
     <Head title="Buy Data" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-100">Buy Data</h2>
-        </template>
-
-        <div class="mx-auto max-w-2xl px-4 py-6 sm:px-6 lg:px-8">
+        <div class="space-y-6">
             <!-- ============================ STATUS VIEW =========================== -->
-            <div
-                v-if="transaction"
-                class="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-800"
-            >
-                <div class="flex flex-col items-center text-center">
+            <!-- A completed purchase is a receipt, so it is shown as one. -->
+            <section v-if="transaction" class="slip">
+                <div class="slip-guilloche flex flex-col items-center rounded-t-card px-6 pb-6 pt-8 text-center">
                     <svg
                         v-if="!transaction.terminal"
-                        class="mb-4 h-12 w-12 animate-spin text-blue-600"
+                        class="mb-4 h-10 w-10 animate-spin text-brand-700 dark:text-brand-300"
                         viewBox="0 0 24 24" fill="none"
                     >
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    <h3 class="text-lg font-semibold" :class="statusColor">
+
+                    <p class="eyebrow">Data purchase</p>
+                    <h1 class="mt-1 font-display text-2xl font-bold capitalize tracking-tight" :class="statusColor">
                         {{ transaction.terminal ? transaction.status.replace('_', ' ') : 'Processing…' }}
-                    </h3>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ transaction.message }}</p>
+                    </h1>
+                    <p class="mt-2 max-w-sm text-sm text-ink-500 dark:text-ink-400">{{ transaction.message }}</p>
+                </div>
 
-                    <dl class="mt-5 w-full space-y-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-gray-900/40">
-                        <div class="flex justify-between"><dt class="text-gray-500">Plan</dt><dd class="font-medium">{{ transaction.plan_name }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">Amount</dt><dd class="font-medium">{{ money(transaction.price) }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">Phone</dt><dd class="font-medium">{{ transaction.phone }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-gray-500">Reference</dt><dd class="font-mono text-xs">{{ transaction.reference }}</dd></div>
-                    </dl>
+                <dl class="slip-tear divide-y rule">
+                    <div class="flex items-center justify-between gap-4 px-6 py-3">
+                        <dt class="eyebrow">Plan</dt>
+                        <dd class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ transaction.plan_name }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 px-6 py-3">
+                        <dt class="eyebrow">Amount</dt>
+                        <dd class="font-mono text-sm font-semibold text-ink-950 dark:text-white">{{ money(transaction.price) }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 px-6 py-3">
+                        <dt class="eyebrow">Phone</dt>
+                        <dd class="font-mono text-sm text-ink-800 dark:text-ink-100">{{ transaction.phone }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 px-6 py-3">
+                        <dt class="eyebrow">Reference</dt>
+                        <dd class="truncate font-mono text-xs text-ink-500 dark:text-ink-400">{{ transaction.reference }}</dd>
+                    </div>
+                </dl>
 
+                <div class="border-t rule p-4">
                     <!--
                         Only offered once the transaction is terminal. Leaving it
                         live during processing invites a second purchase before
@@ -293,30 +307,29 @@ const statusColor = computed(() => {
                     <Link
                         v-if="transaction.terminal"
                         :href="route('buy-data')"
-                        class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
+                        class="btn btn-primary btn-lg w-full"
                     >
                         Buy more data
                     </Link>
-                    <button
-                        v-else
-                        type="button"
-                        disabled
-                        class="mt-6 inline-flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-gray-300 px-4 py-3 font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                    >
+                    <button v-else type="button" disabled class="btn btn-secondary btn-lg w-full">
                         Please wait…
                     </button>
                 </div>
-            </div>
+            </section>
 
             <!-- ============================ PURCHASE FORM ========================= -->
-            <div v-else class="space-y-5">
+            <template v-else>
+                <PageHeader eyebrow="Data" title="Buy data" description="Pick a number, pick a bundle. Charged to your wallet." />
+
                 <!-- balance -->
-                <div class="flex items-center justify-between rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
+                <div class="card flex items-center justify-between gap-4 px-5 py-4">
                     <div>
-                        <p class="text-xs uppercase tracking-wide text-blue-100">Wallet balance</p>
-                        <p class="text-2xl font-bold">{{ money(balance) }}</p>
+                        <p class="eyebrow">Wallet balance</p>
+                        <p class="mt-1 font-mono text-2xl font-semibold tracking-tight text-ink-950 dark:text-white">
+                            {{ money(balance) }}
+                        </p>
                     </div>
-                    <Link :href="route('wallet.fund')" class="rounded-lg bg-white/15 px-3 py-2 text-sm font-medium hover:bg-white/25">Fund</Link>
+                    <Link :href="route('wallet.fund')" class="btn btn-accent btn-sm">Fund</Link>
                 </div>
 
                 <!-- buy again -->
@@ -324,24 +337,30 @@ const statusColor = computed(() => {
                     v-if="lastPurchase"
                     type="button"
                     @click="buyAgain"
-                    class="flex w-full items-center justify-between rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-900 dark:bg-blue-950/40"
+                    class="flex w-full items-center justify-between gap-3 rounded-card border border-brass-300 bg-brass-50 p-4 text-left transition hover:bg-brass-100 dark:border-brass-800 dark:bg-brass-950/40 dark:hover:bg-brass-950/70"
                 >
-                    <span class="text-sm">
-                        <span class="font-semibold text-blue-700 dark:text-blue-300">Buy again:</span>
-                        {{ lastPurchase.plan_name }} → {{ lastPurchase.phone }}
+                    <span class="min-w-0 text-sm text-ink-700 dark:text-ink-200">
+                        <span class="font-semibold text-brass-800 dark:text-brass-300">Buy again:</span>
+                        {{ lastPurchase.plan_name }} → <span class="font-mono">{{ lastPurchase.phone }}</span>
                     </span>
-                    <span class="text-xs font-semibold text-blue-700 dark:text-blue-300">Tap to repeat →</span>
+                    <span class="shrink-0 text-xs font-semibold text-brass-800 dark:text-brass-300">Repeat →</span>
                 </button>
 
+                <!-- Two columns on desktop: what you're sending to on the left,
+                     what you're sending on the right. Stacks on mobile. -->
+                <div class="grid gap-5 lg:grid-cols-5">
+                <div class="space-y-5 lg:col-span-2">
+
                 <!-- phone -->
-                <div class="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
-                    <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Phone number</label>
+                <div class="card card-pad">
+                    <label for="phone" class="eyebrow">Phone number</label>
                     <input
+                        id="phone"
                         v-model="phone"
                         type="tel"
                         inputmode="numeric"
                         placeholder="08012345678"
-                        class="w-full rounded-xl border-gray-300 text-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                        class="mt-1.5 block w-full font-mono text-lg"
                     />
 
                     <!-- beneficiaries -->
@@ -351,24 +370,24 @@ const statusColor = computed(() => {
                             :key="b.phone"
                             type="button"
                             @click="pickBeneficiary(b)"
-                            class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
+                            class="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700 transition hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700"
                         >
                             {{ b.label || b.phone }}
                         </button>
                     </div>
 
                     <!-- suggestion / mismatch -->
-                    <p v-if="hint.suggestion.value && !hint.mismatch.value" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <p v-if="hint.suggestion.value && !hint.mismatch.value" class="mt-2 text-xs text-ink-500 dark:text-ink-400">
                         {{ hint.suggestion.value }}
                     </p>
-                    <p v-if="hint.mismatch.value" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    <p v-if="hint.mismatch.value" class="mt-2 text-xs text-warning-700 dark:text-warning-400">
                         {{ hint.mismatchNote.value }}.
                         <button type="button" class="font-semibold underline" @click="ported = true">Ported number?</button>
                     </p>
 
                     <!-- ported toggle -->
-                    <label class="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                        <input v-model="ported" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                    <label class="mt-3 flex items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
+                        <input v-model="ported" type="checkbox" />
                         This is a ported number
                     </label>
                 </div>
@@ -380,12 +399,13 @@ const statusColor = computed(() => {
                         :key="n.value"
                         type="button"
                         @click="pickNetwork(n.value)"
-                        class="flex flex-col items-center gap-1 rounded-xl border p-3 text-xs font-semibold transition"
+                        :aria-pressed="selectedNetwork === n.value"
+                        class="flex flex-col items-center gap-1.5 rounded-card border p-3 text-xs font-semibold transition"
                         :class="selectedNetwork === n.value
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
-                            : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'"
+                            ? 'border-brand-700 bg-brand-50 text-brand-900 dark:border-brand-500 dark:bg-brand-950/60 dark:text-white'
+                            : 'border-ink-200 bg-white text-ink-600 hover:border-ink-300 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-300'"
                     >
-                        <SignalIcon class="h-6 w-6" :class="brandTint[n.value] || 'text-gray-400'" />
+                        <SignalIcon class="h-6 w-6" :class="brandTint[n.value] || 'text-ink-400'" />
                         {{ n.label }}
                     </button>
                 </div>
@@ -398,52 +418,56 @@ const statusColor = computed(() => {
                         type="button"
                         :disabled="!t.available"
                         @click="t.available && (selectedType = t.type)"
-                        class="rounded-full px-3 py-1 text-xs font-semibold transition"
+                        class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
                         :class="[
                             !t.available
-                                ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800'
+                                ? 'cursor-not-allowed bg-ink-100 text-ink-400 dark:bg-ink-800 dark:text-ink-500'
                                 : selectedType === t.type
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200',
+                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    : 'bg-ink-100 text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700',
                         ]"
                     >
                         {{ t.type }}<span v-if="!t.available"> (Unavailable)</span>
                     </button>
                 </div>
 
+                </div><!-- /left column -->
+
+                <div class="space-y-5 lg:col-span-3">
+
                 <!-- plan cards -->
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     <button
                         v-for="p in filteredPlans"
                         :key="p.id"
                         type="button"
                         @click="selectedPlanId = p.id"
-                        class="rounded-xl border p-3 text-left transition"
+                        :aria-pressed="selectedPlanId === p.id"
+                        class="rounded-card border p-3 text-left transition"
                         :class="selectedPlanId === p.id
-                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 dark:bg-blue-950/40'
-                            : 'border-gray-200 bg-white hover:border-blue-300 dark:border-gray-700 dark:bg-gray-800'"
+                            ? 'border-brand-700 bg-brand-50 ring-1 ring-brand-700 dark:border-brand-500 dark:bg-brand-950/60 dark:ring-brand-500'
+                            : 'border-ink-200 bg-white hover:border-brand-300 dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-700'"
                     >
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ p.name }}</p>
-                        <p class="text-lg font-bold text-blue-600 dark:text-blue-400">{{ money(p.price) }}</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ p.validity }}</p>
+                        <p class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ p.name }}</p>
+                        <p class="mt-0.5 font-mono text-lg font-semibold text-brand-800 dark:text-brand-300">{{ money(p.price) }}</p>
+                        <p class="mt-0.5 text-xs text-ink-500 dark:text-ink-400">{{ p.validity }}</p>
                     </button>
-                    <p v-if="!filteredPlans.length" class="col-span-full py-6 text-center text-sm text-gray-500">
+
+                    <p v-if="!filteredPlans.length" class="col-span-full py-6 text-center text-sm text-ink-500 dark:text-ink-400">
                         No plans available for this selection.
                     </p>
                 </div>
 
                 <!-- buy button -->
-                <button
-                    type="button"
-                    :disabled="!canSubmit"
-                    @click="submit()"
-                    class="w-full rounded-xl bg-blue-600 px-4 py-4 text-center font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-gray-700"
-                >
+                <button type="button" :disabled="!canSubmit" @click="submit()" class="btn btn-primary btn-lg w-full">
                     <span v-if="form.processing">Starting…</span>
                     <span v-else-if="selectedPlan">Buy {{ selectedPlan.name }} — {{ money(selectedPlan.price) }}</span>
-                    <span v-else>Buy Data</span>
+                    <span v-else>Buy data</span>
                 </button>
-            </div>
+
+                </div><!-- /right column -->
+                </div><!-- /two-column grid -->
+            </template>
         </div>
     </AuthenticatedLayout>
 </template>

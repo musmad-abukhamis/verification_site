@@ -1,3 +1,293 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =========================================================================
+   Ledger — base
+
+   No gradients. Depth comes from three flat tints of one sage family —
+   canvas, card, and the well under a table head — separated by a hairline
+   and a shallow shadow. Colour is spent on pine chrome, brass accent and
+   the status scale, never on the surfaces themselves.
+   ========================================================================= */
+
+@layer base {
+    :root {
+        /* The colour sitting *behind* a slip, so its notches can be punched
+           out of it. Must match the canvas exactly. */
+        --slip-behind: #d9e5dc;  /* ink-100 */
+        --hairline: 198 214 203; /* ink-200 */
+    }
+
+    .dark {
+        --slip-behind: #0a1713;  /* ink-950 */
+        --hairline: 37 56 47;    /* ink-800 */
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-ink-100 text-ink-700 antialiased dark:bg-ink-950 dark:text-ink-300;
+        font-feature-settings: 'cv05' 1, 'ss01' 1;
+    }
+
+    /* Money, IDs and references are compared column-to-column constantly.
+       Lock every digit to the same advance width app-wide. */
+    .font-mono,
+    table,
+    input,
+    output {
+        font-variant-numeric: tabular-nums;
+    }
+
+    h1, h2, h3, h4 {
+        @apply font-display text-ink-950 dark:text-white;
+        text-wrap: balance;
+    }
+
+    p {
+        text-wrap: pretty;
+    }
+
+    ::selection {
+        @apply bg-brass-200 text-ink-950;
+    }
+
+    /* One focus treatment everywhere: a brass ring that reads on both pine
+       chrome and paper surfaces. */
+    :focus-visible {
+        @apply outline-none ring-2 ring-brass-500 ring-offset-2 ring-offset-white dark:ring-offset-ink-950;
+    }
+
+    [type='text'],
+    [type='email'],
+    [type='url'],
+    [type='password'],
+    [type='number'],
+    [type='date'],
+    [type='datetime-local'],
+    [type='month'],
+    [type='search'],
+    [type='tel'],
+    [type='time'],
+    [type='week'],
+    [multiple],
+    textarea,
+    select {
+        @apply rounded-lg border-ink-300 bg-white text-ink-900 shadow-sm transition
+               placeholder:text-ink-400
+               focus:border-brand-600 focus:ring-brand-600
+               dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100 dark:placeholder:text-ink-500;
+    }
+
+    /* The forms plugin hardcodes #fff on these; override it so even a
+       checkbox sits on tinted paper. */
+    [type='checkbox'],
+    [type='radio'] {
+        @apply rounded border-ink-300 bg-white text-brand-800 focus:ring-brand-600
+               dark:border-ink-600 dark:bg-ink-800;
+    }
+
+    /* Scrollbars inside data panes, so horizontal scroll is discoverable
+       rather than an invisible affordance. */
+    .scroll-slim {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(127 152 135 / 0.6) transparent;
+    }
+    .scroll-slim::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+    }
+    .scroll-slim::-webkit-scrollbar-thumb {
+        @apply rounded-full bg-ink-300 dark:bg-ink-700;
+    }
+    .scroll-slim::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+/* =========================================================================
+   Ledger — components
+   ========================================================================= */
+
+@layer components {
+    /* ---- Eyebrow / field label -------------------------------------- */
+    .eyebrow {
+        @apply text-2xs font-semibold uppercase tracking-[0.14em] text-ink-500 dark:text-ink-400;
+    }
+
+    /* ---- Surfaces ----------------------------------------------------
+       One flat tint, lighter than the canvas. The hairline does the
+       separating; the shadow only hints at lift. */
+    .card {
+        @apply rounded-card border border-ink-200 bg-white shadow-card dark:border-ink-800 dark:bg-ink-900;
+    }
+
+    .card-pad {
+        @apply p-5 sm:p-6;
+    }
+
+    /* Hairline divider that survives dark mode without a second class. */
+    .rule {
+        @apply border-ink-200 dark:border-ink-800;
+    }
+
+    /* ---- Buttons ------------------------------------------------------ */
+    .btn {
+        @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg
+               px-4 py-2.5 text-sm font-semibold transition
+               disabled:pointer-events-none disabled:opacity-50;
+    }
+
+    .btn-primary {
+        @apply bg-brand-800 text-white shadow-sm hover:bg-brand-900 active:bg-brand-950
+               dark:bg-brand-700 dark:hover:bg-brand-600;
+    }
+
+    /* The one place brass carries an action: funding the wallet. */
+    .btn-accent {
+        @apply bg-brass-500 text-ink-950 shadow-sm hover:bg-brass-400 active:bg-brass-600;
+    }
+
+    .btn-secondary {
+        @apply border border-ink-300 bg-white text-ink-800 hover:bg-ink-50
+               dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100 dark:hover:bg-ink-800;
+    }
+
+    .btn-ghost {
+        @apply text-ink-600 hover:bg-ink-100 hover:text-ink-900
+               dark:text-ink-300 dark:hover:bg-ink-800 dark:hover:text-white;
+    }
+
+    .btn-danger {
+        @apply bg-danger-600 text-white shadow-sm hover:bg-danger-700;
+    }
+
+    .btn-sm {
+        @apply px-3 py-1.5 text-xs;
+    }
+
+    .btn-lg {
+        @apply px-6 py-3.5 text-base;
+    }
+
+    /* ---- Status pills --------------------------------------------------
+       Always dot + word. Colour is reinforcement, never the sole signal. */
+    .pill {
+        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1
+               text-xs font-semibold capitalize;
+    }
+
+    .pill::before {
+        content: '';
+        @apply h-1.5 w-1.5 rounded-full bg-current opacity-70;
+    }
+
+    .pill-success  { @apply bg-success-50 text-success-700 dark:bg-success-950 dark:text-success-300; }
+    .pill-pending  { @apply bg-warning-50 text-warning-700 dark:bg-warning-950 dark:text-warning-300; }
+    .pill-info     { @apply bg-info-50    text-info-700    dark:bg-info-950    dark:text-info-300; }
+    .pill-danger   { @apply bg-danger-50  text-danger-700  dark:bg-danger-950  dark:text-danger-300; }
+    .pill-refund   { @apply bg-refund-50  text-refund-700  dark:bg-refund-950  dark:text-refund-300; }
+    .pill-neutral  { @apply bg-ink-100    text-ink-600     dark:bg-ink-800     dark:text-ink-300; }
+    .pill-brass    { @apply bg-brass-50   text-brass-700   dark:bg-brass-950   dark:text-brass-300; }
+
+    /* ---- The slip ------------------------------------------------------
+       Signature element. A record in this product *is* a receipt, so the
+       card that shows one carries a torn-ticket edge: a punched notch on
+       each side and a dotted tear line between the header and the detail.
+       Used on the wallet balance and transaction records only. */
+    .slip {
+        @apply relative rounded-card border border-ink-200 bg-white shadow-card
+               dark:border-ink-800 dark:bg-ink-900;
+    }
+
+    .slip-tear {
+        @apply relative border-t border-dashed border-ink-300 dark:border-ink-700;
+    }
+
+    .slip-tear::before,
+    .slip-tear::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        height: 16px;
+        width: 16px;
+        transform: translateY(-50%);
+        border-radius: 9999px;
+        background: var(--slip-behind);
+    }
+
+    .slip-tear::before {
+        left: -9px;
+        box-shadow: inset -1px 0 0 rgb(var(--hairline));
+    }
+
+    .slip-tear::after {
+        right: -9px;
+        box-shadow: inset 1px 0 0 rgb(var(--hairline));
+    }
+
+    /* Guilloche-ish security hatch, for the wallet slip only. Two crossed
+       low-contrast line grids — the texture of engraved document stock.
+       A pattern, not a gradient: it repeats at a fixed pitch and reads the
+       same at any card height. */
+    .slip-guilloche {
+        background-image:
+            repeating-linear-gradient(45deg,  rgb(184 134 59 / 0.07) 0 1px, transparent 1px 7px),
+            repeating-linear-gradient(-45deg, rgb(184 134 59 / 0.07) 0 1px, transparent 1px 7px);
+    }
+
+    /* ---- Data table ---------------------------------------------------- */
+    .t-head {
+        @apply bg-ink-50 text-left text-2xs font-semibold uppercase tracking-[0.12em]
+               text-ink-500 dark:bg-ink-950/40 dark:text-ink-400;
+    }
+
+    .t-head th {
+        @apply whitespace-nowrap px-4 py-3;
+    }
+
+    .t-row {
+        @apply transition-colors hover:bg-brand-50/60 dark:hover:bg-brand-950/30;
+    }
+
+    .t-row td {
+        @apply px-4 py-3 text-sm;
+    }
+
+    /* ---- Link ----------------------------------------------------------- */
+    .link {
+        @apply font-medium text-brand-700 underline-offset-2 hover:text-brand-900 hover:underline
+               dark:text-brand-300 dark:hover:text-brand-200;
+    }
+
+    /* ---- Skeleton ------------------------------------------------------- */
+    .skeleton {
+        @apply animate-sheen rounded bg-ink-200 dark:bg-ink-800;
+        background-image: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgb(255 255 255 / 0.45) 50%,
+            transparent 100%
+        );
+        background-size: 200% 100%;
+    }
+}
+
+/* =========================================================================
+   Motion preferences
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

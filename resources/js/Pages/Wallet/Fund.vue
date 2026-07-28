@@ -1,15 +1,17 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import EmptyState from '@/Components/EmptyState.vue';
 import Modal from '@/Components/Modal.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 
-const props = defineProps({
+defineProps({
     wallet: Object,
     reserved_accounts: { type: Array, default: () => [] },
 });
@@ -17,8 +19,6 @@ const props = defineProps({
 const page = usePage();
 const showModal = ref(false);
 const copied = ref(null);
-
-const authUser = computed(() => page.props.auth?.user ?? {});
 
 // BVN is the only input PayVessel needs: the account name comes from the
 // user's registered name, and both banks are issued in one request.
@@ -62,93 +62,97 @@ const copy = async (value) => {
     <Head title="Fund Wallet" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Fund Wallet</h2>
-        </template>
+        <div class="mx-auto max-w-3xl space-y-6">
+            <PageHeader
+                eyebrow="Wallet"
+                title="Fund wallet"
+                description="Transfer to any of your accounts below. Credits land automatically once the transfer clears."
+            />
 
-        <div>
-            <div class="max-w-3xl mx-auto space-y-6">
-                <!-- Balance -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                        <h3 class="text-lg font-medium mb-2">Current Balance</h3>
-                        <p class="text-3xl font-bold">{{ formatCurrency(wallet.total_balance) }}</p>
-                    </div>
-                </div>
-
-                <!-- Flash -->
-                <div v-if="page.props.flash?.success" class="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-700">
-                    {{ page.props.flash.success }}
-                </div>
-
-                <!-- Reserved accounts -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 class="text-lg font-medium text-gray-900">Your Virtual Accounts</h3>
-                                <p class="text-sm text-gray-500">Transfer to any account below to fund your wallet instantly.</p>
-                            </div>
-                            <PrimaryButton @click="openModal">+ Add Account</PrimaryButton>
-                        </div>
-
-                        <div v-if="reserved_accounts.length === 0" class="text-center py-10">
-                            <p class="text-gray-500 mb-4">You don't have a virtual account yet.</p>
-                            <PrimaryButton @click="openModal">Create Virtual Account</PrimaryButton>
-                        </div>
-
-                        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div
-                                v-for="acct in reserved_accounts"
-                                :key="acct.account_number"
-                                class="border border-gray-200 rounded-lg p-4 flex flex-col gap-2"
-                            >
-                                <div class="text-xs font-medium text-indigo-600 uppercase">{{ acct.bank }}</div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-2xl font-mono font-bold tracking-wide">{{ acct.account_number }}</span>
-                                    <button
-                                        type="button"
-                                        class="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
-                                        @click="copy(acct.account_number)"
-                                    >
-                                        {{ copied === acct.account_number ? 'Copied' : 'Copy' }}
-                                    </button>
-                                </div>
-                                <div class="text-sm text-gray-600">{{ acct.account_name }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
-                    Funds reflect automatically once your transfer is confirmed. Virtual accounts are created with BVN KYC verification.
-                </div>
+            <div v-if="page.props.flash?.success" class="rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm font-medium text-success-700 dark:border-success-900 dark:bg-success-950 dark:text-success-300">
+                {{ page.props.flash.success }}
             </div>
+
+            <!-- Balance -->
+            <section class="slip slip-guilloche px-5 py-5">
+                <p class="eyebrow">Current balance</p>
+                <p class="mt-2 font-mono text-3xl font-semibold tracking-tight text-ink-950 dark:text-white">
+                    {{ formatCurrency(wallet.total_balance) }}
+                </p>
+            </section>
+
+            <!-- Accounts -->
+            <section class="card">
+                <div class="flex flex-col gap-3 border-b rule px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">
+                            Your virtual accounts
+                        </h2>
+                        <p class="mt-0.5 text-sm text-ink-500 dark:text-ink-400">
+                            Money sent to these numbers credits your wallet instantly.
+                        </p>
+                    </div>
+                    <PrimaryButton v-if="reserved_accounts.length" @click="openModal">Add account</PrimaryButton>
+                </div>
+
+                <div v-if="reserved_accounts.length" class="grid gap-4 p-5 sm:grid-cols-2">
+                    <div v-for="acct in reserved_accounts" :key="acct.account_number" class="rounded-lg border rule p-4">
+                        <p class="eyebrow">{{ acct.bank }}</p>
+                        <div class="mt-2 flex items-center justify-between gap-3">
+                            <span class="font-mono text-xl font-semibold tracking-wide text-ink-950 dark:text-white">
+                                {{ acct.account_number }}
+                            </span>
+                            <button type="button" class="btn btn-secondary btn-sm" @click="copy(acct.account_number)">
+                                {{ copied === acct.account_number ? 'Copied' : 'Copy' }}
+                            </button>
+                        </div>
+                        <p class="mt-1.5 text-sm text-ink-500 dark:text-ink-400">{{ acct.account_name }}</p>
+                    </div>
+                </div>
+
+                <EmptyState
+                    v-else
+                    title="You don't have a virtual account yet"
+                    description="It takes one step: confirm your BVN and we'll issue account numbers in your registered name."
+                    icon="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                >
+                    <PrimaryButton @click="openModal">Create virtual account</PrimaryButton>
+                </EmptyState>
+            </section>
+
+            <p class="text-sm text-ink-500 dark:text-ink-400">
+                Funds reflect automatically once your transfer is confirmed. Virtual accounts are created with BVN KYC verification.
+            </p>
         </div>
 
         <!-- Create account dialog -->
-        <Modal :show="showModal" @close="closeModal">
+        <Modal :show="showModal" max-width="md" @close="closeModal">
             <div class="p-6">
-                <h3 class="text-lg font-medium text-gray-900">Create Virtual Account</h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Fill in your details to create a virtual account with KYC verification.
+                <h2 class="font-display text-lg font-semibold text-ink-950 dark:text-white">Create virtual account</h2>
+                <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">
+                    Your accounts will be created in your registered name using your BVN.
                 </p>
 
                 <form @submit.prevent="submit" class="mt-6 space-y-4">
                     <div>
                         <InputLabel for="bvn" value="BVN (Bank Verification Number)" />
-                        <TextInput id="bvn" v-model="form.bvn" type="text" inputmode="numeric" maxlength="11" class="mt-1 block w-full" placeholder="Enter your 11-digit BVN" autofocus />
+                        <TextInput
+                            id="bvn"
+                            v-model="form.bvn"
+                            type="text"
+                            inputmode="numeric"
+                            maxlength="11"
+                            class="mt-1 block w-full font-mono"
+                            placeholder="11-digit BVN"
+                            autofocus
+                        />
                         <InputError class="mt-2" :message="form.errors.bvn" />
                     </div>
-
-                    <p class="text-xs text-gray-500">
-                        Your accounts will be created in your registered name using your BVN.
-                    </p>
 
                     <div class="flex justify-end gap-2 pt-2">
                         <SecondaryButton type="button" @click="closeModal" :disabled="form.processing">Cancel</SecondaryButton>
                         <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
-                            {{ form.processing ? 'Creating...' : 'Create Account' }}
+                            {{ form.processing ? 'Creating…' : 'Create account' }}
                         </PrimaryButton>
                     </div>
                 </form>

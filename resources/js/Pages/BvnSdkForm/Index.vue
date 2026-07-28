@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import BalanceStrip from '@/Components/BalanceStrip.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -79,18 +80,9 @@ const progress = computed(() => ((step.value - 1) / (totalSteps - 1)) * 100);
 <template>
     <Head title="BVN SDK Onboarding" />
     <AuthenticatedLayout>
-        <div class="max-w-3xl mx-auto space-y-6">
+        <div class="space-y-6">
             <!-- Wallet + price -->
-            <div class="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl shadow p-6 text-white flex items-center justify-between">
-                <div>
-                    <p class="text-sm opacity-80">Wallet Balance</p>
-                    <p class="text-3xl font-bold mt-1">₦{{ wallet.total_balance.toLocaleString() }}</p>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm opacity-80">Onboarding Fee</p>
-                    <p class="text-2xl font-bold mt-1">{{ formatCurrency(price) }}</p>
-                </div>
-            </div>
+            <BalanceStrip :wallet="wallet" :price="price" />
 
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
                 <div class="flex items-start justify-between mb-6">
@@ -122,7 +114,7 @@ const progress = computed(() => ((step.value - 1) / (totalSteps - 1)) * 100);
                     </div>
                 </div>
 
-                <form @submit.prevent="submit" class="space-y-4">
+                <form @submit.prevent="submit" class="max-w-3xl space-y-4">
                     <!-- Step 1: Account -->
                     <div v-show="step === 1" class="space-y-4">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Account Information</h3>

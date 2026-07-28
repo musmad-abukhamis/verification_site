@@ -1,5 +1,11 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
+import BalanceStrip from '@/Components/BalanceStrip.vue';
+import Alert from '@/Components/Alert.vue';
+import StatusPill from '@/Components/StatusPill.vue';
+import EmptyState from '@/Components/EmptyState.vue';
+import Pagination from '@/Components/Pagination.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -19,6 +25,9 @@ const checkingStatus = ref({});
 let searchTimeout;
 
 const canSubmit = computed(() => nin.value.length === 11 && !isSubmitting.value);
+
+const money = (amount) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount ?? 0));
 
 const submit = () => {
     if (nin.value.length !== 11) { formError.value = 'NIN must be exactly 11 characters'; return; }
@@ -46,143 +55,146 @@ const fetchTransactions = () => {
     });
 };
 
-const goToPage = (url) => {
-    if (!url) return;
-    router.visit(url, { preserveState: true, preserveScroll: false, only: ['transactions'] });
+const debouncedSearch = () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(fetchTransactions, 300);
 };
 
 const formatDate = (date) => {
-    if (!date) return '-';
+    if (!date) return '—';
     return new Date(date).toLocaleString('en-NG', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
-
-const getStatusClass = (status) => {
-    const map = {
-        completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        validated: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        processing: 'border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300',
-        failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    };
-    return map[status?.toLowerCase()] ?? 'bg-gray-100 text-gray-800';
 };
 
 const canCheck = (status) => !['completed', 'validated', 'failed'].includes(status?.toLowerCase());
 
 const transactionsList = computed(() => props.transactions?.data || []);
-const pagination = computed(() => ({
-    from: props.transactions?.from || 0,
-    to: props.transactions?.to || 0,
-    total: props.transactions?.total || 0,
-    prev_page_url: props.transactions?.prev_page_url,
-    next_page_url: props.transactions?.next_page_url,
-}));
 </script>
 
 <template>
     <Head title="NIN Validation" />
+
     <AuthenticatedLayout>
         <div class="space-y-6">
-            <!-- Wallet -->
-            <div class="bg-gradient-to-r from-cyan-600 to-sky-600 rounded-xl shadow p-6 text-white">
-                <p class="text-sm opacity-80">Wallet Balance</p>
-                <p class="text-3xl font-bold mt-1">₦{{ wallet.total_balance.toLocaleString() }}</p>
-                <div class="flex gap-4 mt-2 text-sm opacity-80">
-                    <span>Main: ₦{{ wallet.balance.toLocaleString() }}</span>
-                    <span>Bonus: ₦{{ wallet.bonus_balance.toLocaleString() }}</span>
+            <PageHeader
+                eyebrow="NIN services"
+                title="NIN validation"
+                description="Validate a NIN against the official records. Results arrive asynchronously — check back on a row to refresh it."
+            />
+
+            <BalanceStrip :wallet="wallet" :price="price" />
+
+            <!-- Submit -->
+            <section class="card card-pad">
+                <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">Submit a NIN</h2>
+
+                <div class="mt-4 space-y-3">
+                    <Alert v-if="formError" tone="danger">{{ formError }}</Alert>
+                    <Alert v-if="$page.props.flash?.success" tone="success">{{ $page.props.flash.success }}</Alert>
                 </div>
-            </div>
 
-            <!-- Form Card -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-1">NIN Validation</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Validate your NIN against official records.</p>
-                <p class="text-sm font-semibold text-cyan-600 dark:text-cyan-400 mb-6">Price: ₦{{ price?.toLocaleString() }}</p>
-
-                <div v-if="formError" class="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ formError }}</div>
-                <div v-if="$page.props.flash?.success" class="mb-4 p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg text-sm">{{ $page.props.flash.success }}</div>
-
-                <form @submit.prevent="submit" class="space-y-4 max-w-lg">
+                <form @submit.prevent="submit" class="mt-4 max-w-lg space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NIN Number</label>
-                        <input v-model="nin" type="text" maxlength="11" placeholder="Enter 11-digit NIN"
+                        <label for="nin" class="eyebrow">NIN number</label>
+                        <input
+                            id="nin"
+                            v-model="nin"
+                            type="text"
+                            inputmode="numeric"
+                            maxlength="11"
+                            placeholder="11-digit NIN"
                             :disabled="isSubmitting"
-                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 font-mono focus:ring-2 focus:ring-cyan-500" />
-                        <p class="mt-1 text-xs text-gray-500">{{ nin.length }}/11 characters</p>
+                            class="mt-1.5 block w-full font-mono text-lg"
+                        />
+                        <p class="mt-1 font-mono text-xs text-ink-400 dark:text-ink-500">{{ nin.length }}/11</p>
                     </div>
-                    <button type="submit" :disabled="!canSubmit"
-                        class="flex items-center gap-2 px-6 py-2.5 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <svg v-if="isSubmitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+
+                    <button type="submit" :disabled="!canSubmit" class="btn btn-primary">
+                        <svg v-if="isSubmitting" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
-                        {{ isSubmitting ? 'Submitting...' : `Validate (₦${price?.toLocaleString()})` }}
+                        {{ isSubmitting ? 'Submitting…' : `Validate — ${money(price)}` }}
                     </button>
                 </form>
-            </div>
+            </section>
 
-            <!-- Transaction History -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Validation History</h3>
-                    <div class="flex gap-3">
-                        <input v-model="search" @input="() => { clearTimeout(searchTimeout); searchTimeout = setTimeout(fetchTransactions, 300); }"
-                            type="text" placeholder="Search..." class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-                        <select v-model="statusFilter" @change="fetchTransactions" class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-                            <option value="">All Statuses</option>
+            <!-- History -->
+            <section class="card overflow-hidden">
+                <div class="flex flex-col gap-3 border-b rule px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">Validation history</h2>
+
+                    <div class="flex flex-wrap gap-2">
+                        <input
+                            v-model="search"
+                            @input="debouncedSearch"
+                            type="search"
+                            placeholder="Search…"
+                            aria-label="Search validations"
+                            class="text-sm"
+                        />
+                        <select v-model="statusFilter" @change="fetchTransactions" aria-label="Filter by status" class="text-sm">
+                            <option value="">All statuses</option>
                             <option value="processing">Processing</option>
                             <option value="completed">Completed</option>
                             <option value="failed">Failed</option>
                         </select>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NIN</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comment</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Old Bal</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Bal</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr v-for="tx in transactionsList" :key="tx.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">{{ tx.id }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{{ tx.nin }}</td>
-                                <td class="px-4 py-3">
-                                    <span :class="['inline-flex px-2 py-0.5 text-xs rounded-full font-medium', getStatusClass(tx.status)]">{{ tx.status }}</span>
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-[180px] truncate">{{ tx.comment || '-' }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.old_balance || 0).toLocaleString() }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.new_balance || 0).toLocaleString() }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(tx.created_at) }}</td>
-                                <td class="px-4 py-3">
-                                    <button @click="checkStatus(tx)" :disabled="!canCheck(tx.status) || checkingStatus[tx.id]"
-                                        class="inline-flex items-center gap-1 px-3 py-1 text-xs bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300 rounded hover:bg-cyan-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <svg v-if="checkingStatus[tx.id]" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                        </svg>
-                                        {{ checkingStatus[tx.id] ? 'Checking...' : 'Check' }}
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div v-if="transactionsList.length === 0" class="py-10 text-center text-gray-400">No validations yet</div>
-                </div>
-                <div v-if="pagination.total > 0" class="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <p class="text-sm text-gray-500">Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }}</p>
-                    <div class="flex gap-2">
-                        <button @click="goToPage(pagination.prev_page_url)" :disabled="!pagination.prev_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Prev</button>
-                        <button @click="goToPage(pagination.next_page_url)" :disabled="!pagination.next_page_url" class="px-3 py-1 text-sm rounded border border-gray-300 disabled:opacity-50">Next</button>
+
+                <template v-if="transactionsList.length">
+                    <div class="scroll-slim overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="t-head">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>NIN</th>
+                                    <th>Status</th>
+                                    <th>Comment</th>
+                                    <th>Prev. balance</th>
+                                    <th>New balance</th>
+                                    <th>Date</th>
+                                    <th><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y rule">
+                                <tr v-for="tx in transactionsList" :key="tx.id" class="t-row">
+                                    <td class="font-mono text-ink-500 dark:text-ink-400">{{ tx.id }}</td>
+                                    <td class="font-mono font-semibold text-ink-950 dark:text-white">{{ tx.nin }}</td>
+                                    <td><StatusPill :status="tx.status" /></td>
+                                    <td class="max-w-[180px] truncate text-ink-600 dark:text-ink-300" :title="tx.comment">
+                                        {{ tx.comment || '—' }}
+                                    </td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ money(tx.old_balance) }}</td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ money(tx.new_balance) }}</td>
+                                    <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ formatDate(tx.created_at) }}</td>
+                                    <td class="text-right">
+                                        <button
+                                            @click="checkStatus(tx)"
+                                            :disabled="!canCheck(tx.status) || checkingStatus[tx.id]"
+                                            class="btn btn-secondary btn-sm"
+                                        >
+                                            <svg v-if="checkingStatus[tx.id]" class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            {{ checkingStatus[tx.id] ? 'Checking…' : 'Check' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </div>
+
+                    <Pagination :paginator="transactions" label="validations" />
+                </template>
+
+                <EmptyState
+                    v-else
+                    title="No validations yet"
+                    description="Submit a NIN above and each attempt will be listed here with its result."
+                    icon="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

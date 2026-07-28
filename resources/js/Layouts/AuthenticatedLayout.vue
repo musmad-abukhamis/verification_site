@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import DarkModeToggle from '@/Components/DarkModeToggle.vue';
@@ -14,6 +14,8 @@ const expandedMenus = ref(new Set());
 
 const authUser = computed(() => page.props.auth?.user ?? {});
 const isAdmin = computed(() => authUser.value?.is_admin);
+
+const appName = computed(() => page.props.app?.name || 'ABC Services');
 
 const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount ?? 0));
@@ -80,202 +82,290 @@ const toggleMenu = (name) => {
 
 const isGroupActive = (item) => item.children?.some((c) => current(c.pattern)) ?? false;
 const isMenuExpanded = (item) => expandedMenus.value.has(item.name) || isGroupActive(item);
+
+/** The page title, used as the mobile top-bar label so you always know where you are. */
+const currentSection = computed(() => {
+    for (const item of menuItems.value) {
+        if (item.children) {
+            const child = item.children.find((c) => current(c.pattern));
+            if (child) return `${item.name} · ${child.name}`;
+        } else if (current(item.pattern)) {
+            return item.name;
+        }
+    }
+    return appName.value;
+});
+
+// Never leave the off-canvas sidebar open behind a new page.
+watch(() => page.url, () => (showingSidebar.value = false));
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-        <!-- Sidebar -->
+    <div class="min-h-screen bg-ink-100 dark:bg-ink-950">
+        <!-- =====================================================================
+             Sidebar. Deep pine in both themes: the chrome is the instrument,
+             the content area is the paper you work on.
+             ===================================================================== -->
         <aside
             :class="[
-                'fixed top-0 left-0 z-40 w-64 h-screen transition-transform bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700',
-                showingSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-brand-950 transition-transform duration-300 ease-out md:translate-x-0',
+                showingSidebar ? 'translate-x-0' : '-translate-x-full',
             ]"
         >
-            <div class="h-full flex flex-col">
-                <!-- Logo -->
-                <div class="flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-700">
-                    <Link :href="route('dashboard')" class="flex items-center">
-                        <ApplicationLogo class="block h-8 w-auto text-gray-800 dark:text-gray-200" />
-                    </Link>
-                </div>
+            <!-- Brand -->
+            <div class="flex h-16 shrink-0 items-center gap-3 px-5">
+                <Link :href="route('dashboard')" class="flex min-w-0 items-center gap-3">
+                    <ApplicationLogo class="h-8 w-8 shrink-0 text-white" />
+                    <span class="truncate font-display text-base font-bold tracking-tight text-white">
+                        {{ appName }}
+                    </span>
+                </Link>
 
-                <!-- User profile -->
-                <div class="px-4 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold uppercase">
-                            {{ (authUser.username || authUser.name || '?').charAt(0) }}
-                        </div>
-                        <div class="min-w-0">
-                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {{ authUser.username || authUser.name }}
-                            </p>
-                            <span class="inline-block mt-0.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                                {{ formatCurrency(authUser.balance) }}
-                            </span>
-                        </div>
+                <button
+                    @click="showingSidebar = false"
+                    type="button"
+                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-brand-300 hover:bg-brand-900 hover:text-white md:hidden"
+                >
+                    <span class="sr-only">Close menu</span>
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Wallet slip. The balance is the number an agent checks most, so
+                 it gets the accent and sits above the navigation, not inside it. -->
+            <div class="px-4 pb-4">
+                <div class="slip-guilloche overflow-hidden rounded-card border border-brass-500/30 bg-brand-900/70">
+                    <div class="px-4 pt-3.5">
+                        <p class="text-2xs font-semibold uppercase tracking-[0.14em] text-brass-300">Wallet balance</p>
+                        <p class="mt-1 font-mono text-xl font-semibold tracking-tight text-white">
+                            {{ formatCurrency(authUser.balance) }}
+                        </p>
+                    </div>
+
+                    <div class="mt-3 flex items-stretch border-t border-dashed border-brass-500/30">
+                        <Link
+                            :href="route('wallet.fund')"
+                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-brass-200 transition hover:bg-brass-500/10 hover:text-white"
+                        >
+                            Fund wallet
+                        </Link>
+                        <span class="w-px bg-brass-500/20" aria-hidden="true"></span>
+                        <Link
+                            :href="route('wallet.transactions')"
+                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-brand-200 transition hover:bg-brass-500/10 hover:text-white"
+                        >
+                            History
+                        </Link>
                     </div>
                 </div>
+            </div>
 
-                <!-- Navigation -->
-                <nav class="flex-1 overflow-y-auto px-3 py-4">
-                    <ul class="space-y-1">
-                        <li v-for="item in menuItems" :key="item.name">
-                            <!-- Leaf item -->
-                            <Link
-                                v-if="!item.children"
-                                :href="route(item.route)"
-                                @click="showingSidebar = false"
+            <!-- Navigation -->
+            <nav class="scroll-slim flex-1 overflow-y-auto px-3 pb-4">
+                <ul class="space-y-0.5">
+                    <li v-for="item in menuItems" :key="item.name">
+                        <!-- Leaf item -->
+                        <Link
+                            v-if="!item.children"
+                            :href="route(item.route)"
+                            :aria-current="current(item.pattern) ? 'page' : undefined"
+                            :class="[
+                                'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
+                                current(item.pattern)
+                                    ? 'bg-brand-900 font-semibold text-white'
+                                    : 'font-medium text-brand-200 hover:bg-brand-900/60 hover:text-white',
+                            ]"
+                        >
+                            <span
+                                v-if="current(item.pattern)"
+                                class="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brass-500"
+                                aria-hidden="true"
+                            ></span>
+                            <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="item.icon" />
+                            </svg>
+                            <span class="truncate">{{ item.name }}</span>
+                        </Link>
+
+                        <!-- Group item -->
+                        <div v-else>
+                            <button
+                                type="button"
+                                @click="toggleMenu(item.name)"
+                                :aria-expanded="isMenuExpanded(item)"
                                 :class="[
-                                    'flex items-center p-3 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                                    current(item.pattern) && 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+                                    'relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
+                                    isGroupActive(item)
+                                        ? 'font-semibold text-white'
+                                        : 'font-medium text-brand-200 hover:bg-brand-900/60 hover:text-white',
                                 ]"
                             >
-                                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
+                                <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="item.icon" />
                                 </svg>
-                                <span class="ml-3 text-sm">{{ item.name }}</span>
-                            </Link>
+                                <span class="truncate">{{ item.name }}</span>
+                                <svg
+                                    :class="['ml-auto h-4 w-4 shrink-0 transition-transform duration-200', isMenuExpanded(item) ? 'rotate-180' : '']"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
+                                >
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
 
-                            <!-- Group item -->
-                            <div v-else>
-                                <button
-                                    type="button"
-                                    @click="toggleMenu(item.name)"
+                            <!-- Children hang off a hairline, so the group reads as one unit. -->
+                            <div v-show="isMenuExpanded(item)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-brand-800 pl-3">
+                                <Link
+                                    v-for="child in item.children"
+                                    :key="child.route"
+                                    :href="route(child.route)"
+                                    :aria-current="current(child.pattern) ? 'page' : undefined"
                                     :class="[
-                                        'w-full flex items-center justify-between p-3 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                                        isGroupActive(item) && 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+                                        'relative block rounded-md px-3 py-2 text-sm transition',
+                                        current(child.pattern)
+                                            ? 'bg-brand-900 font-semibold text-white'
+                                            : 'text-brand-300 hover:bg-brand-900/60 hover:text-white',
                                     ]"
                                 >
-                                    <span class="flex items-center">
-                                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
-                                        </svg>
-                                        <span class="ml-3 text-sm">{{ item.name }}</span>
-                                    </span>
-                                    <svg
-                                        :class="['w-4 h-4 transition-transform', isMenuExpanded(item) ? 'rotate-180' : '']"
-                                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                    >
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </button>
-                                <div v-show="isMenuExpanded(item)" class="ml-6 mt-1 space-y-1">
-                                    <Link
-                                        v-for="child in item.children"
-                                        :key="child.route"
-                                        :href="route(child.route)"
-                                        @click="showingSidebar = false"
-                                        :class="[
-                                            'block px-3 py-2 text-sm rounded-lg transition-colors',
-                                            current(child.pattern)
-                                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400'
-                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white',
-                                        ]"
-                                    >
-                                        {{ child.name }}
-                                    </Link>
-                                </div>
+                                    <span
+                                        v-if="current(child.pattern)"
+                                        class="absolute -left-[13px] top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brass-500"
+                                        aria-hidden="true"
+                                    ></span>
+                                    {{ child.name }}
+                                </Link>
                             </div>
-                        </li>
+                        </div>
+                    </li>
+                </ul>
 
-                        <!-- Admin link -->
-                        <li v-if="isAdmin">
-                            <Link
-                                :href="route('admin.dashboard')"
-                                @click="showingSidebar = false"
-                                :class="[
-                                    'flex items-center p-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors',
-                                    current('admin.*') && 'bg-red-50 dark:bg-red-900/20',
-                                ]"
-                            >
-                                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span class="ml-3 text-sm font-medium">Admin Panel</span>
-                            </Link>
-                        </li>
-                    </ul>
-                </nav>
+                <!-- Admin sits apart from the agent's own tools. -->
+                <div v-if="isAdmin" class="mt-4 border-t border-brand-900 pt-4">
+                    <Link
+                        :href="route('admin.dashboard')"
+                        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-brass-300 transition hover:bg-brass-500/10 hover:text-brass-200"
+                    >
+                        <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Admin Panel
+                    </Link>
+                </div>
+            </nav>
 
-                <!-- Footer: logout -->
-                <div class="px-3 py-4 border-t border-gray-200 dark:border-gray-700">
+            <!-- Account -->
+            <div class="shrink-0 border-t border-brand-900 p-3">
+                <div class="flex items-center gap-3 rounded-lg px-2 py-2">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-800 font-display text-sm font-bold uppercase text-brass-300">
+                        {{ (authUser.username || authUser.name || '?').charAt(0) }}
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-semibold text-white">{{ authUser.username || authUser.name }}</p>
+                        <p class="truncate text-xs text-brand-300">{{ authUser.email }}</p>
+                    </div>
                     <Link
                         :href="route('logout')"
                         method="post"
                         as="button"
-                        class="w-full flex items-center p-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        title="Log out"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-brand-300 transition hover:bg-brand-900 hover:text-white"
                     >
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        <span class="sr-only">Log out</span>
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        <span class="ml-3 text-sm">Log Out</span>
                     </Link>
                 </div>
             </div>
         </aside>
 
-        <!-- Main column -->
-        <div class="md:ml-64">
+        <!-- =====================================================================
+             Main column
+             ===================================================================== -->
+        <div class="md:pl-[17rem]">
             <!-- Top bar -->
-            <nav class="sticky top-0 z-30 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                <div class="px-4 sm:px-6 lg:px-8">
-                    <div class="flex items-center justify-between h-16">
-                        <!-- Mobile hamburger -->
-                        <button
-                            @click="showingSidebar = !showingSidebar"
-                            class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
-                        >
-                            <span class="sr-only">Toggle sidebar</span>
-                            <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
-                        </button>
+            <header class="sticky top-0 z-30 border-b border-ink-200 bg-white/85 backdrop-blur dark:border-ink-800 dark:bg-ink-950/85">
+                <div class="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
+                    <button
+                        @click="showingSidebar = true"
+                        type="button"
+                        class="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg text-ink-600 transition hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 md:hidden"
+                    >
+                        <span class="sr-only">Open menu</span>
+                        <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
 
-                        <div class="flex items-center ml-auto space-x-4">
-                            <NotificationBell />
-                            <DarkModeToggle />
-                            <Dropdown align="right" width="48">
-                                <template #trigger>
-                                    <button class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none">
-                                        {{ authUser.name }}
-                                        <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </button>
-                                </template>
-                                <template #content>
-                                    <DropdownLink :href="route('profile.edit')">Profile</DropdownLink>
-                                    <DropdownLink :href="route('logout')" method="post" as="button">Log Out</DropdownLink>
-                                </template>
-                            </Dropdown>
-                        </div>
+                    <!-- On mobile the sidebar is hidden, so the top bar carries location. -->
+                    <p class="truncate text-sm font-semibold text-ink-900 dark:text-ink-100 md:hidden">
+                        {{ currentSection }}
+                    </p>
+
+                    <!-- Balance repeats here on mobile only, where the sidebar slip isn't visible. -->
+                    <Link
+                        :href="route('wallet.index')"
+                        class="ml-auto hidden items-center gap-2 rounded-lg border border-brass-300 bg-brass-50 px-3 py-1.5 dark:border-brass-800 dark:bg-brass-950/40 sm:flex md:hidden"
+                    >
+                        <span class="font-mono text-sm font-semibold text-brass-800 dark:text-brass-200">
+                            {{ formatCurrency(authUser.balance) }}
+                        </span>
+                    </Link>
+
+                    <div class="ml-auto flex items-center gap-1 md:ml-auto">
+                        <NotificationBell />
+                        <DarkModeToggle />
+                        <Dropdown align="right" width="48">
+                            <template #trigger>
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-ink-700 transition hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800"
+                                >
+                                    <span class="hidden max-w-[10rem] truncate sm:block">{{ authUser.name }}</span>
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-brand-800 font-display text-xs font-bold uppercase text-brass-300 sm:hidden">
+                                        {{ (authUser.username || authUser.name || '?').charAt(0) }}
+                                    </span>
+                                    <svg class="h-4 w-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                            </template>
+                            <template #content>
+                                <DropdownLink :href="route('profile.edit')">Profile</DropdownLink>
+                                <DropdownLink :href="route('wallet.index')">Wallet</DropdownLink>
+                                <DropdownLink :href="route('logout')" method="post" as="button">Log Out</DropdownLink>
+                            </template>
+                        </Dropdown>
                     </div>
                 </div>
-            </nav>
 
-            <!-- Optional page heading -->
-            <header class="sticky top-16 z-20 bg-white shadow dark:bg-gray-800" v-if="$slots.header">
-                <div class="py-5 px-4 sm:px-6 lg:px-8">
+                <!-- Page heading slot, when a page supplies one. -->
+                <div v-if="$slots.header" class="border-t border-ink-200 px-4 py-4 dark:border-ink-800 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
-            <!-- Page content -->
-            <main>
-                <div class="py-6 px-4 sm:px-6 lg:px-8">
-                    <slot />
-                </div>
+            <main class="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+                <slot />
             </main>
         </div>
 
         <!-- Mobile overlay -->
-        <div
-            v-if="showingSidebar"
-            @click="showingSidebar = false"
-            class="fixed inset-0 z-30 bg-gray-900/50 md:hidden"
-        ></div>
+        <transition
+            enter-active-class="transition-opacity duration-200"
+            enter-from-class="opacity-0"
+            leave-active-class="transition-opacity duration-200"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="showingSidebar"
+                @click="showingSidebar = false"
+                class="fixed inset-0 z-40 bg-ink-950/60 backdrop-blur-sm md:hidden"
+                aria-hidden="true"
+            ></div>
+        </transition>
 
-        <!-- Global announcement modal -->
         <GlobalNotificationModal />
     </div>
 </template>

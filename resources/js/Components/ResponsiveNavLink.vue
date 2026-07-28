@@ -14,13 +14,13 @@ const props = defineProps({
 
 const classes = computed(() =>
     props.active
-        ? 'block w-full ps-3 pe-4 py-2 border-l-4 border-indigo-400 dark:border-indigo-600 text-start text-base font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/50 focus:outline-none focus:text-indigo-800 dark:focus:text-indigo-200 focus:bg-indigo-100 dark:focus:bg-indigo-900 focus:border-indigo-700 dark:focus:border-indigo-300 transition duration-150 ease-in-out'
-        : 'block w-full ps-3 pe-4 py-2 border-l-4 border-transparent text-start text-base font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:outline-none focus:text-gray-800 dark:focus:text-gray-200 focus:bg-gray-50 dark:focus:bg-gray-700 focus:border-gray-300 dark:focus:border-gray-600 transition duration-150 ease-in-out',
+        ? 'block w-full border-l-[3px] border-brass-500 bg-brand-50 py-2 pe-4 ps-3 text-start text-base font-semibold text-brand-800 transition dark:bg-brand-950/50 dark:text-brand-200'
+        : 'block w-full border-l-[3px] border-transparent py-2 pe-4 ps-3 text-start text-base font-medium text-ink-600 transition hover:border-ink-300 hover:bg-ink-50 hover:text-ink-900 dark:text-ink-400 dark:hover:border-ink-600 dark:hover:bg-ink-800 dark:hover:text-white',
 );
 </script>
 
 <template>
-    <Link :href="href" :class="classes">
+    <Link :href="href" :class="classes" :aria-current="active ? 'page' : undefined">
         <slot />
     </Link>
 </template>

@@ -1,6 +1,11 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import PageHeader from '@/Components/PageHeader.vue';
+import StatTile from '@/Components/StatTile.vue';
+import StatusPill from '@/Components/StatusPill.vue';
+import EmptyState from '@/Components/EmptyState.vue';
+import Pagination from '@/Components/Pagination.vue';
+import { Head, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
 const props = defineProps({
@@ -31,157 +36,149 @@ watch(search, () => {
     searchTimeout = setTimeout(reload, 350);
 });
 watch([status, type], reload);
-
-const statusColor = (s) => {
-    const map = {
-        success: 'text-green-700 bg-green-100',
-        pending: 'text-yellow-700 bg-yellow-100',
-        failed: 'text-red-700 bg-red-100',
-    };
-    return map[s] || 'text-gray-700 bg-gray-100';
-};
 </script>
 
 <template>
     <Head title="My Wallet Transactions" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">My Wallet Transactions</h2>
-        </template>
+        <div class="space-y-6">
+            <PageHeader
+                eyebrow="Wallet"
+                title="Wallet transactions"
+                description="Every credit and debit against your balance, with the balance before and after each one."
+            />
 
-        <div>
-            <div class="space-y-6">
-                <!-- Summary cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-white shadow-sm rounded-lg p-6">
-                        <p class="text-sm font-medium text-gray-500">Current Balance</p>
-                        <p class="text-2xl font-bold text-indigo-600">{{ formatCurrency(wallet.total_balance) }}</p>
-                    </div>
-                    <div class="bg-white shadow-sm rounded-lg p-6">
-                        <p class="text-sm font-medium text-gray-500">Total Credit</p>
-                        <p class="text-2xl font-bold text-green-600">{{ formatCurrency(stats.total_credit) }}</p>
-                    </div>
-                    <div class="bg-white shadow-sm rounded-lg p-6">
-                        <p class="text-sm font-medium text-gray-500">Total Debit</p>
-                        <p class="text-2xl font-bold text-red-600">{{ formatCurrency(stats.total_debit) }}</p>
-                    </div>
-                    <div class="bg-white shadow-sm rounded-lg p-6">
-                        <p class="text-sm font-medium text-gray-500">Total Transactions</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ stats.total_count }}</p>
-                    </div>
-                </div>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatTile
+                    label="Current balance"
+                    :value="formatCurrency(wallet.total_balance)"
+                    tone="brass"
+                    icon="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                />
+                <StatTile
+                    label="Total credit"
+                    :value="formatCurrency(stats.total_credit)"
+                    tone="success"
+                    icon="M12 19V6m0 0l-6 6m6-6l6 6"
+                />
+                <StatTile
+                    label="Total debit"
+                    :value="formatCurrency(stats.total_debit)"
+                    tone="danger"
+                    icon="M12 5v13m0 0l6-6m-6 6l-6-6"
+                />
+                <StatTile
+                    label="Transactions"
+                    :value="stats.total_count"
+                    icon="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+            </div>
 
-                <!-- Filters -->
-                <div class="bg-white shadow-sm rounded-lg p-4">
-                    <div class="flex flex-col md:flex-row gap-3">
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Search transactions..."
-                            class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        />
-                        <select v-model="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                            <option value="all">All Status</option>
-                            <option value="success">Success</option>
-                            <option value="pending">Pending</option>
-                            <option value="failed">Failed</option>
-                        </select>
-                        <select v-model="type" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                            <option value="all">All Types</option>
-                            <option value="credit">Credit</option>
-                            <option value="debit">Debit</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Table / cards -->
-                <div class="bg-white shadow-sm rounded-lg p-6">
-                    <div v-if="transactions.data.length === 0" class="text-center py-10 text-gray-500">
-                        No transactions found.
-                    </div>
-
-                    <template v-else>
-                        <!-- Desktop -->
-                        <div class="hidden md:block overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead>
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prev. Balance</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Balance</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Direction</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-200">
-                                    <tr v-for="t in transactions.data" :key="t.id" class="hover:bg-gray-50">
-                                        <td class="px-4 py-3 text-sm font-mono text-gray-500">{{ String(t.reference).slice(0, 10) }}…</td>
-                                        <td class="px-4 py-3 text-sm font-semibold text-gray-900">{{ formatCurrency(t.amount) }}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">{{ formatCurrency(t.old_balance) }}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-600">{{ formatCurrency(t.new_balance) }}</td>
-                                        <td class="px-4 py-3">
-                                            <span :class="['px-2 py-1 text-xs rounded-full capitalize', t.type === 'credit' ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100']">
-                                                {{ t.type }}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-gray-600 capitalize">{{ t.fundingtype }}</td>
-                                        <td class="px-4 py-3 text-sm text-gray-500">{{ t.date }}</td>
-                                        <td class="px-4 py-3">
-                                            <span :class="['px-2 py-1 text-xs rounded-full capitalize', statusColor(t.status)]">{{ t.status }}</span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Mobile -->
-                        <div class="md:hidden space-y-4">
-                            <div v-for="t in transactions.data" :key="t.id" class="border border-gray-200 rounded-lg p-4 space-y-3">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <p class="font-mono text-xs text-gray-500">{{ String(t.reference).slice(0, 12) }}…</p>
-                                        <p class="font-semibold text-lg">{{ formatCurrency(t.amount) }}</p>
-                                    </div>
-                                    <span :class="['px-2 py-1 text-xs rounded-full capitalize', statusColor(t.status)]">{{ t.status }}</span>
-                                </div>
-                                <div class="grid grid-cols-2 gap-3 text-sm">
-                                    <div><p class="text-gray-500">Prev. Balance</p><p class="font-medium">{{ formatCurrency(t.old_balance) }}</p></div>
-                                    <div><p class="text-gray-500">New Balance</p><p class="font-medium">{{ formatCurrency(t.new_balance) }}</p></div>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span :class="['px-2 py-1 text-xs rounded-full capitalize', t.type === 'credit' ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100']">{{ t.type }}</span>
-                                    <span class="text-xs text-gray-500 capitalize">{{ t.fundingtype }}</span>
-                                </div>
-                                <p class="text-xs text-gray-400 text-right">{{ t.date }}</p>
-                            </div>
-                        </div>
-
-                        <!-- Pagination -->
-                        <div class="mt-6 flex items-center justify-between">
-                            <div class="text-sm text-gray-500">
-                                Showing {{ transactions.from }} to {{ transactions.to }} of {{ transactions.total }} results
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <Link
-                                    v-for="link in transactions.links"
-                                    :key="link.label"
-                                    :href="link.url || ''"
-                                    :class="[
-                                        'px-3 py-1 rounded text-sm',
-                                        link.active ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                                        !link.url && 'opacity-50 cursor-not-allowed pointer-events-none',
-                                    ]"
-                                    v-html="link.label"
-                                />
-                            </div>
-                        </div>
-                    </template>
+            <!-- Filters -->
+            <div class="card card-pad">
+                <div class="flex flex-col gap-3 md:flex-row">
+                    <input
+                        v-model="search"
+                        type="search"
+                        placeholder="Search by reference…"
+                        class="flex-1"
+                        aria-label="Search transactions"
+                    />
+                    <select v-model="status" aria-label="Filter by status">
+                        <option value="all">All statuses</option>
+                        <option value="success">Success</option>
+                        <option value="pending">Pending</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <select v-model="type" aria-label="Filter by direction">
+                        <option value="all">All directions</option>
+                        <option value="credit">Credit</option>
+                        <option value="debit">Debit</option>
+                    </select>
                 </div>
             </div>
+
+            <!-- Records -->
+            <section class="card overflow-hidden">
+                <template v-if="transactions.data.length">
+                    <!-- Desktop -->
+                    <div class="scroll-slim hidden overflow-x-auto md:block">
+                        <table class="min-w-full">
+                            <thead class="t-head">
+                                <tr>
+                                    <th>Reference</th>
+                                    <th>Amount</th>
+                                    <th>Prev. balance</th>
+                                    <th>New balance</th>
+                                    <th>Direction</th>
+                                    <th>Source</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y rule">
+                                <tr v-for="t in transactions.data" :key="t.id" class="t-row">
+                                    <td class="font-mono text-ink-500 dark:text-ink-400" :title="t.reference">
+                                        {{ String(t.reference).slice(0, 10) }}…
+                                    </td>
+                                    <td class="font-mono font-semibold text-ink-950 dark:text-white">
+                                        {{ formatCurrency(t.amount) }}
+                                    </td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ formatCurrency(t.old_balance) }}</td>
+                                    <td class="font-mono text-ink-600 dark:text-ink-300">{{ formatCurrency(t.new_balance) }}</td>
+                                    <td><StatusPill :status="t.type" /></td>
+                                    <td class="capitalize text-ink-600 dark:text-ink-300">{{ t.fundingtype }}</td>
+                                    <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ t.date }}</td>
+                                    <td><StatusPill :status="t.status" /></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile: the same record as a slip, since it is a receipt. -->
+                    <div class="divide-y rule md:hidden">
+                        <article v-for="t in transactions.data" :key="t.id" class="space-y-3 p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate font-mono text-xs text-ink-500 dark:text-ink-400">
+                                        {{ String(t.reference).slice(0, 12) }}…
+                                    </p>
+                                    <p class="mt-1 font-mono text-lg font-semibold text-ink-950 dark:text-white">
+                                        {{ formatCurrency(t.amount) }}
+                                    </p>
+                                </div>
+                                <StatusPill :status="t.status" />
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <p class="eyebrow">Prev. balance</p>
+                                    <p class="mt-0.5 font-mono text-sm text-ink-700 dark:text-ink-200">{{ formatCurrency(t.old_balance) }}</p>
+                                </div>
+                                <div>
+                                    <p class="eyebrow">New balance</p>
+                                    <p class="mt-0.5 font-mono text-sm text-ink-700 dark:text-ink-200">{{ formatCurrency(t.new_balance) }}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <StatusPill :status="t.type" />
+                                <span class="text-xs capitalize text-ink-500 dark:text-ink-400">{{ t.fundingtype }} · {{ t.date }}</span>
+                            </div>
+                        </article>
+                    </div>
+
+                    <Pagination :paginator="transactions" label="transactions" />
+                </template>
+
+                <EmptyState
+                    v-else
+                    title="No transactions found"
+                    description="Nothing matches these filters. Try clearing the search or widening the status."
+                    icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>

@@ -1,5 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
+import BalanceStrip from '@/Components/BalanceStrip.vue';
+import Alert from '@/Components/Alert.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -37,11 +40,11 @@ const priceColumnMap = {
 };
 
 const serviceOptions = [
-    { value: 'modify-name', label: 'Name Modification', column: 'name_mod', description: 'Update your name information' },
-    { value: 'modify-dob', label: 'DOB Modification', column: 'dob_mod', description: 'Correct your date of birth' },
-    { value: 'modify-phone', label: 'Phone Number Modification', column: 'phone_mod', description: 'Update your phone number' },
-    { value: 'modify-name-dob', label: 'Name & DOB Modification', column: 'namedob_mod', description: 'Update both name and date of birth' },
-    { value: 'modify-name-dob-phone', label: 'Complete Profile Modification', column: 'namephonedob_mod', description: 'Update name, date of birth, and phone number' },
+    { value: 'modify-name', label: 'Name modification', column: 'name_mod', description: 'Update your name information' },
+    { value: 'modify-dob', label: 'DOB modification', column: 'dob_mod', description: 'Correct your date of birth' },
+    { value: 'modify-phone', label: 'Phone number modification', column: 'phone_mod', description: 'Update your phone number' },
+    { value: 'modify-name-dob', label: 'Name & DOB modification', column: 'namedob_mod', description: 'Update both name and date of birth' },
+    { value: 'modify-name-dob-phone', label: 'Complete profile modification', column: 'namephonedob_mod', description: 'Update name, date of birth, and phone number' },
 ];
 
 const needsName = computed(() => ['modify-name', 'modify-name-dob', 'modify-name-dob-phone'].includes(form.serviceType));
@@ -49,7 +52,7 @@ const needsDob = computed(() => ['modify-dob', 'modify-name-dob', 'modify-name-d
 const needsPhone = computed(() => ['modify-phone', 'modify-name-dob-phone'].includes(form.serviceType));
 
 const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || amount === '' || amount === '0' || Number(amount) === 0) return 'Contact Support';
+    if (amount === null || amount === undefined || amount === '' || amount === '0' || Number(amount) === 0) return 'Contact support';
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(Number(amount));
 };
 
@@ -74,167 +77,203 @@ const submit = () => {
 
 <template>
     <Head title="BVN Modification" />
+
     <AuthenticatedLayout>
         <div class="space-y-6">
-            <!-- Wallet -->
-            <div class="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl shadow p-6 text-white">
-                <p class="text-sm opacity-80">Wallet Balance</p>
-                <p class="text-3xl font-bold mt-1">₦{{ wallet.total_balance.toLocaleString() }}</p>
-                <div class="flex gap-4 mt-2 text-sm opacity-80">
-                    <span>Main: ₦{{ wallet.balance.toLocaleString() }}</span>
-                </div>
+            <PageHeader
+                eyebrow="BVN services"
+                title="BVN modification"
+                description="Pick what needs correcting, then give us the record as it stands and as it should read."
+            >
+                <template #actions>
+                    <Link :href="route('bvn-modification.requests')" class="btn btn-secondary">My requests</Link>
+                </template>
+            </PageHeader>
+
+            <BalanceStrip :wallet="wallet" :price="selectedPrice" />
+
+            <div class="space-y-3">
+                <Alert v-if="form.errors.message" tone="danger">{{ form.errors.message }}</Alert>
+                <Alert v-if="$page.props.flash?.success" tone="success">{{ $page.props.flash.success }}</Alert>
+                <Alert v-if="form.errors.serviceType" tone="danger">{{ form.errors.serviceType }}</Alert>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-                <div class="flex items-start justify-between mb-1">
-                    <div>
-                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">BVN Modification Request</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Select a service type and fill in the required information.</p>
-                    </div>
-                    <Link :href="route('bvn-modification.requests')" class="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline whitespace-nowrap">
-                        My Requests →
-                    </Link>
-                </div>
+            <form @submit.prevent="submit" class="space-y-6">
+                <!-- Service type. One control, not two: the priced list *is* the
+                     selector, so the price is never a step removed from the choice. -->
+                <fieldset class="card card-pad">
+                    <legend class="font-display text-base font-semibold text-ink-950 dark:text-white">
+                        What needs changing?
+                    </legend>
 
-                <div v-if="form.errors.message" class="my-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg text-sm">{{ form.errors.message }}</div>
-                <div v-if="$page.props.flash?.success" class="my-4 p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg text-sm">{{ $page.props.flash.success }}</div>
-
-                <form @submit.prevent="submit" class="space-y-6 mt-4">
-                    <!-- Service Type -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Service Type</label>
-                        <select v-model="form.serviceType"
-                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-emerald-500">
-                            <option value="">Select service type</option>
-                            <option v-for="opt in serviceOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                        </select>
-                        <p v-if="form.errors.serviceType" class="mt-1 text-xs text-red-600">{{ form.errors.serviceType }}</p>
-                    </div>
-
-                    <!-- Pricing -->
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Pricing</label>
-                        </div>
-                        <div class="space-y-2">
-                            <div v-for="opt in serviceOptions" :key="opt.value"
-                                @click="form.serviceType = opt.value"
-                                :class="['p-3 border rounded-lg cursor-pointer transition-all flex items-center justify-between',
-                                    form.serviceType === opt.value ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300']">
-                                <div>
-                                    <p class="font-medium text-sm text-gray-900 dark:text-gray-100">{{ opt.label }}</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ opt.description }}</p>
-                                </div>
-                                <span :class="['text-xs font-medium px-2.5 py-1 rounded-full',
-                                    isAvailable(prices?.[opt.column]) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-yellow-100 text-yellow-800']">
-                                    {{ formatCurrency(prices?.[opt.column]) }}
+                    <div class="mt-4 space-y-2">
+                        <label
+                            v-for="opt in serviceOptions"
+                            :key="opt.value"
+                            :class="[
+                                'flex cursor-pointer items-center justify-between gap-4 rounded-lg border p-3 transition',
+                                form.serviceType === opt.value
+                                    ? 'border-brand-700 bg-brand-50 dark:border-brand-500 dark:bg-brand-950/50'
+                                    : 'border-ink-200 hover:border-ink-300 dark:border-ink-800 dark:hover:border-ink-700',
+                            ]"
+                        >
+                            <span class="flex min-w-0 items-start gap-3">
+                                <input type="radio" v-model="form.serviceType" :value="opt.value" class="mt-1 shrink-0" />
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold text-ink-900 dark:text-ink-100">{{ opt.label }}</span>
+                                    <span class="block text-xs text-ink-500 dark:text-ink-400">{{ opt.description }}</span>
                                 </span>
-                            </div>
-                        </div>
-                    </div>
+                            </span>
 
-                    <!-- BVN / NIN -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <span
+                                class="pill shrink-0"
+                                :class="isAvailable(prices?.[opt.column]) ? 'pill-brass' : 'pill-pending'"
+                            >
+                                {{ formatCurrency(prices?.[opt.column]) }}
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <!-- Identity -->
+                <section class="card card-pad">
+                    <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">Identity</h2>
+
+                    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">BVN</label>
-                            <input v-model="form.bvn" type="text" placeholder="Enter your BVN"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 font-mono focus:ring-2 focus:ring-emerald-500" />
-                            <p v-if="form.errors.bvn" class="mt-1 text-xs text-red-600">{{ form.errors.bvn }}</p>
+                            <label for="bvn" class="eyebrow">BVN</label>
+                            <input id="bvn" v-model="form.bvn" type="text" inputmode="numeric" class="mt-1.5 block w-full font-mono" />
+                            <p v-if="form.errors.bvn" class="mt-1 text-xs font-medium text-danger-600 dark:text-danger-400">{{ form.errors.bvn }}</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NIN</label>
-                            <input v-model="form.nin" type="text" placeholder="Enter your NIN"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-4 py-2.5 font-mono focus:ring-2 focus:ring-emerald-500" />
-                            <p v-if="form.errors.nin" class="mt-1 text-xs text-red-600">{{ form.errors.nin }}</p>
+                            <label for="nin" class="eyebrow">NIN</label>
+                            <input id="nin" v-model="form.nin" type="text" inputmode="numeric" class="mt-1.5 block w-full font-mono" />
+                            <p v-if="form.errors.nin" class="mt-1 text-xs font-medium text-danger-600 dark:text-danger-400">{{ form.errors.nin }}</p>
                         </div>
                     </div>
 
-                    <!-- NIN Slip -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Attach NIN Slip</label>
-                        <input type="file" accept="image/jpeg,image/png,application/pdf" @change="onFile"
-                            class="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
-                        <p class="mt-1 text-xs text-gray-500">Upload your NIN slip (JPEG, PNG, or PDF — max 5MB)</p>
-                        <p v-if="form.errors.ninSlip" class="mt-1 text-xs text-red-600">{{ form.errors.ninSlip }}</p>
+                    <div class="mt-4">
+                        <label for="ninSlip" class="eyebrow">Attach NIN slip</label>
+                        <input
+                            id="ninSlip"
+                            type="file"
+                            accept="image/jpeg,image/png,application/pdf"
+                            @change="onFile"
+                            class="mt-1.5 block w-full text-sm text-ink-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-800 hover:file:bg-brand-100 dark:text-ink-300 dark:file:bg-brand-950 dark:file:text-brand-300"
+                        />
+                        <p class="mt-1 text-xs text-ink-500 dark:text-ink-400">JPEG, PNG or PDF — max 5MB.</p>
+                        <p v-if="form.errors.ninSlip" class="mt-1 text-xs font-medium text-danger-600 dark:text-danger-400">{{ form.errors.ninSlip }}</p>
+                    </div>
+                </section>
+
+                <!-- Old / new record -->
+                <section v-if="form.serviceType" class="card card-pad">
+                    <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">The record</h2>
+                    <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">
+                        Fill both sides: what the record says now, and what it should say.
+                    </p>
+
+                    <div class="mt-4 grid grid-cols-2 overflow-hidden rounded-lg border rule">
+                        <button
+                            type="button"
+                            @click="activeTab = 'old'"
+                            :aria-pressed="activeTab === 'old'"
+                            :class="[
+                                'py-2 text-sm font-semibold transition',
+                                activeTab === 'old'
+                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    : 'bg-ink-50 text-ink-600 hover:text-ink-900 dark:bg-ink-950/40 dark:text-ink-300 dark:hover:text-white',
+                            ]"
+                        >
+                            Old record
+                        </button>
+                        <button
+                            type="button"
+                            @click="activeTab = 'new'"
+                            :aria-pressed="activeTab === 'new'"
+                            :class="[
+                                'py-2 text-sm font-semibold transition',
+                                activeTab === 'new'
+                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    : 'bg-ink-50 text-ink-600 hover:text-ink-900 dark:bg-ink-950/40 dark:text-ink-300 dark:hover:text-white',
+                            ]"
+                        >
+                            New record
+                        </button>
                     </div>
 
-                    <!-- Old / New record tabs -->
-                    <div v-if="form.serviceType">
-                        <div class="grid grid-cols-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 mb-4">
-                            <button type="button" @click="activeTab = 'old'"
-                                :class="['py-2 text-sm font-semibold', activeTab === 'old' ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300']">Old Record</button>
-                            <button type="button" @click="activeTab = 'new'"
-                                :class="['py-2 text-sm font-semibold', activeTab === 'new' ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300']">New Record</button>
-                        </div>
-
-                        <!-- OLD -->
-                        <div v-show="activeTab === 'old'" class="space-y-4">
-                            <div v-if="needsName" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
-                                    <input v-model="form.oldFirstName" type="text" placeholder="Old first name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Middle Name</label>
-                                    <input v-model="form.oldMiddleName" type="text" placeholder="Old middle name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
-                                    <input v-model="form.oldLastName" type="text" placeholder="Old last name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
+                    <!-- OLD -->
+                    <div v-show="activeTab === 'old'" class="mt-4 space-y-4">
+                        <div v-if="needsName" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div>
+                                <label for="oldFirstName" class="eyebrow">First name</label>
+                                <input id="oldFirstName" v-model="form.oldFirstName" type="text" class="mt-1.5 block w-full" />
                             </div>
-                            <div v-if="needsDob">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
-                                <input v-model="form.oldDob" type="date" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
+                            <div>
+                                <label for="oldMiddleName" class="eyebrow">Middle name</label>
+                                <input id="oldMiddleName" v-model="form.oldMiddleName" type="text" class="mt-1.5 block w-full" />
                             </div>
-                            <div v-if="needsPhone">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
-                                <input v-model="form.oldPhoneNumber" type="text" placeholder="Old phone number" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
+                            <div>
+                                <label for="oldLastName" class="eyebrow">Last name</label>
+                                <input id="oldLastName" v-model="form.oldLastName" type="text" class="mt-1.5 block w-full" />
                             </div>
                         </div>
-
-                        <!-- NEW -->
-                        <div v-show="activeTab === 'new'" class="space-y-4">
-                            <div v-if="needsName" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
-                                    <input v-model="form.newFirstName" type="text" placeholder="New first name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Middle Name</label>
-                                    <input v-model="form.newMiddleName" type="text" placeholder="New middle name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
-                                    <input v-model="form.newLastName" type="text" placeholder="New last name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                                </div>
-                            </div>
-                            <div v-if="needsDob">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
-                                <input v-model="form.newDob" type="date" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                            </div>
-                            <div v-if="needsPhone">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
-                                <input v-model="form.newPhoneNumber" type="text" placeholder="New phone number" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2" />
-                            </div>
+                        <div v-if="needsDob">
+                            <label for="oldDob" class="eyebrow">Date of birth</label>
+                            <input id="oldDob" v-model="form.oldDob" type="date" class="mt-1.5 block w-full" />
+                        </div>
+                        <div v-if="needsPhone">
+                            <label for="oldPhoneNumber" class="eyebrow">Phone number</label>
+                            <input id="oldPhoneNumber" v-model="form.oldPhoneNumber" type="tel" class="mt-1.5 block w-full font-mono" />
                         </div>
                     </div>
 
-                    <button type="submit" :disabled="form.processing || !form.serviceType"
-                        class="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <svg v-if="form.processing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    <!-- NEW -->
+                    <div v-show="activeTab === 'new'" class="mt-4 space-y-4">
+                        <div v-if="needsName" class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div>
+                                <label for="newFirstName" class="eyebrow">First name</label>
+                                <input id="newFirstName" v-model="form.newFirstName" type="text" class="mt-1.5 block w-full" />
+                            </div>
+                            <div>
+                                <label for="newMiddleName" class="eyebrow">Middle name</label>
+                                <input id="newMiddleName" v-model="form.newMiddleName" type="text" class="mt-1.5 block w-full" />
+                            </div>
+                            <div>
+                                <label for="newLastName" class="eyebrow">Last name</label>
+                                <input id="newLastName" v-model="form.newLastName" type="text" class="mt-1.5 block w-full" />
+                            </div>
+                        </div>
+                        <div v-if="needsDob">
+                            <label for="newDob" class="eyebrow">Date of birth</label>
+                            <input id="newDob" v-model="form.newDob" type="date" class="mt-1.5 block w-full" />
+                        </div>
+                        <div v-if="needsPhone">
+                            <label for="newPhoneNumber" class="eyebrow">Phone number</label>
+                            <input id="newPhoneNumber" v-model="form.newPhoneNumber" type="tel" class="mt-1.5 block w-full font-mono" />
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Held to a sane width: a full-bleed submit button across a
+                     wide desktop column reads as a banner, not a control. -->
+                <div class="max-w-md space-y-2">
+                    <button type="submit" :disabled="form.processing || !form.serviceType" class="btn btn-primary btn-lg w-full">
+                        <svg v-if="form.processing" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
-                        <span v-if="form.processing">Submitting...</span>
-                        <span v-else>Submit Request<template v-if="form.serviceType"> — {{ formatCurrency(selectedPrice) }}</template></span>
+                        <span v-if="form.processing">Submitting…</span>
+                        <span v-else>
+                            Submit request<template v-if="form.serviceType"> — {{ formatCurrency(selectedPrice) }}</template>
+                        </span>
                     </button>
 
-                    <p v-if="form.serviceType" class="text-center text-xs text-gray-500 dark:text-gray-400">
+                    <p v-if="form.serviceType" class="text-center text-xs text-ink-500 dark:text-ink-400">
                         By submitting this request, you agree to the service fee which will be deducted from your wallet balance.
                     </p>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </AuthenticatedLayout>
 </template>

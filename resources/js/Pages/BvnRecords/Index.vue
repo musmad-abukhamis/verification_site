@@ -1,5 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import PageHeader from '@/Components/PageHeader.vue';
+import EmptyState from '@/Components/EmptyState.vue';
+import Pagination from '@/Components/Pagination.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
@@ -21,17 +24,6 @@ const search = () => {
         query: query.value.trim(),
     }, { preserveState: true, preserveScroll: true });
 };
-
-const goToPage = (url) => {
-    if (url) router.visit(url, { preserveState: true, preserveScroll: true });
-};
-
-// Laravel paginator links: keep First/prev, numbered pages, next/Last (skip the
-// text prev/next labels, which we render separately).
-const numberedLinks = computed(() => {
-    if (!props.records?.links) return [];
-    return props.records.links.filter((l) => !['&laquo; Previous', 'Next &raquo;'].includes(l.label));
-});
 
 /* -- expandable comments ------------------------------------------------- */
 
@@ -70,108 +62,124 @@ watch(() => props.records, () => expanded.value.clear());
 
 <template>
     <Head title="Search BVN Records" />
+
     <AuthenticatedLayout>
         <div class="space-y-6">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Search BVN Records</h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Look up enrolment records by Ticket ID or Agent ID.</p>
-            </div>
+            <PageHeader
+                eyebrow="BVN services"
+                title="Search BVN records"
+                description="Look up enrolment records by Ticket ID or Agent ID."
+            />
 
-            <!-- Search form -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-4">
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <select v-model="searchType"
-                        class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:w-44">
+            <!-- Search -->
+            <div class="card card-pad">
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <select v-model="searchType" aria-label="Search by" class="sm:w-44">
                         <option value="ticket_id">Ticket ID</option>
                         <option value="enroller_id">Agent ID</option>
                     </select>
+
                     <div class="flex-1">
-                        <input v-model="query" type="text" minlength="6" @keyup.enter="search"
+                        <input
+                            v-model="query"
+                            type="search"
+                            minlength="6"
+                            @keyup.enter="search"
                             :placeholder="`Enter ${searchType === 'ticket_id' ? 'Ticket ID' : 'Agent ID'} (min. 6 characters)`"
-                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
-                        <p v-if="query.trim() && !isValid" class="mt-1 text-xs text-red-500">Please enter at least 6 characters.</p>
+                            aria-label="Search term"
+                            class="block w-full font-mono"
+                        />
+                        <p v-if="query.trim() && !isValid" class="mt-1 text-xs font-medium text-danger-600 dark:text-danger-400">
+                            Please enter at least 6 characters.
+                        </p>
                     </div>
-                    <button @click="search" :disabled="!isValid"
-                        class="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap">
-                        Search
-                    </button>
+
+                    <button @click="search" :disabled="!isValid" class="btn btn-primary">Search</button>
                 </div>
             </div>
 
-            <!-- Empty state (no search yet) -->
-            <div v-if="!hasSearched" class="bg-white dark:bg-slate-800 rounded-xl shadow py-20 text-center">
-                <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p class="text-lg font-medium text-gray-600 dark:text-gray-400">Enter a Ticket ID or Agent ID to search for BVN records.</p>
+            <!-- Nothing searched yet -->
+            <div v-if="!hasSearched" class="card">
+                <EmptyState
+                    title="Search for an enrolment record"
+                    description="Enter a Ticket ID or an Agent ID above and matching records will be listed here."
+                    icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
             </div>
 
             <!-- Results -->
-            <div v-else class="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ticket ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">BVN</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Agent Name</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Agent ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
-                                    <span class="inline-flex items-center gap-2">
-                                        Comment
-                                        <button type="button" @click="toggleAll"
-                                            class="normal-case font-normal text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline">
-                                            {{ allExpanded ? 'Collapse all' : 'Expand all' }}
+            <section v-else class="card overflow-hidden">
+                <template v-if="records.data.length">
+                    <div class="scroll-slim overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="t-head">
+                                <tr>
+                                    <th>Ticket ID</th>
+                                    <th>BVN</th>
+                                    <th>Agent name</th>
+                                    <th>Agent ID</th>
+                                    <th>Status</th>
+                                    <th>
+                                        <span class="inline-flex items-center gap-2">
+                                            Comment
+                                            <button
+                                                type="button"
+                                                @click="toggleAll"
+                                                class="text-[11px] font-normal normal-case tracking-normal text-brand-700 hover:underline dark:text-brand-300"
+                                            >
+                                                {{ allExpanded ? 'Collapse all' : 'Expand all' }}
+                                            </button>
+                                        </span>
+                                    </th>
+                                    <th>Date enrolled</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y rule">
+                                <tr v-for="r in records.data" :key="r.ticket_id" class="t-row">
+                                    <td class="align-top font-mono font-semibold text-ink-950 dark:text-white">{{ r.ticket_id }}</td>
+                                    <td class="align-top font-mono text-ink-700 dark:text-ink-200">{{ r.bvn }}</td>
+                                    <td class="align-top text-ink-700 dark:text-ink-200">{{ r.enrollee_name }}</td>
+                                    <td class="align-top font-mono text-ink-700 dark:text-ink-200">{{ r.enroller_id }}</td>
+                                    <td class="align-top text-ink-700 dark:text-ink-200">{{ r.status }}</td>
+                                    <td class="max-w-[280px] align-top text-ink-600 dark:text-ink-300">
+                                        <button
+                                            v-if="r.comment"
+                                            type="button"
+                                            @click="toggle(r.ticket_id)"
+                                            :aria-expanded="isExpanded(r.ticket_id)"
+                                            :title="isExpanded(r.ticket_id) ? 'Click to collapse' : 'Click to see the full message'"
+                                            class="flex w-full items-start gap-1.5 rounded text-left hover:text-ink-900 dark:hover:text-ink-100"
+                                        >
+                                            <span
+                                                class="min-w-0 flex-1"
+                                                :class="isExpanded(r.ticket_id) ? 'whitespace-pre-wrap break-words' : 'truncate'"
+                                            >{{ r.comment }}</span>
+                                            <svg
+                                                class="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-400 transition-transform"
+                                                :class="{ 'rotate-180': isExpanded(r.ticket_id) }"
+                                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                            >
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
                                         </button>
-                                    </span>
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date Enrolled</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <tr v-for="r in records.data" :key="r.ticket_id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white align-top">{{ r.ticket_id }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300 align-top">{{ r.bvn }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-top">{{ r.enrollee_name }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300 align-top">{{ r.enroller_id }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 align-top">{{ r.status }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-[280px] align-top">
-                                    <button v-if="r.comment" type="button" @click="toggle(r.ticket_id)"
-                                        :aria-expanded="isExpanded(r.ticket_id)"
-                                        :title="isExpanded(r.ticket_id) ? 'Click to collapse' : 'Click to see the full message'"
-                                        class="w-full flex items-start gap-1.5 text-left rounded hover:text-gray-900 dark:hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-                                        <span class="flex-1 min-w-0"
-                                            :class="isExpanded(r.ticket_id) ? 'whitespace-pre-wrap break-words' : 'truncate'">{{ r.comment }}</span>
-                                        <svg class="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400 transition-transform"
-                                            :class="{ 'rotate-180': isExpanded(r.ticket_id) }"
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </button>
-                                    <span v-else class="text-gray-400">—</span>
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 align-top">{{ r.date_enrolled }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-if="records.data.length === 0" class="py-10 text-center text-gray-500 dark:text-gray-400">No records found for the search criteria.</div>
+                                        <span v-else class="text-ink-400 dark:text-ink-500">—</span>
+                                    </td>
+                                    <td class="whitespace-nowrap align-top text-ink-500 dark:text-ink-400">{{ r.date_enrolled }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
 
-                <!-- Pagination -->
-                <div v-if="records.total > records.per_page" class="p-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-center gap-1">
-                    <button @click="goToPage(records.prev_page_url)" :disabled="!records.prev_page_url"
-                        class="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Prev</button>
-                    <button v-for="link in numberedLinks" :key="link.label"
-                        @click="goToPage(link.url)" :disabled="!link.url"
-                        :class="['px-3 py-1.5 text-sm rounded-md border',
-                            link.active ? 'bg-indigo-600 text-white border-indigo-700' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700',
-                            !link.url ? 'opacity-50 cursor-default' : '']"
-                        v-html="link.label"></button>
-                    <button @click="goToPage(records.next_page_url)" :disabled="!records.next_page_url"
-                        class="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Next</button>
-                </div>
-            </div>
+                    <Pagination :paginator="records" label="records" />
+                </template>
+
+                <EmptyState
+                    v-else
+                    title="No records found"
+                    description="Nothing matches that Ticket ID or Agent ID. Check the value and try again."
+                    icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+            </section>
         </div>
     </AuthenticatedLayout>
 </template>
