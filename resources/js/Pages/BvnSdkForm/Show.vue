@@ -3,15 +3,18 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import StatusPill from '@/Components/StatusPill.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { formatDateOnly } from '@/utils/date';
 
 defineProps({
     form: Object,
 });
 
-const formatDate = (date) => {
-    if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' });
-};
+const formatDate = (date) => formatDateOnly(
+    date,
+    { year: 'numeric', month: 'long', day: 'numeric' },
+    'en-NG',
+    '—',
+);
 </script>
 
 <template>

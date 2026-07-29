@@ -7,6 +7,7 @@ import StandardSlipV2 from '@/Components/StandardSlipV2.vue';
 import PremiumSlip from '@/Components/PremiumSlip.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
+import { formatDateOnly } from '@/utils/date';
 
 const props = defineProps({
     wallet: Object,
@@ -237,25 +238,7 @@ const qrValue = computed(() => {
     return "NIN:" + (verificationResult.value?.nin || verificationResult.value?.idValue) + " " + "Name:" + verificationResult.value?.surname + " " + verificationResult.value?.othernames + " " + "DOB:" + formatDob(verificationResult.value?.dob || verificationResult.value?.birthdate);
 });
 
-const formatDob = (dob) => {
-    if (!dob) return '-';
-    try {
-        const parts = String(dob).split('-');
-        if (parts.length === 3) {
-            const [day, month, year] = parts;
-            const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-            const d = new Date(isoDate);
-            if (!isNaN(d.getTime())) {
-                return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-            }
-        }
-        const d = new Date(dob);
-        if (!isNaN(d.getTime())) {
-            return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-        }
-        return dob;
-    } catch { return dob; }
-};
+const formatDob = (dob) => formatDateOnly(dob);
 
 const getGender = (gender) => {
     if (!gender) return '-';

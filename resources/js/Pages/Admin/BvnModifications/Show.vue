@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { formatDateOnly } from '@/utils/date';
 
 const props = defineProps({
     request: Object,
@@ -24,10 +25,7 @@ const destroy = () => {
     }
 };
 
-const formatDate = (date) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' });
-};
+const formatDate = (date) => formatDateOnly(date, { year: 'numeric', month: 'long', day: 'numeric' });
 
 const fullName = (f, m, l) => [f, m, l].filter(Boolean).join(' ') || '-';
 </script>

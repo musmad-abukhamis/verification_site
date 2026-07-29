@@ -10,6 +10,7 @@ import BvnPremiumSlip from '@/Components/BvnPremiumSlip.vue';
 import BvnLongSlip from '@/Components/BvnLongSlip.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { formatDateOnly } from '@/utils/date';
 
 const props = defineProps({
     wallet: Object,
@@ -52,11 +53,12 @@ const formatBvn = (bvn) => {
     return s.length === 11 ? `${s.slice(0, 4)} ${s.slice(4, 7)} ${s.slice(7, 11)}` : s;
 };
 
-const fmtDate = (d) => {
-    if (!d) return '—';
-    const date = new Date(d);
-    return isNaN(date) ? d : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-};
+const fmtDate = (d) => formatDateOnly(
+    d,
+    { day: '2-digit', month: 'short', year: 'numeric' },
+    'en-GB',
+    '—',
+);
 
 const fullName = computed(() => {
     const r = result.value || {};
