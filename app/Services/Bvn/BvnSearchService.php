@@ -5,7 +5,10 @@ namespace App\Services\Bvn;
 use App\Models\NinDetail;
 use App\Models\ServicePrice;
 use App\Models\User;
+use App\Services\Verification\FailedVerificationChargeService;
+use App\Services\Verification\FailureClassification;
 use App\Services\Verification\VerificationDispatcher;
+use App\Services\Verification\VerificationOutcome;
 use App\Support\BankDirectory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +27,10 @@ use Illuminate\Support\Facades\Log;
  */
 class BvnSearchService
 {
-    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
+    public function __construct(
+        private readonly VerificationDispatcher $dispatcher,
+        private readonly FailedVerificationChargeService $failedCharges,
+    ) {}
 
     /** slipType => service_prices key (premium = BVN Slip). */
     public const SLIP_SERVICES = [
@@ -66,7 +72,7 @@ class BvnSearchService
     /**
      * Run a lookup.
      *
-     * @return array{success: bool, message?: string, data?: array, reference: string, price?: float, code?: string}
+     * @return array{success: bool, message?: string, data?: array, reference: string, price?: float, code?: string, charge?: array<string, mixed>}
      */
     public function search(User $user, string $bvn, string $slipType): array
     {
@@ -109,10 +115,10 @@ class BvnSearchService
                 ];
             }
 
-            $lookup = $this->lookup($user, $bvn, $reference);
+            $outcome = $this->lookup($user, $bvn, $reference);
 
-            if ($lookup['success']) {
-                $details = $lookup['data'];
+            if ($outcome->isSuccess()) {
+                $details = $this->toSlipFields($outcome->data, $bvn);
 
                 NinDetail::create([
                     'id' => $reference,
@@ -138,8 +144,16 @@ class BvnSearchService
                 ];
             }
 
-            // Provider said no: refund and log the attempt.
+            // The lookup did not produce a record: the search fee is always
+            // refunded in full, exactly as before. Only then — and only when the
+            // provider actually answered "no such BVN" — is the separate
+            // failed-verification fee taken.
             $this->refund($user, $price);
+
+            $charge = $this->failedCharges->chargeForOutcome($user, 'bvn.verify', $reference, $outcome, [
+                'identity_value' => $bvn,
+                'record_id' => $reference,
+            ]);
 
             NinDetail::create([
                 'id' => $reference,
@@ -148,8 +162,10 @@ class BvnSearchService
                 'sliptype' => $slipType,
                 'status' => 'fail',
                 'oldBal' => $oldBalance,
-                'newBal' => $oldBalance,
-                'price' => (int) round($price),
+                // The failed-verification fee, when one was taken, is the only
+                // net movement — so the logged balance has to reflect it.
+                'newBal' => (float) $user->balance,
+                'price' => (int) round($charge->charged ? $charge->amount : $price),
                 'userId' => $user->id,
             ]);
 
@@ -157,22 +173,36 @@ class BvnSearchService
 
             return [
                 'success' => false,
-                'code' => 'verification_failed',
-                'message' => $lookup['message'] ?? 'Verification failed. Please check the BVN and try again.',
+                'code' => $outcome->isTimeout() ? 'provider_error' : 'verification_failed',
+                'message' => $charge->decorate(
+                    $outcome->message ?: 'Verification failed. Please check the BVN and try again.',
+                ),
                 'reference' => $reference,
                 'price' => $price,
+                'charge' => $charge->toArray(),
             ];
         } catch (\Throwable $e) {
             DB::rollBack();
             $this->refund($user, $price);
             Log::error('BVN search error: '.$e->getMessage());
 
+            // An exception means our code broke, not that the BVN is bad. Log
+            // the non-charge so the history can say so, and never bill for it.
+            $charge = $this->failedCharges->charge(
+                $user,
+                'bvn.verify',
+                $reference,
+                FailureClassification::TECHNICAL_ERROR,
+                ['identity_value' => $bvn, 'message' => $e->getMessage()],
+            );
+
             return [
                 'success' => false,
                 'code' => 'provider_error',
-                'message' => 'Network error. Please try again.',
+                'message' => $charge->decorate('Network error. Please try again.'),
                 'reference' => $reference,
                 'price' => $price,
+                'charge' => $charge->toArray(),
             ];
         }
     }
@@ -185,25 +215,21 @@ class BvnSearchService
     /**
      * Run the lookup against the routed `bvn.verify` chain.
      *
-     * @return array{success: bool, data?: array<string, mixed>, message?: string}
+     * Returns the engine's outcome untranslated, because the caller needs the
+     * fail/timeout distinction to decide whether a failed-verification fee is
+     * even allowed — a flattened "success: false" would lose exactly that.
      */
-    private function lookup(User $user, string $bvn, string $reference): array
+    private function lookup(User $user, string $bvn, string $reference): VerificationOutcome
     {
         // No silent fallback to a config-file provider: if nothing is routed for
         // bvn.verify the request is refused (and refunded). A hidden fallback
         // would send customers to a provider the admin never selected and log
         // nothing in Provider Calls -- exactly the surprise this engine exists
         // to prevent.
-        $outcome = $this->dispatcher->verify('bvn.verify', ['bvn' => $bvn], [
+        return $this->dispatcher->verify('bvn.verify', ['bvn' => $bvn], [
             'user_id' => $user->id,
             'reference' => $reference,
         ]);
-
-        if (! $outcome->isSuccess()) {
-            return ['success' => false, 'message' => $outcome->message];
-        }
-
-        return ['success' => true, 'data' => $this->toSlipFields($outcome->data, $bvn)];
     }
 
     /**

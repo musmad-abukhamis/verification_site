@@ -4,6 +4,7 @@ import PageHeader from '@/Components/PageHeader.vue';
 import StatusPill from '@/Components/StatusPill.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { chargeReasonLabel } from '@/utils/verificationCharge';
 
 defineProps({
     history: Array,
@@ -63,6 +64,7 @@ const tabs = [
                                 <th>Identity number</th>
                                 <th>Amount</th>
                                 <th>Status</th>
+                                <th>Charged</th>
                                 <th>Date</th>
                             </tr>
                         </thead>
@@ -72,6 +74,22 @@ const tabs = [
                                 <td class="font-mono text-ink-600 dark:text-ink-300">{{ item.identity_number }}</td>
                                 <td class="font-mono font-semibold text-ink-950 dark:text-white">{{ formatCurrency(item.amount) }}</td>
                                 <td><StatusPill :status="item.status" /></td>
+                                <!-- The failed-verification fee. Blank on rows from before the
+                                     feature, and on successes, which pay the Amount column. -->
+                                <td class="text-ink-600 dark:text-ink-300">
+                                    <template v-if="item.charged">
+                                        <span class="font-mono font-semibold">{{ formatCurrency(item.charge_amount) }}</span>
+                                        <span
+                                            v-if="item.charge_reference"
+                                            class="block font-mono text-[11px] text-ink-400"
+                                            :title="item.charge_reference"
+                                        >{{ item.charge_reference }}</span>
+                                    </template>
+                                    <span v-else-if="item.charge_reason" class="text-xs text-ink-500 dark:text-ink-400">
+                                        No — {{ chargeReasonLabel(item) }}
+                                    </span>
+                                    <span v-else class="text-ink-400">—</span>
+                                </td>
                                 <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ item.date }}</td>
                             </tr>
                         </tbody>

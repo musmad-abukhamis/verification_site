@@ -8,6 +8,7 @@ import PremiumSlip from '@/Components/PremiumSlip.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import { formatDateOnly } from '@/utils/date';
+import { chargeReasonLabel } from '@/utils/verificationCharge';
 
 const props = defineProps({
     wallet: Object,
@@ -634,7 +635,7 @@ const pagination = computed(() => ({
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th v-for="col in [{field:'id',label:'ID'},{field:'nin',label:'NIN/Phone'},{field:'status',label:'Status'},{field:null,label:'Comment'},{field:null,label:'Old Bal'},{field:null,label:'New Bal'},{field:'created_at',label:'Date'}]"
+                                <th v-for="col in [{field:'id',label:'ID'},{field:'nin',label:'NIN/Phone'},{field:'status',label:'Status'},{field:null,label:'Comment'},{field:null,label:'Old Bal'},{field:null,label:'New Bal'},{field:null,label:'Charged'},{field:'created_at',label:'Date'}]"
                                     :key="col.label"
                                     @click="col.field && handleSort(col.field)"
                                     :class="['px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase', col.field ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600' : '']">
@@ -652,6 +653,20 @@ const pagination = computed(() => ({
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-[180px] truncate" :title="tx.comment">{{ tx.comment || '-' }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.old_balance || 0).toLocaleString() }}</td>
                                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">₦{{ Number(tx.new_balance || 0).toLocaleString() }}</td>
+                                <!-- Failed-verification fee: taken only when a provider confirmed the
+                                     failure, so this also records the deliberate non-charges. -->
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                                    <template v-if="tx.charged">
+                                        <span class="font-medium">₦{{ Number(tx.charge_amount || 0).toLocaleString() }}</span>
+                                        <span v-if="tx.charge_reference" class="block font-mono text-[11px] text-gray-400" :title="tx.charge_reference">
+                                            {{ tx.charge_reference }}
+                                        </span>
+                                    </template>
+                                    <span v-else-if="tx.charge_reason" class="text-xs text-gray-500 dark:text-gray-400">
+                                        No — {{ chargeReasonLabel(tx) }}
+                                    </span>
+                                    <span v-else class="text-gray-400">—</span>
+                                </td>
                                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(tx.created_at) }}</td>
                             </tr>
                         </tbody>

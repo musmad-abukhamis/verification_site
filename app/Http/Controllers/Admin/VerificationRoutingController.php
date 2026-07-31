@@ -7,10 +7,13 @@ use App\Models\VerificationAttempt;
 use App\Models\VerificationProvider;
 use App\Models\VerificationRoute;
 use App\Models\VerificationSetting;
+use App\Services\Verification\FailedVerificationChargeService;
 use App\Services\Verification\ServiceCatalog;
 use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -69,7 +72,26 @@ class VerificationRoutingController extends Controller
                 'failover_max_attempts' => VerificationSetting::int('failover_max_attempts', 0),
                 'attempt_retention_days' => VerificationSetting::int('attempt_retention_days', 30),
             ],
+            'failedCharges' => $this->failedChargeSettings(),
         ]);
+    }
+
+    /**
+     * The Failed Verification Charges panel's current state.
+     *
+     * @return array<string, mixed>
+     */
+    private function failedChargeSettings(): array
+    {
+        $keys = FailedVerificationChargeService::SETTINGS;
+
+        return [
+            'bvn_enabled' => VerificationSetting::bool($keys['bvn']['enabled'], false),
+            'bvn_amount' => VerificationSetting::float($keys['bvn']['amount'], 0),
+            'nin_enabled' => VerificationSetting::bool($keys['nin']['enabled'], false),
+            'nin_amount' => VerificationSetting::float($keys['nin']['amount'], 0),
+            'dedupe_seconds' => VerificationSetting::int('failed_charge_dedupe_seconds', 60),
+        ];
     }
 
     public function updateRoutes(Request $request)
@@ -111,6 +133,74 @@ class VerificationRoutingController extends Controller
         VerificationSetting::put('attempt_retention_days', (int) $validated['attempt_retention_days']);
 
         return back()->with('success', 'Settings saved.');
+    }
+
+    /**
+     * Admin > Verification > Failed Verification Charges.
+     *
+     * Sets whether a provider-confirmed failed NIN/BVN verification bills the
+     * user, and how much. Amounts are never hardcoded anywhere — an empty or
+     * zero amount means "do not charge", even with the toggle on.
+     *
+     * The route already sits behind the admin middleware group, so reaching
+     * this method at all requires an administrator.
+     */
+    public function updateFailedCharges(Request $request)
+    {
+        $validated = $request->validate([
+            'bvn_enabled' => ['boolean'],
+            'nin_enabled' => ['boolean'],
+            // Zero is allowed and means "no charge"; negative never is, and the
+            // ceiling stops a stray keystroke emptying a wallet.
+            'bvn_amount' => ['required', 'numeric', 'min:0', 'max:100000'],
+            'nin_amount' => ['required', 'numeric', 'min:0', 'max:100000'],
+            'dedupe_seconds' => ['required', 'integer', 'min:0', 'max:3600'],
+        ], [
+            'bvn_amount.min' => 'The BVN failed-verification charge cannot be negative.',
+            'nin_amount.min' => 'The NIN failed-verification charge cannot be negative.',
+        ]);
+
+        $before = $this->failedChargeSettings();
+
+        $keys = FailedVerificationChargeService::SETTINGS;
+
+        VerificationSetting::put($keys['bvn']['enabled'], $request->boolean('bvn_enabled'));
+        VerificationSetting::put($keys['bvn']['amount'], number_format((float) $validated['bvn_amount'], 2, '.', ''));
+        VerificationSetting::put($keys['nin']['enabled'], $request->boolean('nin_enabled'));
+        VerificationSetting::put($keys['nin']['amount'], number_format((float) $validated['nin_amount'], 2, '.', ''));
+        VerificationSetting::put('failed_charge_dedupe_seconds', (int) $validated['dedupe_seconds']);
+
+        $this->logFailedChargeChange($before, $this->failedChargeSettings());
+
+        return back()->with('success', 'Failed verification charges saved.');
+    }
+
+    /**
+     * Who changed what, before → after. These settings take money off customers,
+     * so a change that nobody can account for later is not acceptable.
+     *
+     * @param  array<string, mixed>  $before
+     * @param  array<string, mixed>  $after
+     */
+    private function logFailedChargeChange(array $before, array $after): void
+    {
+        $changes = [];
+
+        foreach ($after as $key => $value) {
+            if (($before[$key] ?? null) !== $value) {
+                $changes[$key] = ['from' => $before[$key] ?? null, 'to' => $value];
+            }
+        }
+
+        if ($changes === []) {
+            return;
+        }
+
+        Log::info('[admin] UPDATED_FAILED_VERIFICATION_CHARGES', [
+            'admin_id' => Auth::id(),
+            'admin_name' => Auth::user()?->name,
+            'changes' => $changes,
+        ]);
     }
 
     /**

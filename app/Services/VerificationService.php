@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\FailedVerificationCharge;
 use App\Models\NinDetail;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Verification\FailedVerificationChargeService;
+use App\Services\Verification\FailureClassification;
 use App\Services\Verification\VerificationDispatcher;
 use Illuminate\Support\Facades\Log;
 
@@ -20,7 +23,10 @@ use Illuminate\Support\Facades\Log;
  */
 class VerificationService
 {
-    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
+    public function __construct(
+        private readonly VerificationDispatcher $dispatcher,
+        private readonly FailedVerificationChargeService $failedCharges,
+    ) {}
 
     /**
      * Verify NIN (National Identity Number)
@@ -126,13 +132,24 @@ class VerificationService
                 ];
             }
 
-            // Every routed provider declined (or none answered) — refund.
+            // Every routed provider declined (or none answered) — the
+            // verification fee is refunded in full, as it always was. The
+            // failed-verification fee is then taken only if the provider
+            // actually answered "no such record".
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed($outcome->message ?? 'Verification failed');
+
+            $charge = $this->failedCharges->chargeForOutcome($user, $service, $reference, $outcome, [
+                'identity_value' => $identityNumber,
+                'record_id' => $reference,
+            ]);
+
+            $message = $charge->decorate($outcome->message ?: 'NIN verification failed');
+            $transaction->markAsFailed($message);
 
             return [
                 'success' => false,
-                'message' => $outcome->message ?? 'NIN verification failed',
+                'message' => $message,
+                'charge' => $charge->toArray(),
             ];
         } catch (\Exception $e) {
             Log::error('NIN verification failed', [
@@ -142,11 +159,23 @@ class VerificationService
             ]);
 
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed('Service temporarily unavailable');
+
+            // Our own exception — never the customer's problem to pay for.
+            $charge = $this->failedCharges->charge(
+                $user,
+                $service,
+                $reference,
+                FailureClassification::TECHNICAL_ERROR,
+                ['identity_value' => $identityNumber, 'message' => $e->getMessage(), 'record_id' => $reference],
+            );
+
+            $message = $charge->decorate('Service temporarily unavailable. Please try again.');
+            $transaction->markAsFailed($message);
 
             return [
                 'success' => false,
-                'message' => 'Service temporarily unavailable. Please try again.',
+                'message' => $message,
+                'charge' => $charge->toArray(),
             ];
         }
     }
@@ -221,13 +250,23 @@ class VerificationService
                 ];
             }
 
-            // Every routed provider declined (or none answered) — refund.
+            // Every routed provider declined (or none answered) — refund the
+            // verification fee, then apply the failed-verification fee if the
+            // provider genuinely rejected the BVN.
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed($outcome->message ?? 'Verification failed');
+
+            $charge = $this->failedCharges->chargeForOutcome($user, 'bvn.verify', $reference, $outcome, [
+                'identity_value' => $bvnNumber,
+                'record_id' => $reference,
+            ]);
+
+            $message = $charge->decorate($outcome->message ?: 'BVN verification failed');
+            $transaction->markAsFailed($message);
 
             return [
                 'success' => false,
-                'message' => $outcome->message ?? 'BVN verification failed',
+                'message' => $message,
+                'charge' => $charge->toArray(),
             ];
         } catch (\Exception $e) {
             Log::error('BVN verification failed', [
@@ -236,11 +275,22 @@ class VerificationService
             ]);
 
             $user->credit($amount, false, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $transaction->markAsFailed('Service temporarily unavailable');
+
+            $charge = $this->failedCharges->charge(
+                $user,
+                'bvn.verify',
+                $reference,
+                FailureClassification::TECHNICAL_ERROR,
+                ['identity_value' => $bvnNumber, 'message' => $e->getMessage(), 'record_id' => $reference],
+            );
+
+            $message = $charge->decorate('Service temporarily unavailable. Please try again.');
+            $transaction->markAsFailed($message);
 
             return [
                 'success' => false,
-                'message' => 'Service temporarily unavailable. Please try again.',
+                'message' => $message,
+                'charge' => $charge->toArray(),
             ];
         }
     }
@@ -260,8 +310,18 @@ class VerificationService
             $query->where('type', $typeMap[$type]);
         }
 
-        return $query->get()->map(function (Transaction $txn) {
+        $transactions = $query->get();
+
+        // One lookup for the page rather than one per row: the charge (or the
+        // recorded decision not to charge) is keyed by the transaction id, which
+        // is also the verification reference.
+        $charges = FailedVerificationCharge::whereIn('verification_reference', $transactions->pluck('id'))
+            ->get()
+            ->keyBy('verification_reference');
+
+        return $transactions->map(function (Transaction $txn) use ($charges) {
             $kind = $txn->type === 'bvn_verification' ? 'BVN' : 'NIN';
+            $charge = $charges->get($txn->id);
 
             return [
                 'id' => $txn->id,
@@ -270,7 +330,7 @@ class VerificationService
                 'status' => $txn->status,
                 'date' => $txn->createdAt?->format('Y-m-d H:i:s'),
                 'amount' => (float) $txn->price,
-            ];
+            ] + ($charge?->toHistoryPayload() ?? FailedVerificationCharge::emptyHistoryPayload());
         })->toArray();
     }
 }

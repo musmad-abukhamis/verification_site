@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\NIN;
 
+use App\Models\FailedVerificationCharge;
 use App\Models\ServicePrice;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -118,6 +120,25 @@ trait NinWalletTrait
             'new_balance' => (float) $record->newBal,
             'created_at' => $record->createdAt,
         ];
+    }
+
+    /**
+     * Present a page of Validation rows with the failed-verification charge (or
+     * the recorded decision not to charge) attached to each one.
+     *
+     * Done as a single lookup for the page rather than a per-row query, and it
+     * degrades to "not charged" for rows that predate the feature.
+     */
+    protected function withFailedChargeDetail(LengthAwarePaginator $records): LengthAwarePaginator
+    {
+        $charges = FailedVerificationCharge::whereIn(
+            'record_id',
+            collect($records->items())->pluck('id')->map(fn ($id) => (string) $id),
+        )->get()->keyBy('record_id');
+
+        return $records->through(fn ($record) => $this->presentNinRecord($record)
+            + (($charges->get((string) $record->id))?->toHistoryPayload()
+                ?? FailedVerificationCharge::emptyHistoryPayload()));
     }
 
     /**

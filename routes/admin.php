@@ -79,6 +79,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('/verification-routing', [VerificationRoutingController::class, 'updateRoutes'])->name('verification-routing.update');
     Route::put('/verification-routing/settings', [VerificationRoutingController::class, 'updateSettings'])->name('verification-routing.settings.update');
 
+    // Whether (and how much) a provider-confirmed failed NIN/BVN verification
+    // bills the user. Lives here because it is a property of the same engine.
+    Route::put('/verification-routing/failed-charges', [VerificationRoutingController::class, 'updateFailedCharges'])->name('verification-routing.failed-charges.update');
+
     // Per-hop audit of every provider call, failed-over hops included.
     Route::get('/verification-attempts', [VerificationRoutingController::class, 'attempts'])->name('verification-attempts.index');
 

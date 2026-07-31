@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FailedVerificationCharge;
 use App\Models\NinDetail;
 use App\Services\Bvn\BvnSearchService;
 use Illuminate\Http\Request;
@@ -40,18 +41,27 @@ class BvnSearchController extends Controller
         $history = NinDetail::where('userId', $user->id)
             ->where('idtype', 'bvn')
             ->orderByDesc('createdAt')
-            ->paginate(10)
-            ->through(fn (NinDetail $d) => [
-                'id' => $d->id,
-                'bvn' => $d->idvalue,
-                'name' => trim(($d->surname ?? '').' '.($d->othernames ?? '')) ?: null,
-                'slip_type' => $d->sliptype,
-                'status' => $d->status,
-                'price' => $d->price,
-                'old_balance' => $d->oldBal,
-                'new_balance' => $d->newBal,
-                'created_at' => $d->createdAt,
-            ]);
+            ->paginate(10);
+
+        // The failed-verification charge for each attempt on this page — one
+        // query, keyed by the NINDetails id, which is also the reference the
+        // charge was recorded against.
+        $charges = FailedVerificationCharge::whereIn(
+            'verification_reference',
+            collect($history->items())->pluck('id'),
+        )->get()->keyBy('verification_reference');
+
+        $history->through(fn (NinDetail $d) => [
+            'id' => $d->id,
+            'bvn' => $d->idvalue,
+            'name' => trim(($d->surname ?? '').' '.($d->othernames ?? '')) ?: null,
+            'slip_type' => $d->sliptype,
+            'status' => $d->status,
+            'price' => $d->price,
+            'old_balance' => $d->oldBal,
+            'new_balance' => $d->newBal,
+            'created_at' => $d->createdAt,
+        ] + ($charges->get($d->id)?->toHistoryPayload() ?? FailedVerificationCharge::emptyHistoryPayload()));
 
         return Inertia::render('BvnSearch/Index', [
             'wallet' => $this->walletPayload($user),

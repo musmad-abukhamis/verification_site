@@ -51,6 +51,18 @@ class VerificationSetting extends Model
         return $value === null ? $default : (int) $value;
     }
 
+    /**
+     * Money-valued settings (the failed-verification charge amounts) are stored
+     * as strings like "50.00", so they need their own accessor — int() would
+     * silently truncate the kobo.
+     */
+    public static function float(string $key, float $default = 0.0): float
+    {
+        $value = self::get($key);
+
+        return $value === null || $value === '' ? $default : (float) $value;
+    }
+
     public static function put(string $key, mixed $value): void
     {
         static::query()->updateOrCreate(

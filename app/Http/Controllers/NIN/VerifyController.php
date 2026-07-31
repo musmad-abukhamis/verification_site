@@ -7,6 +7,8 @@ use App\Models\Transaction;
 use App\Models\Validation;
 use App\Services\Nin\NinProviderManager;
 use App\Services\Nin\Providers\RoutedProvider;
+use App\Services\Verification\FailedVerificationChargeService;
+use App\Services\Verification\FailureClassification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +27,10 @@ class VerifyController extends Controller
 {
     use NinWalletTrait;
 
-    public function __construct(private readonly RoutedProvider $routed) {}
+    public function __construct(
+        private readonly RoutedProvider $routed,
+        private readonly FailedVerificationChargeService $failedCharges,
+    ) {}
 
     /**
      * Show the NIN Verification page
@@ -37,8 +42,9 @@ class VerifyController extends Controller
         // Get verification history (validation records)
         $verifications = Validation::where('userId', $user->id)
             ->orderByDesc('createdAt')
-            ->paginate(10)
-            ->through(fn ($r) => $this->presentNinRecord($r));
+            ->paginate(10);
+
+        $verifications = $this->withFailedChargeDetail($verifications);
 
         // Get slip download transactions
         $slipDownloads = Transaction::where('userId', $user->id)
@@ -173,12 +179,20 @@ class VerifyController extends Controller
                 ]);
             }
 
-            // Every routed provider declined (or none is configured) — refund.
+            // Every routed provider declined (or none is configured) — the
+            // verification fee comes back in full. The failed-verification fee
+            // is then charged only for a provider-confirmed rejection, so a
+            // timeout or an unconfigured chain still costs the user nothing.
             $this->creditWallet($user, $verificationPrice, ['fundingtype' => 'refund', 'status' => 'refund']);
 
-            $errorMessage = $result->message ?? 'Verification failed';
+            $charge = $this->failedCharges->chargeForResult($user, $service, $reference, $result, [
+                'identity_value' => $data['idValue'],
+            ]);
 
-            Validation::create([
+            $errorMessage = $charge->decorate($result->message ?: 'Verification failed');
+
+            // Created after the charge so oldBal/newBal bracket the fee too.
+            $validation = Validation::create([
                 'nin' => $data['idValue'],
                 'status' => 'failed',
                 'result' => json_encode($result->raw ?? ['message' => $errorMessage]),
@@ -188,6 +202,9 @@ class VerifyController extends Controller
                 'userId' => $user->id,
             ]);
 
+            // Link the charge to the history row the user will actually see.
+            $charge->record?->update(['record_id' => (string) $validation->id]);
+
             DB::commit();
 
             return back()->withErrors(['message' => $errorMessage]);
@@ -196,7 +213,19 @@ class VerifyController extends Controller
             $this->creditWallet($user, $verificationPrice, ['fundingtype' => 'refund', 'status' => 'refund']);
             Log::error('NIN Verify error: '.$e->getMessage());
 
-            return back()->withErrors(['message' => 'Network error: '.$e->getMessage()]);
+            // The rollback undid any charge written above; record the technical
+            // failure on its own so the "you were not billed" is on file.
+            $charge = $this->failedCharges->charge(
+                $user,
+                $data['idType'] === 'phone' ? 'nin.phone' : 'nin.verify',
+                $reference,
+                FailureClassification::TECHNICAL_ERROR,
+                ['identity_value' => $data['idValue'], 'message' => $e->getMessage()],
+            );
+
+            return back()->withErrors([
+                'message' => $charge->decorate('Network error: '.$e->getMessage()),
+            ]);
         }
     }
 }

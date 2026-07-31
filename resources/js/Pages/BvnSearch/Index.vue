@@ -11,6 +11,7 @@ import BvnLongSlip from '@/Components/BvnLongSlip.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { formatDateOnly } from '@/utils/date';
+import { chargeReasonLabel } from '@/utils/verificationCharge';
 
 const props = defineProps({
     wallet: Object,
@@ -253,6 +254,7 @@ const printSlip = () => window.print();
                                     <th>Slip</th>
                                     <th>Status</th>
                                     <th>Price</th>
+                                    <th>Charged</th>
                                     <th>Date</th>
                                 </tr>
                             </thead>
@@ -263,6 +265,22 @@ const printSlip = () => window.print();
                                     <td class="capitalize text-ink-600 dark:text-ink-300">{{ h.slip_type }}</td>
                                     <td><StatusPill :status="h.status" /></td>
                                     <td class="font-mono text-ink-600 dark:text-ink-300">{{ formatCurrency(h.price) }}</td>
+                                    <!-- Failed attempts: whether the failed-verification fee applied, and if
+                                         not, why. Successful ones simply pay the price column. -->
+                                    <td class="text-ink-600 dark:text-ink-300">
+                                        <template v-if="h.charged">
+                                            <span class="font-mono font-semibold">{{ formatCurrency(h.charge_amount) }}</span>
+                                            <span
+                                                v-if="h.charge_reference"
+                                                class="block font-mono text-[11px] text-ink-400"
+                                                :title="h.charge_reference"
+                                            >{{ h.charge_reference }}</span>
+                                        </template>
+                                        <span v-else-if="h.charge_reason" class="text-xs text-ink-500 dark:text-ink-400">
+                                            No — {{ chargeReasonLabel(h) }}
+                                        </span>
+                                        <span v-else class="text-ink-400">—</span>
+                                    </td>
                                     <td class="whitespace-nowrap text-ink-500 dark:text-ink-400">{{ fmtDate(h.created_at) }}</td>
                                 </tr>
                             </tbody>

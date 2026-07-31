@@ -39,12 +39,15 @@ class BvnController extends Controller
         $result = $this->search->search($request->user(), $validated['bvn'], $slipType);
 
         if (! $result['success']) {
-            return response()->json([
+            return response()->json(array_filter([
                 'status' => 'error',
                 'message' => $result['message'],
                 'code' => $result['code'],
                 'reference' => $result['reference'],
-            ], $this->statusFor($result['code']));
+                // Present only when the failed-verification fee applied, so an
+                // integrator can reconcile the debit against their own records.
+                'charge' => $result['charge'] ?? null,
+            ], fn ($value) => $value !== null), $this->statusFor($result['code']));
         }
 
         return response()->json([

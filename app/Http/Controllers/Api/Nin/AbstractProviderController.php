@@ -10,6 +10,8 @@ use App\Models\Validation;
 use App\Services\Nin\Contracts\NinProvider;
 use App\Services\Nin\NinProviderManager;
 use App\Services\Nin\VerificationResult;
+use App\Services\Verification\FailedVerificationChargeResult;
+use App\Services\Verification\FailedVerificationChargeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,8 +29,10 @@ abstract class AbstractProviderController extends Controller
 {
     use NinWalletTrait;
 
-    public function __construct(protected NinProviderManager $providers)
-    {
+    public function __construct(
+        protected NinProviderManager $providers,
+        protected FailedVerificationChargeService $failedCharges,
+    ) {
     }
 
     /** The provider key this controller serves (e.g. "prembly"). */
@@ -79,16 +83,35 @@ abstract class AbstractProviderController extends Controller
                 return $this->success($provider, $method, $result, $validation, $reference);
             }
 
-            // Provider returned a business failure -> refund and log.
+            // Provider returned a business failure -> refund the verification
+            // price in full, then apply the admin-configured failed-verification
+            // fee if (and only if) the provider actually answered "no record".
+            // A timeout or a provider outage lands here too, and must not bill.
             $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
-            $this->logFailure($user->id, $provider, $method, $request, $result, $oldBalance, $user, $reference);
+
+            $charge = $this->failedCharges->chargeForResult(
+                $user,
+                $this->serviceFor($method),
+                $reference,
+                $result,
+                ['identity_value' => $this->idValueFor($method, $request)],
+            );
+
+            $validation = $this->logFailure($user->id, $provider, $method, $request, $result, $oldBalance, $user, $reference, $charge);
+            $charge->record?->update(['record_id' => (string) $validation->id]);
+
             DB::commit();
 
             return $this->error(
                 $result->errorCode ?? 'verification_failed',
-                $result->message ?? 'Verification failed.',
+                $charge->decorate($result->message ?: 'Verification failed.'),
                 $result->httpStatus ?: 422,
-                ['provider' => $provider->key(), 'method' => $method, 'reference' => $reference],
+                [
+                    'provider' => $provider->key(),
+                    'method' => $method,
+                    'reference' => $reference,
+                    'charge' => $charge->toArray(),
+                ],
             );
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -121,17 +144,38 @@ abstract class AbstractProviderController extends Controller
         ]);
     }
 
-    protected function logFailure(string $userId, NinProvider $provider, string $method, ProviderVerifyRequest $request, VerificationResult $result, float $oldBalance, User $user, string $reference): void
+    /**
+     * Written after the failed-verification fee is settled, so `newBal` is the
+     * balance the user is actually left with.
+     */
+    protected function logFailure(string $userId, NinProvider $provider, string $method, ProviderVerifyRequest $request, VerificationResult $result, float $oldBalance, User $user, string $reference, ?FailedVerificationChargeResult $charge = null): Validation
     {
-        Validation::create([
+        $note = $charge?->charged
+            ? ' (failed-verification fee ₦'.number_format($charge->amount, 2).' charged)'
+            : '';
+
+        return Validation::create([
             'nin' => $request->input('nin') ?? $this->idValueFor($method, $request) ?? '',
             'status' => 'failed',
             'result' => json_encode($result->raw ?? ['message' => $result->message]),
-            'comment' => "[{$result->errorCode}] ".($result->message ?? 'Verification failed'),
+            'comment' => "[{$result->errorCode}] ".($result->message ?? 'Verification failed').$note,
             'oldBal' => $oldBalance,
             'newBal' => (float) $user->balance,
             'userId' => $userId,
         ]);
+    }
+
+    /**
+     * The ServiceCatalog key behind a verification method — which is what
+     * decides whether the NIN or the BVN failed-charge toggle applies.
+     */
+    protected function serviceFor(string $method): string
+    {
+        return match ($method) {
+            'phone' => 'nin.phone',
+            'demographic' => 'nin.demographic',
+            default => 'nin.verify',
+        };
     }
 
     protected function idValueFor(string $method, ProviderVerifyRequest $request): ?string
