@@ -173,27 +173,37 @@ const primaryAccount = computed(() => props.reserved_accounts?.[0] ?? null);
                 </h1>
             </header>
 
-            <div class="grid gap-3 sm:gap-4 lg:grid-cols-3">
+            <!-- `grid-cols-1` is not redundant with plain `grid`. Without a
+                 column template this grid gets one *implicit* track, sized
+                 `auto` — which never shrinks below its content's min-content
+                 width, so the unbreakable balance figure widened the track and
+                 both panels in it stretched past the viewport. `grid-cols-1`
+                 is `repeat(1, minmax(0, 1fr))`, and that `0` is the fix. -->
+            <div class="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
                 <!-- ========================================================
                      Balance + funding accounts — the first thing on the page
                      in every layout, so DOM order and visual order agree and
                      no `order-*` juggling is needed.
                      ======================================================== -->
                 <section class="dash-panel lg:col-span-2">
-                    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-                        <div>
+                    <!-- Every box down this branch carries `min-w-0`. A flex item
+                         defaults to `min-width: auto`, and a ₦ figure has no break
+                         opportunity in it, so without these the figure sets a floor
+                         on the row's width that the panel can't get under. -->
+                    <div class="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-4">
+                        <div class="min-w-0">
                             <p class="dash-eyebrow">Total balance</p>
-                            <p class="dash-figure mt-1.5 text-3xl sm:text-[2rem]">
+                            <p class="dash-figure mt-1.5 text-[1.75rem] sm:text-[2rem]">
                                 {{ formatCurrency(wallet.total_balance) }}
                             </p>
                         </div>
 
-                        <div class="flex gap-6">
-                            <div>
+                        <div class="flex min-w-0 gap-6">
+                            <div class="min-w-0">
                                 <p class="dash-eyebrow">Main</p>
                                 <p class="dash-figure mt-1 text-sm">{{ formatCurrency(wallet.balance) }}</p>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <p class="dash-eyebrow">Bonus</p>
                                 <p class="dash-figure mt-1 text-sm">{{ formatCurrency(wallet.bonus_balance) }}</p>
                             </div>
@@ -212,7 +222,7 @@ const primaryAccount = computed(() => props.reserved_accounts?.[0] ?? null);
                             </Link>
                         </div>
 
-                        <div v-if="reserved_accounts.length" class="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div v-if="reserved_accounts.length" class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <div
                                 v-for="acct in reserved_accounts"
                                 :key="acct.account_number"

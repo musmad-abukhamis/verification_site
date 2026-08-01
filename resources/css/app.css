@@ -27,6 +27,14 @@
     html {
         -webkit-text-size-adjust: 100%;
         -webkit-tap-highlight-color: transparent;
+
+        /* Backstop, not a fix. Every known cause of sideways scroll on this
+           app is fixed at its source; this only guarantees that the next one
+           degrades into a clipped edge rather than into a page that scrolls
+           sideways and leaves a gap beside every full-width element.
+           `clip`, never `hidden` — `hidden` on an ancestor silently kills
+           `position: sticky`, and the top bar depends on it. */
+        overflow-x: clip;
     }
 
     body {
@@ -342,6 +350,33 @@ body.dash-canvas { background: #F9FAFB; }
 
 .dash-h { font-family: 'Sora', ui-sans-serif, system-ui, sans-serif; }
 
+/* ---- Fitting a phone --------------------------------------------------
+   The whole page is grids inside grids, and a grid or flex item defaults to
+   `min-width: auto` — meaning it will not shrink below its own min-content
+   width. This page is full of tokens that have no break opportunity at all:
+   a ₦ balance, a 10-digit account number, a username, a reference. One of
+   those wider than its column doesn't overflow its own box quietly; it
+   widens the column, which widens the grid, which pushes the document past
+   the viewport. Every full-width element then looks like it stops short with
+   a gap on the right, which is the bug as you see it.
+
+   Two rules fix the whole class of it: let the boxes shrink, and let the
+   tokens break. Anything added to this page needs both. */
+.dash .grid > *,
+.dash-panel,
+.ws-body {
+    min-width: 0;
+}
+
+.dash-h,
+.dash-figure,
+.qd-label,
+.qd-strip-text,
+.ws-title,
+.ws-sub {
+    overflow-wrap: anywhere;
+}
+
 .dash-panel {
     background: var(--d-card);
     border: 1px solid var(--d-edge);
@@ -528,7 +563,6 @@ body.dash-canvas { background: #F9FAFB; }
 .ws-body {
     position: relative;   /* lifts the text clear of the watermark */
     flex: 1 1 auto;
-    min-width: 0;
 }
 
 .ws-title {
@@ -538,9 +572,6 @@ body.dash-canvas { background: #F9FAFB; }
     font-weight: 700;
     line-height: 1.25;
     color: var(--d-ink);
-    /* Belt and braces with the `min-width: 0` above: that lets the column
-       shrink, this lets the word itself break rather than spill. */
-    overflow-wrap: anywhere;
 }
 
 /* Clamped so one long subtitle can't set the height of every card in its
