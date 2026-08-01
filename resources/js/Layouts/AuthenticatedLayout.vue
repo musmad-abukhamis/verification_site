@@ -103,21 +103,23 @@ watch(() => page.url, () => (showingSidebar.value = false));
 <template>
     <div class="min-h-screen bg-canvas dark:bg-ink-950">
         <!-- =====================================================================
-             Sidebar. Near-black cool grey in both themes: the chrome is the
-             instrument, the content area is the paper you work on. Blue is
-             spent only on what's active; amber only on the balance.
+             Sidebar. White in light mode, near-black in dark — a near-black rail
+             against a grey-50 canvas was the heaviest thing on the screen and
+             fought the content for attention. It now reads as a quiet extension
+             of the page, separated by a hairline rather than by contrast. Blue
+             is spent only on what's active; amber only on the balance.
              ===================================================================== -->
         <aside
             :class="[
-                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-ink-950 transition-transform duration-300 ease-out md:translate-x-0',
+                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-ink-200 bg-white transition-transform duration-300 ease-out dark:border-ink-800 dark:bg-ink-950 md:translate-x-0',
                 showingSidebar ? 'translate-x-0' : '-translate-x-full',
             ]"
         >
             <!-- Brand -->
             <div class="flex h-16 shrink-0 items-center gap-3 px-5">
                 <Link :href="route('dashboard')" class="flex min-w-0 items-center gap-3">
-                    <ApplicationLogo class="h-8 w-8 shrink-0 text-white" />
-                    <span class="truncate font-display text-base font-bold tracking-tight text-white">
+                    <ApplicationLogo class="h-8 w-8 shrink-0 text-ink-900 dark:text-white" />
+                    <span class="truncate font-display text-base font-bold tracking-tight text-ink-900 dark:text-white">
                         {{ appName }}
                     </span>
                 </Link>
@@ -125,7 +127,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 <button
                     @click="showingSidebar = false"
                     type="button"
-                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-800 hover:text-white md:hidden"
+                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white md:hidden"
                 >
                     <span class="sr-only">Close menu</span>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -137,25 +139,25 @@ watch(() => page.url, () => (showingSidebar.value = false));
             <!-- Wallet slip. The balance is the number an agent checks most, so
                  it gets the accent and sits above the navigation, not inside it. -->
             <div class="px-4 pb-4">
-                <div class="slip-guilloche overflow-hidden rounded-card border border-brass-500/25 bg-ink-900">
+                <div class="slip-guilloche overflow-hidden rounded-card border border-brass-200 bg-brass-50 dark:border-brass-500/25 dark:bg-ink-900">
                     <div class="px-4 pt-3.5">
-                        <p class="text-2xs font-semibold uppercase tracking-[0.14em] text-brass-300">Wallet balance</p>
-                        <p class="mt-1 font-mono text-xl font-semibold tracking-tight text-white">
+                        <p class="text-2xs font-semibold uppercase tracking-[0.14em] text-brass-700 dark:text-brass-300">Wallet balance</p>
+                        <p class="mt-1 font-mono text-xl font-semibold tracking-tight text-ink-950 dark:text-white">
                             {{ formatCurrency(authUser.balance) }}
                         </p>
                     </div>
 
-                    <div class="mt-3 flex items-stretch border-t border-dashed border-brass-500/30">
+                    <div class="mt-3 flex items-stretch border-t border-dashed border-brass-300 dark:border-brass-500/30">
                         <Link
                             :href="route('wallet.fund')"
-                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-brass-200 transition hover:bg-brass-500/10 hover:text-white"
+                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-brass-800 transition hover:bg-brass-500/10 hover:text-brass-900 dark:text-brass-200 dark:hover:text-white"
                         >
                             Fund wallet
                         </Link>
-                        <span class="w-px bg-brass-500/20" aria-hidden="true"></span>
+                        <span class="w-px bg-brass-300 dark:bg-brass-500/20" aria-hidden="true"></span>
                         <Link
                             :href="route('wallet.transactions')"
-                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-ink-300 transition hover:bg-brass-500/10 hover:text-white"
+                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-ink-600 transition hover:bg-brass-500/10 hover:text-ink-900 dark:text-ink-300 dark:hover:text-white"
                         >
                             History
                         </Link>
@@ -175,8 +177,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             :class="[
                                 'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                 current(item.pattern)
-                                    ? 'bg-ink-800 font-semibold text-white'
-                                    : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
+                                    ? 'bg-ink-100 font-semibold text-ink-900 dark:bg-ink-800 dark:text-white'
+                                    : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800/60 dark:hover:text-white',
                             ]"
                         >
                             <span
@@ -199,8 +201,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                 :class="[
                                     'relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                     isGroupActive(item)
-                                        ? 'font-semibold text-white'
-                                        : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
+                                        ? 'font-semibold text-ink-900 dark:text-white'
+                                        : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800/60 dark:hover:text-white',
                                 ]"
                             >
                                 <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -216,7 +218,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             </button>
 
                             <!-- Children hang off a hairline, so the group reads as one unit. -->
-                            <div v-show="isMenuExpanded(item)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-ink-800 pl-3">
+                            <div v-show="isMenuExpanded(item)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-ink-200 pl-3 dark:border-ink-800">
                                 <Link
                                     v-for="child in item.children"
                                     :key="child.route"
@@ -225,8 +227,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     :class="[
                                         'relative block rounded-md px-3 py-2 text-sm transition',
                                         current(child.pattern)
-                                            ? 'bg-ink-800 font-semibold text-white'
-                                            : 'text-ink-400 hover:bg-ink-800/60 hover:text-white',
+                                            ? 'bg-ink-100 font-semibold text-ink-900 dark:bg-ink-800 dark:text-white'
+                                            : 'text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800/60 dark:hover:text-white',
                                     ]"
                                 >
                                     <span
@@ -242,10 +244,10 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 </ul>
 
                 <!-- Admin sits apart from the agent's own tools. -->
-                <div v-if="isAdmin" class="mt-4 border-t border-ink-800 pt-4">
+                <div v-if="isAdmin" class="mt-4 border-t border-ink-200 pt-4 dark:border-ink-800">
                     <Link
                         :href="route('admin.dashboard')"
-                        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-brass-300 transition hover:bg-brass-500/10 hover:text-brass-200"
+                        class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-brass-700 transition hover:bg-brass-50 hover:text-brass-800 dark:text-brass-300 dark:hover:bg-brass-500/10 dark:hover:text-brass-200"
                     >
                         <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -256,21 +258,21 @@ watch(() => page.url, () => (showingSidebar.value = false));
             </nav>
 
             <!-- Account -->
-            <div class="shrink-0 border-t border-ink-800 p-3">
+            <div class="shrink-0 border-t border-ink-200 p-3 dark:border-ink-800">
                 <div class="flex items-center gap-3 rounded-lg px-2 py-2">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 font-display text-sm font-bold uppercase text-white">
                         {{ (authUser.username || authUser.name || '?').charAt(0) }}
                     </span>
                     <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-semibold text-white">{{ authUser.username || authUser.name }}</p>
-                        <p class="truncate text-xs text-ink-400">{{ authUser.email }}</p>
+                        <p class="truncate text-sm font-semibold text-ink-900 dark:text-white">{{ authUser.username || authUser.name }}</p>
+                        <p class="truncate text-xs text-ink-500 dark:text-ink-400">{{ authUser.email }}</p>
                     </div>
                     <Link
                         :href="route('logout')"
                         method="post"
                         as="button"
                         title="Log out"
-                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 transition hover:bg-ink-800 hover:text-white"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white"
                     >
                         <span class="sr-only">Log out</span>
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -300,7 +302,11 @@ watch(() => page.url, () => (showingSidebar.value = false));
                     </button>
 
                     <!-- On mobile the sidebar is hidden, so the top bar carries location. -->
-                    <p class="truncate text-sm font-semibold text-ink-900 dark:text-ink-100 md:hidden">
+                    <!-- `truncate` sets `white-space: nowrap`, which gives a flex
+                         item an automatic min-width equal to its full text. Without
+                         `min-w-0` a long section name ("Enrollment Records") widens
+                         the whole bar past the viewport instead of ellipsing. -->
+                    <p class="min-w-0 truncate text-sm font-semibold text-ink-900 dark:text-ink-100 md:hidden">
                         {{ currentSection }}
                     </p>
 

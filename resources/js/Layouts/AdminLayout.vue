@@ -123,29 +123,30 @@ watch(() => page.url, () => (showingSidebar.value = false));
 
 <template>
     <div class="min-h-screen bg-canvas dark:bg-ink-950">
-        <!-- Admin rail is ink rather than pine, and badged, so it is never
-             mistaken for the agent-facing side of the product. -->
+        <!-- Matches the agent rail (white in light, near-black in dark). The
+             amber ADMIN badge under the wordmark is what keeps this side of the
+             product from being mistaken for the other, not the rail colour. -->
         <aside
             :class="[
-                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-ink-950 transition-transform duration-300 ease-out md:translate-x-0',
+                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-ink-200 bg-white transition-transform duration-300 ease-out dark:border-ink-800 dark:bg-ink-950 md:translate-x-0',
                 showingSidebar ? 'translate-x-0' : '-translate-x-full',
             ]"
         >
             <div class="flex h-16 shrink-0 items-center gap-3 px-5">
                 <Link :href="route('admin.dashboard')" class="flex min-w-0 items-center gap-3">
-                    <ApplicationLogo class="h-8 w-8 shrink-0 text-white" />
+                    <ApplicationLogo class="h-8 w-8 shrink-0 text-ink-900 dark:text-white" />
                     <span class="min-w-0">
-                        <span class="block truncate font-display text-base font-bold leading-tight tracking-tight text-white">
+                        <span class="block truncate font-display text-base font-bold leading-tight tracking-tight text-ink-900 dark:text-white">
                             {{ appName }}
                         </span>
-                        <span class="block text-2xs font-semibold uppercase tracking-[0.14em] text-brass-400">Admin</span>
+                        <span class="block text-2xs font-semibold uppercase tracking-[0.14em] text-brass-600 dark:text-brass-400">Admin</span>
                     </span>
                 </Link>
 
                 <button
                     @click="showingSidebar = false"
                     type="button"
-                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-800 hover:text-white md:hidden"
+                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white md:hidden"
                 >
                     <span class="sr-only">Close menu</span>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -165,8 +166,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             :class="[
                                 'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                 isActive(item.route)
-                                    ? 'bg-ink-800 font-semibold text-white'
-                                    : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
+                                    ? 'bg-ink-100 font-semibold text-ink-900 dark:bg-ink-800 dark:text-white'
+                                    : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800/60 dark:hover:text-white',
                             ]"
                         >
                             <span
@@ -189,8 +190,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                 :class="[
                                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                     isMenuActive(item)
-                                        ? 'font-semibold text-white'
-                                        : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
+                                        ? 'font-semibold text-ink-900 dark:text-white'
+                                        : 'font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800/60 dark:hover:text-white',
                                 ]"
                             >
                                 <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -205,7 +206,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                 </svg>
                             </button>
 
-                            <div v-show="isMenuExpanded(item.name)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-ink-800 pl-3">
+                            <div v-show="isMenuExpanded(item.name)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-ink-200 pl-3 dark:border-ink-800">
                                 <Link
                                     v-for="child in item.children"
                                     :key="child.route"
@@ -214,8 +215,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     :class="[
                                         'relative block rounded-md px-3 py-2 text-sm transition',
                                         isActive(child.route)
-                                            ? 'bg-ink-800 font-semibold text-white'
-                                            : 'text-ink-400 hover:bg-ink-800/60 hover:text-white',
+                                            ? 'bg-ink-100 font-semibold text-ink-900 dark:bg-ink-800 dark:text-white'
+                                            : 'text-ink-500 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800/60 dark:hover:text-white',
                                     ]"
                                 >
                                     <span
@@ -231,10 +232,10 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 </ul>
             </nav>
 
-            <div class="shrink-0 border-t border-ink-900 p-3">
+            <div class="shrink-0 border-t border-ink-200 p-3 dark:border-ink-800">
                 <Link
                     :href="route('dashboard')"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-300 transition hover:bg-ink-800 hover:text-white"
+                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-600 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800 dark:hover:text-white"
                 >
                     <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -259,7 +260,8 @@ watch(() => page.url, () => (showingSidebar.value = false));
                         </svg>
                     </button>
 
-                    <p class="truncate text-sm font-semibold text-ink-900 dark:text-ink-100 md:hidden">
+                    <!-- min-w-0 or `truncate` can't shrink; see AuthenticatedLayout. -->
+                    <p class="min-w-0 truncate text-sm font-semibold text-ink-900 dark:text-ink-100 md:hidden">
                         {{ currentSection }}
                     </p>
 

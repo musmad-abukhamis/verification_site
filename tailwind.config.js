@@ -167,15 +167,21 @@ export default {
                 info: blue,
                 refund,
 
-                /* Legacy aliases so existing pages inherit the system. */
+                /* Legacy aliases so existing pages inherit the system.
+                   Every stock Tailwind hue is listed — a gap here is invisible
+                   until a page that uses the missing one renders in raw
+                   Tailwind and looks nothing like the rest of the app, which
+                   is exactly what `lime` did to NIN/Verify until 2026-08-01. */
                 indigo: blue,
                 gray: neutral,
                 slate: neutral,
                 zinc: neutral,
                 stone: neutral,
+                neutral,
                 green: success,
                 emerald: success,
                 teal: success,
+                lime: success,
                 red: danger,
                 rose: danger,
                 amber,

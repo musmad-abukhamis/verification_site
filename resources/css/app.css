@@ -463,6 +463,12 @@ body.dash-canvas { background: #F9FAFB; }
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    /* A grid item defaults to `min-width: auto`, so it refuses to shrink below
+       its own min-content width — one long word in a title ("modification",
+       "Enrollment") then widens the whole 2-up column, the grid overflows the
+       viewport, and every full-width element on the page looks like it stops
+       short with a gap on the right. This is what stops that. */
+    min-width: 0;
     background: var(--d-card);
     border: 1px solid var(--d-edge);
     border-radius: 18px;
@@ -532,6 +538,9 @@ body.dash-canvas { background: #F9FAFB; }
     font-weight: 700;
     line-height: 1.25;
     color: var(--d-ink);
+    /* Belt and braces with the `min-width: 0` above: that lets the column
+       shrink, this lets the word itself break rather than spill. */
+    overflow-wrap: anywhere;
 }
 
 /* Clamped so one long subtitle can't set the height of every card in its
@@ -578,17 +587,6 @@ body.dash-canvas { background: #F9FAFB; }
     background: var(--d-chip);
     color: var(--d-chip-ink);
     text-decoration: none;
-}
-
-/* The one chip that isn't neutral: services an admin has to fulfil by hand
-   are worth knowing about before you start, not after you've paid. */
-.ws-chip-review {
-    background: rgba(247, 144, 9, 0.14);
-    color: #b54708;
-}
-.dark .ws-chip-review {
-    background: rgba(253, 176, 34, 0.16);
-    color: #fdb022;
 }
 
 /* The arrow is decorative — the whole card is the link — so on a 2-up

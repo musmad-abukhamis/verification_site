@@ -107,10 +107,12 @@ const quickDots = [
  * nothing has to be boxed together to show that Search and Retrieval are
  * both BVN work.
  *
- * The `review` flag is not decoration: BVN Modification, Onboarding,
- * Retrieval and ID Card all write a pending record for an admin to fulfil
- * by hand, while everything else returns a result there and then. That's
- * worth knowing before you start one, not after you've paid.
+ * BVN Modification, Onboarding, Retrieval and ID Card all write a pending
+ * record for an admin to fulfil by hand rather than returning a result there
+ * and then. That used to be flagged with a "Needs review" chip; the chip was
+ * dropped on 2026-08-01 at the user's request — on a 2-up phone it was the
+ * widest thing in the card and wrapped to its own line. Each of those pages
+ * says so itself when you land on it.
  */
 /* `data` and `account` currently have no cards — the grid is NIN and BVN work
    only. Both are kept so a future service can join a family that already has
@@ -140,10 +142,10 @@ const SERVICES = [
 
     { title: 'BVN search', subtitle: 'Find a BVN and print the slip.', family: 'bvn', icon: ICON.search, route: 'bvn-search.index' },
     { title: 'BVN verify', subtitle: 'Check a BVN against the register.', family: 'bvn', icon: ICON.bvn, route: 'bvn-verify.index' },
-    { title: 'BVN modification', subtitle: 'Correct a name, date or phone.', family: 'bvn', icon: ICON.edit, route: 'bvn-modification.index', review: true },
-    { title: 'BVN onboarding', subtitle: 'Enrol someone new by SDK form.', family: 'bvn', icon: ICON.enrol, route: 'bvn-sdk-form.index', review: true },
-    { title: 'BVN retrieval', subtitle: 'Recover a BVN from a BMS ticket.', family: 'bvn', icon: ICON.retrieve, route: 'bvn-retrieval.index', review: true },
-    { title: 'ID card', subtitle: 'Order a printed agent ID card.', family: 'bvn', icon: ICON.idcard, route: 'idcard.index', review: true },
+    { title: 'BVN modification', subtitle: 'Correct a name, date or phone.', family: 'bvn', icon: ICON.edit, route: 'bvn-modification.index' },
+    { title: 'BVN onboarding', subtitle: 'Enrol someone new by SDK form.', family: 'bvn', icon: ICON.enrol, route: 'bvn-sdk-form.index' },
+    { title: 'BVN retrieval', subtitle: 'Recover a BVN from a BMS ticket.', family: 'bvn', icon: ICON.retrieve, route: 'bvn-retrieval.index' },
+    { title: 'ID card', subtitle: 'Order a printed agent ID card.', family: 'bvn', icon: ICON.idcard, route: 'idcard.index' },
     { title: 'Enrollment records', subtitle: 'Search uploaded enrollment data.', family: 'bvn', icon: ICON.records, route: 'bvn-records.index' },
 ];
 
@@ -310,7 +312,6 @@ const primaryAccount = computed(() => props.reserved_accounts?.[0] ?? null);
 
                         <span class="ws-chips">
                             <span class="ws-chip">{{ service.familyLabel }}</span>
-                            <span v-if="service.review" class="ws-chip ws-chip-review">Needs review</span>
                         </span>
                     </span>
 
