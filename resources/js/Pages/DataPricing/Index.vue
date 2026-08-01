@@ -64,7 +64,7 @@ const rateLabel = computed(() => {
 <template>
     <Head title="Data Pricing" />
 
-    <component :is="Wrapper" :class="authenticated ? null : 'min-h-screen bg-ink-100 dark:bg-ink-950'">
+    <component :is="Wrapper" :class="authenticated ? null : 'min-h-screen bg-canvas dark:bg-ink-950'">
         <!-- Public masthead only: signed in, the app's own chrome is already there. -->
         <header v-if="!authenticated" class="border-b rule bg-white dark:bg-ink-900">
             <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
@@ -102,7 +102,7 @@ const rateLabel = computed(() => {
                         :aria-pressed="active === 'all'"
                         :class="['rounded-full px-3 py-1.5 text-sm font-semibold transition',
                             active === 'all'
-                                ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                ? 'bg-brand-600 text-white dark:bg-brand-600'
                                 : 'bg-white text-ink-600 shadow-card hover:text-ink-900 dark:bg-ink-900 dark:text-ink-300 dark:hover:text-white']"
                     >
                         All
@@ -152,7 +152,7 @@ const rateLabel = computed(() => {
                         <tbody class="divide-y rule">
                             <tr v-for="plan in inNetwork(network)" :key="plan.plan_id" class="t-row">
                                 <td>
-                                    <code class="rounded bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-semibold text-brand-800 dark:bg-brand-950 dark:text-brand-300">
+                                    <code class="rounded bg-brand-50 px-1.5 py-0.5 font-mono text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
                                         {{ plan.plan_id }}
                                     </code>
                                 </td>

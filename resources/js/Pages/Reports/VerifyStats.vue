@@ -23,8 +23,10 @@ const presets = [
     { label: 'Custom Range', value: 'custom' },
 ];
 
-const TYPE_COLORS = { BVN: '#7C3AED', NIN: '#0891B2' };
-const colorFor = (t) => TYPE_COLORS[t] || '#6366F1';
+/* refund-500 and brand-500: two hues far enough apart to read as separate
+   series, both already in the palette. */
+const TYPE_COLORS = { BVN: '#7A5AF8', NIN: '#2970FF' };
+const colorFor = (t) => TYPE_COLORS[t] || '#667085';
 
 const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount ?? 0));

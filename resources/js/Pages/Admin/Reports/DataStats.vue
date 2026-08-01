@@ -28,7 +28,7 @@ const presets = [
 ];
 
 const NETWORK_COLORS = { MTN: '#FFCC00', Airtel: '#FF0000', Glo: '#00B050', '9mobile': '#0066CC' };
-const colorFor = (n) => NETWORK_COLORS[n] || '#6366F1';
+const colorFor = (n) => NETWORK_COLORS[n] || '#2970FF'; // brand-500
 
 const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(amount ?? 0));

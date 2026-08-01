@@ -128,7 +128,7 @@ const submit = async (plan = selectedPlan.value) => {
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Buy now',
-        confirmButtonColor: '#10402F',
+        confirmButtonColor: '#155EEF',
     });
 
     if (!result.isConfirmed) return;
@@ -423,7 +423,7 @@ const statusColor = computed(() => {
                             !t.available
                                 ? 'cursor-not-allowed bg-ink-100 text-ink-400 dark:bg-ink-800 dark:text-ink-500'
                                 : selectedType === t.type
-                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    ? 'bg-brand-600 text-white dark:bg-brand-600'
                                     : 'bg-ink-100 text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700',
                         ]"
                     >
@@ -449,7 +449,7 @@ const statusColor = computed(() => {
                             : 'border-ink-200 bg-white hover:border-brand-300 dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-700'"
                     >
                         <p class="text-sm font-semibold text-ink-900 dark:text-ink-100">{{ p.name }}</p>
-                        <p class="mt-0.5 font-mono text-lg font-semibold text-brand-800 dark:text-brand-300">{{ money(p.price) }}</p>
+                        <p class="mt-0.5 font-mono text-lg font-semibold text-brand-700 dark:text-brand-300">{{ money(p.price) }}</p>
                         <p class="mt-0.5 text-xs text-ink-500 dark:text-ink-400">{{ p.validity }}</p>
                     </button>
 

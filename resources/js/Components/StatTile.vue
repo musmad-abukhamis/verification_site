@@ -21,7 +21,7 @@ defineProps({
 
 const STRIPE = {
     neutral: 'bg-ink-300 dark:bg-ink-700',
-    brand: 'bg-brand-800 dark:bg-brand-500',
+    brand: 'bg-brand-600 dark:bg-brand-500',
     brass: 'bg-brass-500',
     success: 'bg-success-500',
     danger: 'bg-danger-500',

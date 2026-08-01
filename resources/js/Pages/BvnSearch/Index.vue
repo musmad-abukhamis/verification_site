@@ -197,7 +197,7 @@ const printSlip = () => window.print();
                     viewer's dark theme. Hence no dark: variants below.
                 -->
                 <div class="slip mx-auto max-w-xl overflow-hidden bg-white text-ink-900">
-                    <div class="bg-brand-800 px-6 py-3 text-center text-white">
+                    <div class="bg-brand-600 px-6 py-3 text-center text-white">
                         <p class="text-2xs font-semibold uppercase tracking-[0.14em] text-brass-300">Verified record</p>
                         <h3 class="mt-0.5 font-display text-lg font-bold">Bank Verification Number Slip</h3>
                     </div>
@@ -212,7 +212,7 @@ const printSlip = () => window.print();
                             />
                             <div class="min-w-0">
                                 <p class="font-display text-xl font-bold uppercase text-ink-950">{{ fullName }}</p>
-                                <p class="mt-0.5 font-mono text-lg tracking-wider text-brand-800">{{ formatBvn(result.bvn) }}</p>
+                                <p class="mt-0.5 font-mono text-lg tracking-wider text-brand-700">{{ formatBvn(result.bvn) }}</p>
                             </div>
                         </div>
 

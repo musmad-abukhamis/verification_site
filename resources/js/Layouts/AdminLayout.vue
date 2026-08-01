@@ -122,7 +122,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
 </script>
 
 <template>
-    <div class="min-h-screen bg-ink-100 dark:bg-ink-950">
+    <div class="min-h-screen bg-canvas dark:bg-ink-950">
         <!-- Admin rail is ink rather than pine, and badged, so it is never
              mistaken for the agent-facing side of the product. -->
         <aside
@@ -145,7 +145,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 <button
                     @click="showingSidebar = false"
                     type="button"
-                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-900 hover:text-white md:hidden"
+                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-800 hover:text-white md:hidden"
                 >
                     <span class="sr-only">Close menu</span>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -165,13 +165,13 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             :class="[
                                 'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                 isActive(item.route)
-                                    ? 'bg-ink-900 font-semibold text-white'
-                                    : 'font-medium text-ink-300 hover:bg-ink-900/60 hover:text-white',
+                                    ? 'bg-ink-800 font-semibold text-white'
+                                    : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
                             ]"
                         >
                             <span
                                 v-if="isActive(item.route)"
-                                class="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brass-500"
+                                class="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brand-500"
                                 aria-hidden="true"
                             ></span>
                             <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -190,7 +190,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                     isMenuActive(item)
                                         ? 'font-semibold text-white'
-                                        : 'font-medium text-ink-300 hover:bg-ink-900/60 hover:text-white',
+                                        : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
                                 ]"
                             >
                                 <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -214,13 +214,13 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     :class="[
                                         'relative block rounded-md px-3 py-2 text-sm transition',
                                         isActive(child.route)
-                                            ? 'bg-ink-900 font-semibold text-white'
-                                            : 'text-ink-400 hover:bg-ink-900/60 hover:text-white',
+                                            ? 'bg-ink-800 font-semibold text-white'
+                                            : 'text-ink-400 hover:bg-ink-800/60 hover:text-white',
                                     ]"
                                 >
                                     <span
                                         v-if="isActive(child.route)"
-                                        class="absolute -left-[13px] top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brass-500"
+                                        class="absolute -left-[13px] top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-500"
                                         aria-hidden="true"
                                     ></span>
                                     {{ child.name }}
@@ -234,7 +234,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
             <div class="shrink-0 border-t border-ink-900 p-3">
                 <Link
                     :href="route('dashboard')"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-300 transition hover:bg-ink-900 hover:text-white"
+                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink-300 transition hover:bg-ink-800 hover:text-white"
                 >
                     <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 19l-7-7m0 0l7-7m-7 7h18" />

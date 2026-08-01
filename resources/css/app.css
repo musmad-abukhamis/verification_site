@@ -5,23 +5,23 @@
 /* =========================================================================
    Ledger — base
 
-   No gradients. Depth comes from three flat tints of one sage family —
-   canvas, card, and the well under a table head — separated by a hairline
-   and a shallow shadow. Colour is spent on pine chrome, brass accent and
-   the status scale, never on the surfaces themselves.
+   Cool grey. Depth comes from a grey-50 canvas, white cards that earn their
+   lift from a shadow rather than a tint, and a grey-100 well under a table
+   head. Colour is spent on blue chrome, the amber money accent and the
+   status scale, never on the surfaces themselves.
    ========================================================================= */
 
 @layer base {
     :root {
         /* The colour sitting *behind* a slip, so its notches can be punched
            out of it. Must match the canvas exactly. */
-        --slip-behind: #d9e5dc;  /* ink-100 */
-        --hairline: 198 214 203; /* ink-200 */
+        --slip-behind: #f9fafb;   /* canvas */
+        --hairline: 234 236 240;  /* ink-200 */
     }
 
     .dark {
-        --slip-behind: #0a1713;  /* ink-950 */
-        --hairline: 37 56 47;    /* ink-800 */
+        --slip-behind: #0c111d;   /* ink-950 */
+        --hairline: 29 41 57;     /* ink-800 */
     }
 
     html {
@@ -30,7 +30,7 @@
     }
 
     body {
-        @apply bg-ink-100 text-ink-700 antialiased dark:bg-ink-950 dark:text-ink-300;
+        @apply bg-canvas text-ink-700 antialiased dark:bg-ink-950 dark:text-ink-300;
         font-feature-settings: 'cv05' 1, 'ss01' 1;
     }
 
@@ -53,13 +53,13 @@
     }
 
     ::selection {
-        @apply bg-brass-200 text-ink-950;
+        @apply bg-brand-100 text-brand-900;
     }
 
-    /* One focus treatment everywhere: a brass ring that reads on both pine
-       chrome and paper surfaces. */
+    /* One focus treatment everywhere: a brand-blue ring, which reads on both
+       the grey chrome and the white surfaces. */
     :focus-visible {
-        @apply outline-none ring-2 ring-brass-500 ring-offset-2 ring-offset-white dark:ring-offset-ink-950;
+        @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white dark:ring-offset-ink-950;
     }
 
     [type='text'],
@@ -87,7 +87,7 @@
        checkbox sits on tinted paper. */
     [type='checkbox'],
     [type='radio'] {
-        @apply rounded border-ink-300 bg-white text-brand-800 focus:ring-brand-600
+        @apply rounded border-ink-300 bg-white text-brand-600 focus:ring-brand-600
                dark:border-ink-600 dark:bg-ink-800;
     }
 
@@ -95,7 +95,7 @@
        rather than an invisible affordance. */
     .scroll-slim {
         scrollbar-width: thin;
-        scrollbar-color: rgb(127 152 135 / 0.6) transparent;
+        scrollbar-color: rgb(152 162 179 / 0.7) transparent;
     }
     .scroll-slim::-webkit-scrollbar {
         height: 8px;
@@ -142,12 +142,14 @@
                disabled:pointer-events-none disabled:opacity-50;
     }
 
+    /* Anchored at 600, not 800: the blue ramp goes navy past 700 and a primary
+       button has to stay recognisably the brand hue, not a dark slab. */
     .btn-primary {
-        @apply bg-brand-800 text-white shadow-sm hover:bg-brand-900 active:bg-brand-950
-               dark:bg-brand-700 dark:hover:bg-brand-600;
+        @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800
+               dark:bg-brand-600 dark:hover:bg-brand-500;
     }
 
-    /* The one place brass carries an action: funding the wallet. */
+    /* The one place the accent carries an action: funding the wallet. */
     .btn-accent {
         @apply bg-brass-500 text-ink-950 shadow-sm hover:bg-brass-400 active:bg-brass-600;
     }
@@ -236,8 +238,8 @@
        same at any card height. */
     .slip-guilloche {
         background-image:
-            repeating-linear-gradient(45deg,  rgb(184 134 59 / 0.07) 0 1px, transparent 1px 7px),
-            repeating-linear-gradient(-45deg, rgb(184 134 59 / 0.07) 0 1px, transparent 1px 7px);
+            repeating-linear-gradient(45deg,  rgb(247 144 9 / 0.08) 0 1px, transparent 1px 7px),
+            repeating-linear-gradient(-45deg, rgb(247 144 9 / 0.08) 0 1px, transparent 1px 7px);
     }
 
     /* ---- Data table ---------------------------------------------------- */
@@ -250,8 +252,10 @@
         @apply whitespace-nowrap px-4 py-3;
     }
 
+    /* Neutral, not brand-tinted: the same chip grey the dashboard's activity
+       rows use, so a hovered row reads the same in both places. */
     .t-row {
-        @apply transition-colors hover:bg-brand-50/60 dark:hover:bg-brand-950/30;
+        @apply transition-colors hover:bg-ink-100 dark:hover:bg-ink-800/60;
     }
 
     .t-row td {
@@ -260,7 +264,7 @@
 
     /* ---- Link ----------------------------------------------------------- */
     .link {
-        @apply font-medium text-brand-700 underline-offset-2 hover:text-brand-900 hover:underline
+        @apply font-medium text-brand-700 underline-offset-2 hover:text-brand-800 hover:underline
                dark:text-brand-300 dark:hover:text-brand-200;
     }
 
@@ -278,6 +282,415 @@
 }
 
 /* =========================================================================
+   Dashboard — "Quick Dots + Watermark Spine"
+
+   The layout language of the user dashboard: gradient action dots, a
+   coloured spine per card, a watermark hung off the corner.
+
+   The *palette* is no longer local to this file — as of 2026-08-01 the whole
+   app was repalletted onto it, so every `--d-*` value below now has a token
+   twin (`--d-chip` is `ink-100`, `--d-line` is `ink-300`, and so on). The
+   variables are kept because the rules underneath are plain CSS in exact
+   pixels, not because the colours are still an exception. Change one, change
+   its twin in `tailwind.config.js`.
+
+   Written as plain CSS, not utilities: the spec is in exact pixels (58px
+   circles, a 6px spine, a 104px watermark hung off the corner at -14/-18)
+   and the Tailwind palette here is aliased onto sage, so every colour would
+   have had to be an arbitrary value anyway.
+   ========================================================================= */
+
+.dash {
+    /* Untitled-UI cool greys. Light values come straight from the spec;
+       dark is the same family continued down its own scale, so the two
+       modes are one palette rather than two. */
+    --d-card: #ffffff;
+    --d-edge: transparent;      /* light leans on shadow alone */
+    --d-ink: #101828;
+    --d-muted: #667085;
+    --d-line: #d0d5dd;
+    --d-chip: #f2f4f7;
+    --d-chip-ink: #475467;
+    --d-amber-wash: #fff7e6;
+    --d-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+    --d-shadow-hover: 0 8px 18px rgba(16, 24, 40, 0.10);
+    --d-watermark: 0.07;
+
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    color: var(--d-ink);
+}
+
+.dark .dash {
+    --d-card: #101828;
+    --d-edge: #1d2939;          /* dark needs an edge; shadow alone vanishes */
+    --d-ink: #f9fafb;
+    --d-muted: #98a2b3;
+    --d-line: #344054;
+    --d-chip: #1d2939;
+    --d-chip-ink: #d0d5dd;
+    --d-amber-wash: rgba(247, 144, 9, 0.16);
+    --d-shadow: 0 1px 3px rgba(0, 0, 0, 0.40);
+    --d-shadow-hover: 0 8px 18px rgba(0, 0, 0, 0.55);
+    --d-watermark: 0.13;
+}
+
+/* The canvas, added to <body> on mount. Now identical to the app canvas in
+   both modes, so it is a no-op kept only so the page's mount/unmount hook and
+   the blade fallback don't have to be unpicked. Safe to delete together. */
+body.dash-canvas { background: #F9FAFB; }
+.dark body.dash-canvas { background: #0C111D; }
+
+.dash-h { font-family: 'Sora', ui-sans-serif, system-ui, sans-serif; }
+
+.dash-panel {
+    background: var(--d-card);
+    border: 1px solid var(--d-edge);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: var(--d-shadow);
+}
+
+/* ---- Quick dots ------------------------------------------------------
+   Three gradient circles. This is the loudest thing on the page and the
+   only place gradients are allowed, which is what makes it read as the
+   primary action row rather than decoration. */
+.qd-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 8px;
+}
+
+.qd {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.qd-circle {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: transform 0.15s ease;
+}
+
+.qd:hover .qd-circle,
+.qd:focus-visible .qd-circle { transform: scale(1.08); }
+
+.qd-circle svg {
+    width: 24px;
+    height: 24px;
+    stroke: #ffffff;
+    fill: none;
+}
+
+.qd-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--d-ink);
+    text-align: center;
+}
+
+.qd-verify .qd-circle {
+    background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+    box-shadow: 0 6px 14px rgba(29, 78, 216, 0.35);
+}
+.qd-data .qd-circle {
+    background: linear-gradient(145deg, #22c55e, #0f9d58);
+    box-shadow: 0 6px 14px rgba(15, 157, 88, 0.35);
+}
+.qd-fund .qd-circle {
+    background: linear-gradient(145deg, #a855f7, #7a3ff2);
+    box-shadow: 0 6px 14px rgba(122, 63, 242, 0.35);
+}
+
+.qd-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--d-line);
+}
+
+.qd-strip-badge {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--d-amber-wash);
+    display: grid;
+    place-items: center;
+}
+
+.qd-strip-badge svg {
+    width: 14px;
+    height: 14px;
+    stroke: #f79009;
+    fill: none;
+}
+
+.qd-strip-text {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--d-muted);
+    min-width: 0;
+}
+
+.qd-strip-text b {
+    font-weight: 700;
+    color: #0f9d58;
+}
+.dark .qd-strip-text b { color: #34d399; }
+
+/* ---- Watermark spine -------------------------------------------------
+   One card per service family. The spine is the identity: a 6px bar of the
+   family's colour, with the same icon hung off the bottom-right corner at
+   104px and 7% so it reads as a watermark printed into the card rather
+   than an icon placed on it. --svc is set per card in the template. */
+/* Three across from `md` means a card is never wide. The spec's horizontal
+   row — text left, 36px button right — costs ~90px of overhead, which a
+   165px card on a 2-up phone simply doesn't have. So the card stacks by
+   default and only becomes that row at `xl`, where there's room for it. */
+.ws {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--d-card);
+    border: 1px solid var(--d-edge);
+    border-radius: 18px;
+    padding: 14px 14px 14px 18px;   /* extra left to clear the spine */
+    box-shadow: var(--d-shadow);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+@media (min-width: 640px) {
+    .ws { padding: 16px 16px 16px 20px; }
+}
+
+@media (min-width: 1280px) {
+    .ws {
+        flex-direction: row;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 18px 18px 22px;
+    }
+}
+
+.ws::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: var(--svc);
+}
+
+.ws:hover,
+.ws:focus-visible {
+    transform: translateX(4px);
+    box-shadow: var(--d-shadow-hover);
+}
+
+.ws-mark {
+    position: absolute;
+    right: -14px;
+    bottom: -18px;
+    width: 84px;
+    height: 84px;
+    stroke: var(--svc);
+    stroke-width: 1.5;
+    fill: none;
+    opacity: var(--d-watermark);
+    pointer-events: none;
+}
+
+/* Full size once the card is wide enough that 104px still reads as a
+   corner mark rather than a background wash. */
+@media (min-width: 640px) {
+    .ws-mark { width: 104px; height: 104px; }
+}
+
+.ws-body {
+    position: relative;   /* lifts the text clear of the watermark */
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ws-title {
+    display: block;
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--d-ink);
+}
+
+/* Clamped so one long subtitle can't set the height of every card in its
+   grid row. Released once the cards are wide enough to hold a line. */
+.ws-sub {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--d-muted);
+}
+
+@media (min-width: 1280px) {
+    .ws-sub {
+        display: block;
+        overflow: visible;
+    }
+}
+
+.ws-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 9px;
+}
+
+/* Keeps the chips clear of the arrow parked in the bottom-right corner. */
+@media (min-width: 640px) {
+    .ws-chips { padding-right: 42px; }
+}
+
+@media (min-width: 1280px) {
+    .ws-chips { padding-right: 0; }
+}
+
+.ws-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--d-chip);
+    color: var(--d-chip-ink);
+    text-decoration: none;
+}
+
+/* The one chip that isn't neutral: services an admin has to fulfil by hand
+   are worth knowing about before you start, not after you've paid. */
+.ws-chip-review {
+    background: rgba(247, 144, 9, 0.14);
+    color: #b54708;
+}
+.dark .ws-chip-review {
+    background: rgba(253, 176, 34, 0.16);
+    color: #fdb022;
+}
+
+/* The arrow is decorative — the whole card is the link — so on a 2-up
+   phone it gives up its 36px to the text rather than the other way round.
+   From `sm` it parks in the corner; at `xl` it rejoins the row. */
+.ws-go {
+    display: none;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--svc);
+    place-items: center;
+}
+
+@media (min-width: 640px) {
+    .ws-go {
+        display: grid;
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+    }
+}
+
+@media (min-width: 1280px) {
+    .ws-go {
+        position: relative;
+        right: auto;
+        bottom: auto;
+    }
+}
+
+.ws-go svg {
+    width: 16px;
+    height: 16px;
+    stroke: #ffffff;
+    fill: none;
+}
+
+/* ---- Supporting panels ----------------------------------------------
+   Balance and activity are deliberately quiet: the same white panel, no
+   colour of their own, so the dots and spines stay the only saturated
+   things on the page. */
+.dash-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--d-muted);
+}
+
+.dash-figure {
+    font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    color: var(--d-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.dash-divide > * + * { border-top: 1px solid var(--d-line); }
+
+.dash-row-hover { transition: background-color 0.15s ease; }
+.dash-row-hover:hover { background: var(--d-chip); }
+
+/* Status tags, same geometry as the spine chips so the page has one pill
+   shape rather than two. Colour is carried by a wash of the status hue. */
+.dash-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.dash-tag-success { background: rgba(15, 157, 88, 0.12);  color: #0f9d58; }
+.dash-tag-pending { background: rgba(247, 144, 9, 0.12);  color: #b54708; }
+.dash-tag-info    { background: rgba(29, 110, 245, 0.12); color: #1d6ef5; }
+.dash-tag-danger  { background: rgba(217, 45, 32, 0.12);  color: #d92d20; }
+.dash-tag-refund  { background: rgba(122, 63, 242, 0.12); color: #7a3ff2; }
+.dash-tag-neutral { background: var(--d-chip);            color: var(--d-chip-ink); }
+
+.dark .dash-tag-success { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+.dark .dash-tag-pending { background: rgba(253, 176, 34, 0.15); color: #fdb022; }
+.dark .dash-tag-info    { background: rgba(132, 173, 255, 0.15); color: #84adff; }
+.dark .dash-tag-danger  { background: rgba(253, 162, 155, 0.15); color: #fda29b; }
+.dark .dash-tag-refund  { background: rgba(168, 85, 247, 0.18);  color: #c4a4fb; }
+
+.dash-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.dash-dot-success { background: #0f9d58; }
+.dash-dot-pending { background: #f79009; }
+.dash-dot-info    { background: #1d6ef5; }
+.dash-dot-danger  { background: #d92d20; }
+.dash-dot-refund  { background: #7a3ff2; }
+.dash-dot-neutral { background: var(--d-line); }
+
+/* =========================================================================
    Motion preferences
    ========================================================================= */
 
@@ -289,5 +702,14 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    /* Loading spinners are the exception to the rule above: the motion *is*
+       the message, and the blanket rule would freeze one mid-rotation, which
+       reads as a hung page rather than as a calmer one. Slowed, not stopped.
+       Anything wearing this class must be a progress indicator. */
+    .motion-essential {
+        animation-duration: 1.6s !important;
+        animation-iteration-count: infinite !important;
     }
 }

@@ -4,7 +4,8 @@
     The product's whole output is a slip — a NIN slip, a BVN slip, a receipt for
     a data bundle — so the mark is that artefact rather than an abstract glyph.
     The body inherits currentColor so it works on any surface; the check is
-    always brass, the one accent in the system.
+    always brand blue — the same hue the dashboard's "Verify" dot is built
+    from, so the mark and the primary action read as the same idea.
 -->
 <template>
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img">
@@ -15,7 +16,7 @@
         />
         <path
             d="m13.2 19.8 4.6 4.6 9.4-9.4"
-            stroke="#B8863B"
+            stroke="#2970FF"
             stroke-width="3.4"
             stroke-linecap="round"
             stroke-linejoin="round"

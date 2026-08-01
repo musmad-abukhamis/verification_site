@@ -41,7 +41,7 @@ defineProps({
                 :class="[
                     'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2.5 text-sm font-semibold transition',
                     link.active
-                        ? 'bg-brand-800 text-white dark:bg-brand-700'
+                        ? 'bg-brand-600 text-white dark:bg-brand-600'
                         : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800 dark:hover:text-white',
                     !link.url && 'pointer-events-none opacity-40',
                 ]"

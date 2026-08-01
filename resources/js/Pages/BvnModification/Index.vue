@@ -159,7 +159,7 @@ const submit = () => {
                             type="file"
                             accept="image/jpeg,image/png,application/pdf"
                             @change="onFile"
-                            class="mt-1.5 block w-full text-sm text-ink-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-800 hover:file:bg-brand-100 dark:text-ink-300 dark:file:bg-brand-950 dark:file:text-brand-300"
+                            class="mt-1.5 block w-full text-sm text-ink-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-ink-300 dark:file:bg-brand-950 dark:file:text-brand-300"
                         />
                         <p class="mt-1 text-xs text-ink-500 dark:text-ink-400">JPEG, PNG or PDF — max 5MB.</p>
                         <p v-if="form.errors.ninSlip" class="mt-1 text-xs font-medium text-danger-600 dark:text-danger-400">{{ form.errors.ninSlip }}</p>
@@ -181,7 +181,7 @@ const submit = () => {
                             :class="[
                                 'py-2 text-sm font-semibold transition',
                                 activeTab === 'old'
-                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    ? 'bg-brand-600 text-white dark:bg-brand-600'
                                     : 'bg-ink-50 text-ink-600 hover:text-ink-900 dark:bg-ink-950/40 dark:text-ink-300 dark:hover:text-white',
                             ]"
                         >
@@ -194,7 +194,7 @@ const submit = () => {
                             :class="[
                                 'py-2 text-sm font-semibold transition',
                                 activeTab === 'new'
-                                    ? 'bg-brand-800 text-white dark:bg-brand-700'
+                                    ? 'bg-brand-600 text-white dark:bg-brand-600'
                                     : 'bg-ink-50 text-ink-600 hover:text-ink-900 dark:bg-ink-950/40 dark:text-ink-300 dark:hover:text-white',
                             ]"
                         >

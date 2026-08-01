@@ -101,14 +101,15 @@ watch(() => page.url, () => (showingSidebar.value = false));
 </script>
 
 <template>
-    <div class="min-h-screen bg-ink-100 dark:bg-ink-950">
+    <div class="min-h-screen bg-canvas dark:bg-ink-950">
         <!-- =====================================================================
-             Sidebar. Deep pine in both themes: the chrome is the instrument,
-             the content area is the paper you work on.
+             Sidebar. Near-black cool grey in both themes: the chrome is the
+             instrument, the content area is the paper you work on. Blue is
+             spent only on what's active; amber only on the balance.
              ===================================================================== -->
         <aside
             :class="[
-                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-brand-950 transition-transform duration-300 ease-out md:translate-x-0',
+                'fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col bg-ink-950 transition-transform duration-300 ease-out md:translate-x-0',
                 showingSidebar ? 'translate-x-0' : '-translate-x-full',
             ]"
         >
@@ -124,7 +125,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 <button
                     @click="showingSidebar = false"
                     type="button"
-                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-brand-300 hover:bg-brand-900 hover:text-white md:hidden"
+                    class="ml-auto -mr-1 inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-800 hover:text-white md:hidden"
                 >
                     <span class="sr-only">Close menu</span>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -136,7 +137,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
             <!-- Wallet slip. The balance is the number an agent checks most, so
                  it gets the accent and sits above the navigation, not inside it. -->
             <div class="px-4 pb-4">
-                <div class="slip-guilloche overflow-hidden rounded-card border border-brass-500/30 bg-brand-900/70">
+                <div class="slip-guilloche overflow-hidden rounded-card border border-brass-500/25 bg-ink-900">
                     <div class="px-4 pt-3.5">
                         <p class="text-2xs font-semibold uppercase tracking-[0.14em] text-brass-300">Wallet balance</p>
                         <p class="mt-1 font-mono text-xl font-semibold tracking-tight text-white">
@@ -154,7 +155,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                         <span class="w-px bg-brass-500/20" aria-hidden="true"></span>
                         <Link
                             :href="route('wallet.transactions')"
-                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-brand-200 transition hover:bg-brass-500/10 hover:text-white"
+                            class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-ink-300 transition hover:bg-brass-500/10 hover:text-white"
                         >
                             History
                         </Link>
@@ -174,13 +175,13 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             :class="[
                                 'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                 current(item.pattern)
-                                    ? 'bg-brand-900 font-semibold text-white'
-                                    : 'font-medium text-brand-200 hover:bg-brand-900/60 hover:text-white',
+                                    ? 'bg-ink-800 font-semibold text-white'
+                                    : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
                             ]"
                         >
                             <span
                                 v-if="current(item.pattern)"
-                                class="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brass-500"
+                                class="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brand-500"
                                 aria-hidden="true"
                             ></span>
                             <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -199,7 +200,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     'relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition',
                                     isGroupActive(item)
                                         ? 'font-semibold text-white'
-                                        : 'font-medium text-brand-200 hover:bg-brand-900/60 hover:text-white',
+                                        : 'font-medium text-ink-300 hover:bg-ink-800/60 hover:text-white',
                                 ]"
                             >
                                 <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -215,7 +216,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                             </button>
 
                             <!-- Children hang off a hairline, so the group reads as one unit. -->
-                            <div v-show="isMenuExpanded(item)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-brand-800 pl-3">
+                            <div v-show="isMenuExpanded(item)" class="ml-[1.55rem] mt-0.5 space-y-0.5 border-l border-ink-800 pl-3">
                                 <Link
                                     v-for="child in item.children"
                                     :key="child.route"
@@ -224,13 +225,13 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     :class="[
                                         'relative block rounded-md px-3 py-2 text-sm transition',
                                         current(child.pattern)
-                                            ? 'bg-brand-900 font-semibold text-white'
-                                            : 'text-brand-300 hover:bg-brand-900/60 hover:text-white',
+                                            ? 'bg-ink-800 font-semibold text-white'
+                                            : 'text-ink-400 hover:bg-ink-800/60 hover:text-white',
                                     ]"
                                 >
                                     <span
                                         v-if="current(child.pattern)"
-                                        class="absolute -left-[13px] top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brass-500"
+                                        class="absolute -left-[13px] top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand-500"
                                         aria-hidden="true"
                                     ></span>
                                     {{ child.name }}
@@ -241,7 +242,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                 </ul>
 
                 <!-- Admin sits apart from the agent's own tools. -->
-                <div v-if="isAdmin" class="mt-4 border-t border-brand-900 pt-4">
+                <div v-if="isAdmin" class="mt-4 border-t border-ink-800 pt-4">
                     <Link
                         :href="route('admin.dashboard')"
                         class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-brass-300 transition hover:bg-brass-500/10 hover:text-brass-200"
@@ -255,21 +256,21 @@ watch(() => page.url, () => (showingSidebar.value = false));
             </nav>
 
             <!-- Account -->
-            <div class="shrink-0 border-t border-brand-900 p-3">
+            <div class="shrink-0 border-t border-ink-800 p-3">
                 <div class="flex items-center gap-3 rounded-lg px-2 py-2">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-800 font-display text-sm font-bold uppercase text-brass-300">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 font-display text-sm font-bold uppercase text-white">
                         {{ (authUser.username || authUser.name || '?').charAt(0) }}
                     </span>
                     <div class="min-w-0 flex-1">
                         <p class="truncate text-sm font-semibold text-white">{{ authUser.username || authUser.name }}</p>
-                        <p class="truncate text-xs text-brand-300">{{ authUser.email }}</p>
+                        <p class="truncate text-xs text-ink-400">{{ authUser.email }}</p>
                     </div>
                     <Link
                         :href="route('logout')"
                         method="post"
                         as="button"
                         title="Log out"
-                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-brand-300 transition hover:bg-brand-900 hover:text-white"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 transition hover:bg-ink-800 hover:text-white"
                     >
                         <span class="sr-only">Log out</span>
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -323,7 +324,7 @@ watch(() => page.url, () => (showingSidebar.value = false));
                                     class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-ink-700 transition hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800"
                                 >
                                     <span class="hidden max-w-[10rem] truncate sm:block">{{ authUser.name }}</span>
-                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-brand-800 font-display text-xs font-bold uppercase text-brass-300 sm:hidden">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 font-display text-xs font-bold uppercase text-white sm:hidden">
                                         {{ (authUser.username || authUser.name || '?').charAt(0) }}
                                     </span>
                                     <svg class="h-4 w-4 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
