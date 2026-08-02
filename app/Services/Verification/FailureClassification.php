@@ -28,6 +28,14 @@ use App\Services\Nin\VerificationResult;
  *     billing them for our billing problem is indefensible.
  *
  * Both come back as PROVIDER_ERROR and are refunded, not charged.
+ *
+ * One wrinkle the outcome message alone cannot express: failover. The
+ * dispatcher keeps only the LAST hop's outcome, so a chain where provider 1
+ * answered "NIN not exists" and provider 2 then declined because our account
+ * with *them* was dry used to classify off provider 2's message and waive a fee
+ * provider 1 had already earned. The per-hop trace is therefore consulted
+ * whenever the final message is not billable: one definitive negative anywhere
+ * in the chain is a verification failure, whatever happened after it.
  */
 class FailureClassification
 {
@@ -112,7 +120,7 @@ class FailureClassification
             return self::PROVIDER_ERROR;
         }
 
-        return self::fromMessage($outcome->message);
+        return self::withChain(self::fromMessage($outcome->message), $outcome->attempts);
     }
 
     /**
@@ -133,8 +141,46 @@ class FailureClassification
             // RoutedProvider emits these for "nothing routed" and "our own code
             // threw" respectively — neither is the customer's doing.
             'provider_unavailable', 'provider_error' => self::PROVIDER_ERROR,
-            default => self::fromMessage($result->message),
+            // RoutedProvider carries the chain's trace through in `raw`, so the
+            // failover rule applies here exactly as it does to an outcome.
+            default => self::withChain(
+                self::fromMessage($result->message),
+                is_array($result->raw['attempts'] ?? null) ? $result->raw['attempts'] : [],
+            ),
         };
+    }
+
+    /**
+     * Let an earlier hop's verdict stand when the last hop's did not bill.
+     *
+     * Only a hop the engine recorded as `fail` counts — that is the one outcome
+     * meaning "the provider read the request and answered". A hop that timed out
+     * answered nothing and cannot make a chain billable.
+     *
+     * The chain is in preference order, so the first definitive negative wins;
+     * a later provider's dry account or rate limit cannot overturn it.
+     *
+     * @param  array<int, array<string, mixed>>  $attempts  one entry per hop
+     */
+    public static function withChain(string $classification, array $attempts): string
+    {
+        if (self::isBillable($classification) || $attempts === []) {
+            return $classification;
+        }
+
+        foreach ($attempts as $attempt) {
+            if (! is_array($attempt) || ($attempt['outcome'] ?? null) !== 'fail') {
+                continue;
+            }
+
+            $hop = self::fromMessage(is_string($attempt['message'] ?? null) ? $attempt['message'] : null);
+
+            if (self::isBillable($hop)) {
+                return $hop;
+            }
+        }
+
+        return $classification;
     }
 
     /**

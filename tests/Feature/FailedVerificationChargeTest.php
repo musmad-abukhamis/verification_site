@@ -478,6 +478,106 @@ class FailedVerificationChargeTest extends TestCase
         $this->assertSame(self::START_BALANCE - 50, (float) $user->fresh()->balance);
     }
 
+    // -------------------------------------------------------- failover ------
+
+    /**
+     * Route a two-provider chain and turn failover on.
+     *
+     * @param  array<int, string>  $services
+     */
+    private function routeChainFor(array $services): void
+    {
+        VerificationSetting::put('failover_enabled', true);
+
+        $this->routeProviderFor($services, 'primary', 'https://primary.test');
+        $this->routeProviderFor($services, 'secondary', 'https://secondary.test');
+    }
+
+    /**
+     * The live regression: the first provider gave a definitive "no such
+     * record", the chain moved on, and the second declined because *our*
+     * account with it had run dry. The dispatcher keeps only the last hop, so
+     * classifying off that message alone waived a fee the first hop had earned.
+     */
+    public function test_a_definitive_nin_failure_is_charged_even_when_a_later_provider_account_is_dry(): void
+    {
+        $user = $this->user();
+        $this->routeChainFor(['nin.verify', 'nin.phone', 'nin.demographic']);
+
+        Http::fake([
+            'primary.test/*' => Http::response(['status' => false, 'message' => 'NIN not exists.'], 200),
+            'secondary.test/*' => Http::response(['message' => 'Insufficient wallet balance'], 400),
+        ]);
+
+        $this->verifyNin($user);
+
+        $charge = FailedVerificationCharge::sole();
+        $this->assertTrue($charge->charged, 'the first provider answered definitively');
+        $this->assertSame(FailureClassification::RECORD_NOT_FOUND, $charge->classification);
+        $this->assertSame(self::START_BALANCE - 50, (float) $user->fresh()->balance);
+    }
+
+    /** Same shape on the BVN side, which classifies from the outcome directly. */
+    public function test_a_definitive_bvn_failure_survives_a_later_provider_fault(): void
+    {
+        $user = $this->user();
+        $this->routeChainFor(['bvn.verify']);
+
+        Http::fake([
+            'primary.test/*' => Http::response(['status' => false, 'message' => 'BVN not found'], 200),
+            'secondary.test/*' => Http::response(['message' => 'Unauthorized: invalid api key'], 401),
+        ]);
+
+        $this->bvnSearch()->search($user, '12345678901', 'premium');
+
+        $charge = FailedVerificationCharge::sole();
+        $this->assertTrue($charge->charged);
+        $this->assertSame(FailureClassification::RECORD_NOT_FOUND, $charge->classification);
+        $this->assertSame(self::START_BALANCE - 50, (float) $user->fresh()->balance);
+    }
+
+    /** No hop answered about the record — still our problem, still no fee. */
+    public function test_a_chain_that_only_hits_our_own_account_problems_is_never_charged(): void
+    {
+        $user = $this->user();
+        $this->routeChainFor(['nin.verify', 'nin.phone', 'nin.demographic']);
+
+        Http::fake([
+            'primary.test/*' => Http::response(['message' => 'Insufficient wallet balance'], 402),
+            'secondary.test/*' => Http::response(['message' => 'Quota exceeded'], 400),
+        ]);
+
+        $this->verifyNin($user);
+
+        $charge = FailedVerificationCharge::sole();
+        $this->assertFalse($charge->charged);
+        $this->assertSame(FailureClassification::PROVIDER_ERROR, $charge->classification);
+        $this->assertSame(self::START_BALANCE, (float) $user->fresh()->balance);
+    }
+
+    /**
+     * The deliberate boundary: a chain that ends unanswered stays free even
+     * when an earlier hop had answered. The user is told to try again, and a
+     * retry they were told to make must not cost them anything.
+     */
+    public function test_a_chain_ending_in_a_timeout_is_not_charged_for_an_earlier_negative(): void
+    {
+        $user = $this->user();
+        $this->routeChainFor(['nin.verify', 'nin.phone', 'nin.demographic']);
+
+        Http::fake([
+            'primary.test/*' => Http::response(['status' => false, 'message' => 'NIN not exists.'], 200),
+            'secondary.test/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('timed out'),
+        ]);
+
+        $this->verifyNin($user);
+
+        $charge = FailedVerificationCharge::sole();
+        $this->assertFalse($charge->charged);
+        $this->assertSame(FailureClassification::TIMEOUT, $charge->classification);
+        $this->assertSame(self::START_BALANCE, (float) $user->fresh()->balance);
+    }
+
     // ----------------------------------------------------------- balances ---
 
     public function test_the_wallet_arithmetic_balances(): void
