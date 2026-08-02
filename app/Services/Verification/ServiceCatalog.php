@@ -71,7 +71,13 @@ class ServiceCatalog
         'nin.ipe' => [
             'label' => 'NIN IPE Clearance (submit)',
             'group' => 'nin',
-            'inputs' => ['nin', 'tracking_id', 'field_code', 'description'],
+            // `field_code` is deliberately absent: it is the provider's own
+            // routing code (ArewaSmart wants 002 here), not something a caller
+            // supplies, so it belongs in the endpoint's Constant fields. Listing
+            // it as an input would render it as a mappable request field that
+            // nothing ever populates — a field map only renames values that are
+            // actually sent, so the row would silently emit nothing.
+            'inputs' => ['nin', 'tracking_id', 'description'],
             'required' => ['tracking_id'],
             // A submission, not a lookup — never re-send on an ambiguous reply.
             'idempotent' => false,
@@ -93,7 +99,8 @@ class ServiceCatalog
         'nin.validation' => [
             'label' => 'NIN Validation (submit)',
             'group' => 'nin',
-            'inputs' => ['nin', 'field_code', 'description'],
+            // See nin.ipe: `field_code` is a Constant field, not a caller input.
+            'inputs' => ['nin', 'description'],
             'required' => ['nin'],
             'idempotent' => false,
             'failover' => false,
