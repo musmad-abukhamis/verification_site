@@ -60,11 +60,15 @@ of the spool-to-disk treatment `migrate-bvnmod.sh` needed.
 - **`Plan` and `vendorapi` have `serial` integer PKs.** Carrying those ids
   collides with ids the target sequence already issued. Use
   `EXCLUDE_COLS='id' CONFLICT='(<natural key>)'`.
-- **Five tables have NO primary key**: `ipe`, `validation`, `personalisation`,
-  `bvnserviceprices`, `ninServicePrices`. `on conflict do nothing` needs a unique
-  constraint, so **a re-run duplicates every row**. Truncate-and-load these, or
-  add a dedupe key first. Every table in the nimcweb migration had a PK; these
-  do not.
+- **Five tables have no declared PRIMARY KEY**: `ipe`, `validation`,
+  `personalisation`, `bvnserviceprices`, `ninServicePrices`. They are not
+  unkeyed, though — `ipe` and `validation` each carry a UNIQUE index on a
+  `serial` `id` (`ipe_id_key`, `validation_id_key`), so `on conflict do nothing`
+  does dedupe them. A probe filtering on `pg_index.indisprimary` misses these;
+  check `pg_indexes` instead. The remaining three are unverified.
+- **Integer ids are the real hazard, not the missing PK.** Carrying a source
+  `serial` id into a target that assigns its own is only safe when the target is
+  empty, and even then the target's sequence is left behind the data — see §6.
 
 ### users column delta
 
@@ -210,11 +214,52 @@ Expected inserts, derived from the map:
 | `Pin` | 10 | 0 | 0 | 10 |
 | `OTP` | 7 | 0 | 0 | 7 |
 
-## 6. Open items
+## 6. ipe and validation — DONE 2026-08-02
+
+Scope was narrowed to `users`, `ipe`, `validation`. Both of these key on a
+`serial` integer, and they took opposite paths for that reason.
+
+| table | source | dropped | remapped | inserted | target after |
+| --- | --- | --- | --- | --- | --- |
+| `ipe` | 257 | 87 | 5 | **170** | 0 → 170 |
+| `validation` | 37 | 12 | 0 | **25** | 160 → 185 |
+
+**`ipe` — target was empty, so source ids were carried across.**
+
+**`validation` — target already held 160 rows** occupying the same id range as
+the incoming 1–37. The first attempt inserted **0 of 25**: every row hit the
+unique index and `on conflict do nothing` discarded it. Nothing was corrupted,
+but nothing landed, and the only reason this was noticed is the measured-insert
+warning added in `819a0d0` — the old script would have printed "inserted." and
+moved on. Re-run with `EXCLUDE_COLS='id'` so the target assigns ids: 25 landed.
+
+> With `EXCLUDE_COLS='id'` there is no key left to dedupe on, so **`validation`
+> is not safe to re-run** — a second pass duplicates all 25 rows.
+
+### The sequence trap — confirmed, not theoretical
+
+After `ipe` was copied with its source ids, the target read:
+
+```
+ipe | max(id)=267 | ipe_id_seq.last_value=1
+```
+
+The sequence had never been used, so the app's next IPE insert would have drawn
+id=1 and collided with an imported row, repeatedly, until it climbed past 267.
+This is a production failure that appears *after* a migration reports success.
+`migrate-table.sh` now calls `setval` after any copy that carried ids (`03dc3e2`);
+`ipe` was fixed by hand because it ran on the previous version. Final state:
+`ipe` 267/267, `validation` 185/185.
+
+**Any future table with an integer key needs this check.** `Plan` and
+`vendorapi` are the remaining ones.
+
+## 7. Open items
 
 - [x] Run the users copy — done 2026-08-02, `inserted=138`, verified.
-- [ ] Decide the no-PK tables' strategy before importing `ipe` (257 rows),
-      `validation` (37), `personalisation` (48).
+- [x] `ipe` (170) and `validation` (25) — done 2026-08-02, see §6.
+- [ ] `personalisation` (48), `bvnserviceprices`, `ninServicePrices`: key
+      structure still unverified. Check `pg_indexes`, not `indisprimary`.
 - [ ] `accountkyc` and `notification_users` carry rows for the three merged
       accounts. If the target already holds a row for the same user, the merge
       can produce a duplicate or trip a unique constraint — check both before
