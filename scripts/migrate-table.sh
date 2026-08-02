@@ -76,6 +76,30 @@ tgt() { PGPASSWORD="$DBP" psql -h "$DBH" -U "$DBU" -d "$DBN" -w "$@"; }
 # Source is live production: server-enforced read-only.
 src() { PGOPTIONS='-c default_transaction_read_only=on' psql "$SRC" -w "$@"; }
 
+# Always say which source database is actually being read, and refuse to run
+# against the wrong one. SRC_PW alone selects the legacy nimcweb/abcweb default,
+# which is the right answer for that migration and a silent disaster for any
+# other -- the ids simply do not match, so the copy "succeeds" with wrong data.
+assert_source() {
+  local actual expect endpoint
+  endpoint=$(printf '%s' "$SRC" | sed -E 's#^postgresql://[^:]+:[^@]*@#-> #; s#\?.*$##')
+  actual=$(src -Atc "select current_database()") \
+    || { echo "error: cannot reach the source database." >&2; exit 1; }
+  echo "source      : $actual $endpoint"
+  [ -n "${SRC_URI:-}" ] || echo "  (SRC_URI unset -- using the legacy nimcweb/abcweb default)"
+
+  if [ "$(tgt -Atc "select to_regclass('public.mt_migration_meta') is not null")" = "t" ]; then
+    expect=$(tgt -Atc "select expected_src_db from mt_migration_meta limit 1")
+    if [ -n "$expect" ] && [ "$actual" != "$expect" ]; then
+      echo >&2
+      echo "ABORT: this target is set up to receive '$expect', but the source" >&2
+      echo "connection points at '$actual'. Set SRC_URI (not SRC_PW):" >&2
+      echo "  export SRC_URI='postgresql://<user>:<pw>@<host>:5432/$expect'" >&2
+      exit 1
+    fi
+  fi
+}
+
 cols_of() {   # $1 = src|tgt -- bare column names, source ordinal order
   local q="select column_name from information_schema.columns
            where table_schema='public' and table_name='$TABLE'
@@ -105,8 +129,9 @@ build_cols() {
 case "$ACTION" in
 
 check)
-  build_cols
   echo "== $TABLE"
+  assert_source
+  build_cols
   echo "source rows : $(src -Atc "select count(*) from $QT")"
   echo "target rows : $(tgt -Atc "select count(*) from $QT")"
   echo "size on src : $(src -Atc "select pg_size_pretty(pg_total_relation_size('$QT'))")"
@@ -117,16 +142,17 @@ check)
   echo "conflict    : ${CONFLICT:-<any unique constraint>} do nothing"
 
   if [ "$(tgt -Atc "select to_regclass('public.mt_user_map') is not null")" = "t" ]; then
-    echo "identity map: LOADED ($(tgt -Atc 'select count(*) from mt_user_map') entries,"
-    echo "              $(tgt -Atc 'select count(*) from mt_user_map where tgt_id is null') marked skip)"
+    echo "identity map: LOADED -- $(tgt -Atc 'select count(*) from mt_user_map') entries, $(tgt -Atc 'select count(*) from mt_user_map where tgt_id is null') marked skip"
     if [ "$TABLE" = users ]; then
-      echo "  users affected: $(src -Atc "select count(*) from $QT" ) source rows, of which"
       src -Atc "select id from $QT" > /tmp/mt-ids.txt
-      tgt -q -c "drop table if exists mt_idprobe" \
+      tgt -q -c "set client_min_messages=warning" \
+             -c "drop table if exists mt_idprobe" \
              -c "create unlogged table mt_idprobe (id text)" \
              -c "\copy mt_idprobe from '/tmp/mt-ids.txt'"
-      echo "  $(tgt -Atc 'select count(*) from mt_idprobe p join mt_user_map m on m.src_id=p.id') will be removed from the stage"
-      tgt -q -c "drop table if exists mt_idprobe"; rm -f /tmp/mt-ids.txt
+      hit=$(tgt -Atc 'select count(*) from mt_idprobe p join mt_user_map m on m.src_id=p.id')
+      echo "  mapped users found on this source: $hit (must equal the map size, or the source is wrong)"
+      tgt -q -c "set client_min_messages=warning" -c "drop table if exists mt_idprobe"
+      rm -f /tmp/mt-ids.txt
     elif echo "$COLS" | grep -q '"userId"'; then
       # Count on the source, using the map's ids passed in as a simple IN list.
       skip=$(tgt -Atc "select string_agg(quote_literal(src_id), ',') from mt_user_map where tgt_id is null")
@@ -154,6 +180,7 @@ check)
   ;;
 
 copy)
+  assert_source
   build_cols
   have=$(tgt -Atc "select count(*) from $QT")
   if [ "$have" != "0" ]; then

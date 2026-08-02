@@ -27,6 +27,15 @@
 
 begin;
 
+-- Which source database this map belongs to. migrate-table.sh refuses to run
+-- when the source it is actually connected to is not this one -- the map's ids
+-- are meaningless anywhere else, and the legacy nimcweb/abcweb default silently
+-- produced a 2263-row "users" copy against the wrong database twice before this
+-- guard existed.
+drop table if exists mt_migration_meta;
+create table mt_migration_meta (expected_src_db text not null);
+insert into mt_migration_meta values ('vtuportal');
+
 drop table if exists mt_user_map;
 
 create table mt_user_map (
