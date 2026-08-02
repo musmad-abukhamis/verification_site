@@ -125,23 +125,35 @@ const FAMILY = {
 };
 
 /*
- * Nothing that already has a home elsewhere on this page appears here.
- * Buy data, NIN verify and Fund wallet are the three quick dots; Wallet
- * history is the "View all" on Recent activity; Profile lives in the
- * account menu in the header. Listing them twice would only make the grid
- * longer without making anything easier to reach.
+ * Buy data and Fund wallet are quick dots and so stay out of the grid; Wallet
+ * history is the "View all" on Recent activity; Profile lives in the account
+ * menu in the header. Listing them twice would only make the grid longer
+ * without making anything easier to reach.
+ *
+ * NIN verify is the deliberate exception, added 2026-08-02. It is also the
+ * first quick dot, but the dot is a bare icon: this grid is where the two
+ * verification services read as a pair, and having BVN verify sitting alone
+ * there implied NIN verification lived somewhere else entirely.
+ *
+ * BVN search left the grid in the same change. It renders the same record as
+ * BVN verify with a slip attached, so two adjacent cards were asking people to
+ * pick between things they could not tell apart. It is still in the sidebar.
  *
  * Data pricing, My purchases, Verify history and API access were removed on
- * 2026-08-01 for the same reason in a different key: the grid is for things
- * you *do*, and those four are things you *read*. They're all still one click
- * away in the sidebar. Don't add them back.
+ * 2026-08-01 for a different reason: the grid is for things you *do*, and those
+ * four are things you *read*. They're all still one click away in the sidebar.
+ * Don't add them back.
  */
 const SERVICES = [
-    { title: 'NIN validation', subtitle: 'Confirm a number against the register.', family: 'nin', icon: ICON.validation, route: 'nin.validation.index' },
-    { title: 'IPE clearance', subtitle: 'Clear a record stuck in IPE.', family: 'nin', icon: ICON.clearance, route: 'nin.ipe.index' },
-
-    { title: 'BVN search', subtitle: 'Find a BVN and print the slip.', family: 'bvn', icon: ICON.search, route: 'bvn-search.index' },
+    // The two instant lookups lead: they are the most-used services and the
+    // only ones that answer while the user is still on the page. Everything
+    // below them either takes hours to come back or is a longer form to fill.
+    { title: 'NIN verify', subtitle: 'Check a NIN against the register.', family: 'nin', icon: ICON.verify, route: 'nin.verify.index' },
     { title: 'BVN verify', subtitle: 'Check a BVN against the register.', family: 'bvn', icon: ICON.bvn, route: 'bvn-verify.index' },
+
+    { title: 'NIN validation', subtitle: 'Submit a NIN for validation (3–7 days).', family: 'nin', icon: ICON.validation, route: 'nin.validation.index' },
+    { title: 'IPE clearance', subtitle: 'Clear a record stuck in IPE (30min–3hrs).', family: 'nin', icon: ICON.clearance, route: 'nin.ipe.index' },
+
     { title: 'BVN modification', subtitle: 'Correct a name, date or phone.', family: 'bvn', icon: ICON.edit, route: 'bvn-modification.index' },
     { title: 'BVN onboarding', subtitle: 'Enrol someone new by SDK form.', family: 'bvn', icon: ICON.enrol, route: 'bvn-sdk-form.index' },
     { title: 'BVN retrieval', subtitle: 'Recover a BVN from a BMS ticket.', family: 'bvn', icon: ICON.retrieve, route: 'bvn-retrieval.index' },

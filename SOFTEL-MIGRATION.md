@@ -155,11 +155,22 @@ Every row is accounted for in exactly one bucket.
 
 ```bash
 cd /var/www/myvtu && git pull
-export SRC_URI='postgresql://vtuuser:<PASSWORD>@72.62.22.206:5432/vtuportal'
 
-# once, before the first table:
-PGPASSWORD="$(grep -E '^DB_PASSWORD=' .env | cut -d= -f2-)" \
-  psql -h 127.0.0.1 -U myvtuuser -d myvtu -w -f scripts/vtuportal-user-map.sql
+# Substitute the real password -- do NOT keep the angle brackets, they are not
+# quoting, they become part of the password and psql fails "password
+# authentication failed for user vtuuser".
+unset SRC_PW      # else a shell that loses SRC_URI silently reads abcweb (see below)
+export SRC_URI='postgresql://vtuuser:THEPASSWORD@72.62.22.206:5432/vtuportal'
+
+# once, before the first table. Read the target credentials exactly the way
+# migrate-table.sh does -- a raw `cut -d= -f2-` keeps the surrounding quotes
+# when .env has DB_PASSWORD="..." and psql then rejects them.
+strip(){ grep -E "^$1=" .env | head -1 | cut -d= -f2- \
+  | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+        -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"; }
+
+PGPASSWORD="$(strip DB_PASSWORD)" psql -h "$(strip DB_HOST)" -U "$(strip DB_USERNAME)" \
+  -d "$(strip DB_DATABASE)" -w -f scripts/vtuportal-user-map.sql
 
 bash scripts/migrate-table.sh users check    # read the identity-map lines
 bash scripts/migrate-table.sh users copy     # expect inserted=138

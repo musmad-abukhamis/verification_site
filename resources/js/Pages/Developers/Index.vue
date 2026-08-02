@@ -61,6 +61,13 @@ const snippets = {
   -H "Content-Type: application/json" \\
   -d '{ "nin": "12345678901" }'`,
 
+    curlValidateStatus: `# By the id we returned, or by the NIN you sent.
+curl ${base}/nin/validate/8841 \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+
+curl ${base}/nin/validate/12345678901 \\
+  -H "Authorization: Bearer YOUR_API_TOKEN"`,
+
     curlIpe: `curl -X POST ${base}/nin/ipe \\
   -H "Authorization: Bearer YOUR_API_TOKEN" \\
   -H "Content-Type: application/json" \\
@@ -310,35 +317,61 @@ const dataSuccess = `{
   }
 }`;
 
-const validationSuccess = `{
-  "status": "success",
+const validationAccepted = `{
+  "status": "processing",
   "reference": "NIN_66A3F2C1B9D4E8721",
   "amount": 25,
-  "valid": true,
+  "message": "Validation submitted. Results typically take 3 days to a week — poll this submission for the outcome.",
   "data": {
+    "id": 8841,
     "nin": "12345678901",
-    "first_name": "JOHN",
-    "middle_name": "ADE",
-    "last_name": "DOE",
-    "full_name": "JOHN ADE DOE",
-    "gender": "MALE",
-    "date_of_birth": "1990-05-21",
-    "phone": "08012345678",
-    "residence_state": "LAGOS",
-    "photo": "<base64 jpeg>",
+    "status": "processing",
+    "result": "Pending",
+    "comment": "[NIN_66A3F2C1B9D4E8721] Submitted to NIMC Gateway via API",
+    "submitted_at": "2026-07-23T09:12:44+00:00",
+    "updated_at": "2026-07-23T09:12:44+00:00"
+  }
+}`;
 
-    "provider": "NIMC Gateway",
-    "validation_id": 8841
+const validationStatus = `{
+  "status": "success",
+  "data": {
+    "id": 8841,
+    "nin": "12345678901",
+    "status": "completed",
+    "result": "{\\"success\\":true,\\"status\\":\\"completed\\", ... }",
+    "comment": "nin: 12345678901, status: Approved, reply: SUCCESSFUL",
+    "submitted_at": "2026-07-23T09:12:44+00:00",
+    "updated_at": "2026-07-28T14:02:10+00:00"
+  }
+}`;
+
+const validationUnconfirmed = `{
+  "status": "unconfirmed",
+  "reference": "NIN_66A3F2C1B9D4E8721",
+  "refunded": true,
+  "message": "The provider did not confirm this submission. It may still have been filed — do not resubmit. Poll this submission or contact support to reconcile it.",
+  "data": {
+    "id": 8842,
+    "nin": "12345678901",
+    "status": "processing",
+    "result": "Unconfirmed",
+    "submitted_at": "2026-07-23T09:12:44+00:00"
   }
 }`;
 
 const validationError = `{
   "status": "error",
-  "code": "verification_failed",
+  "code": "submission_failed",
   "message": "Record not found",
   "reference": "NIN_66A3F2C1B9D4E8721",
-  "valid": false,
-  "refunded": true
+  "refunded": true,
+  "data": {
+    "id": 8843,
+    "nin": "12345678901",
+    "status": "failed",
+    "result": "Failed"
+  }
 }`;
 
 const ipeSuccess = `{
@@ -376,10 +409,10 @@ const ipeStatus = `{
     "id": 2841,
     "tracking_id": "ABC1234567890XY",
     "status": "completed",
-    "result": "IPE Clearance completed",
-    "comment": "Clearance completed",
+    "result": "{\\"success\\":true,\\"cleared\\":true, ... }",
+    "comment": "status: Cleared, reply: SUCCESSFUL, nin: 12345678900, name: MUSA TANKO",
     "submitted_at": "2026-07-23T09:12:44+00:00",
-    "updated_at": "2026-07-24T14:02:10+00:00"
+    "updated_at": "2026-07-23T11:48:10+00:00"
   }
 }`;
 
@@ -511,7 +544,7 @@ Accept: application/json</code></pre>
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
                                 <tr><td class="px-4 py-2"><code>200</code></td><td class="px-4 py-2">Success</td><td class="px-4 py-2">You were charged</td></tr>
                                 <tr><td class="px-4 py-2"><code>201</code></td><td class="px-4 py-2">Submission accepted (IPE, data)</td><td class="px-4 py-2">Charged; read the outcome back later</td></tr>
-                                <tr><td class="px-4 py-2"><code>202</code></td><td class="px-4 py-2">Submission sent but unconfirmed (IPE)</td><td class="px-4 py-2">Refunded. <strong>Never resubmit</strong> — read it back</td></tr>
+                                <tr><td class="px-4 py-2"><code>202</code></td><td class="px-4 py-2">Job filed (NIN validation), or a submission sent but unconfirmed (IPE, validation)</td><td class="px-4 py-2">Read <code>status</code> to tell them apart: <code>processing</code> is charged and running, <code>unconfirmed</code> is refunded. <strong>Never resubmit either</strong> — read it back</td></tr>
                                 <tr><td class="px-4 py-2"><code>401</code></td><td class="px-4 py-2">Bad or missing token</td><td class="px-4 py-2">Check the header; do not retry</td></tr>
                                 <tr><td class="px-4 py-2"><code>402</code></td><td class="px-4 py-2">Your wallet is empty</td><td class="px-4 py-2">Fund your wallet, then retry</td></tr>
                                 <tr><td class="px-4 py-2"><code>404</code></td><td class="px-4 py-2">No such record of yours</td><td class="px-4 py-2">Read-backs only see your own submissions</td></tr>
@@ -560,7 +593,9 @@ Accept: application/json</code></pre>
     "currency": "NGN",
     "services": [
       { "service": "nin.verify", "label": "NIN Verification", "price": 40, "available": true },
-      { "service": "bvn.search.premium", "label": "BVN Slip", "price": 120, "available": true }
+      { "service": "bvn.verify", "label": "BVN Verification", "price": 150, "available": true },
+      { "service": "nin.validation", "label": "NIN Validation", "price": 25, "available": true },
+      { "service": "nin.ipe", "label": "IPE Clearance", "price": 200, "available": true }
     ]
   }
 }</code></pre>
@@ -684,17 +719,28 @@ Accept: application/json</code></pre>
                         <code class="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">POST /nin/validate</code>
                     </div>
                     <p class="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                        Confirms a NIN is real and returns who it belongs to. It is a separate service from
-                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">POST /nin/verify</code>, priced separately
-                        as <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">nin.validation</code>.
+                        Files a validation request against the NIMC register — a correction job for a record that is
+                        wrong or incomplete. Like <a href="#ipe" class="text-indigo-600 hover:underline dark:text-indigo-400">IPE clearance</a>
+                        it is a <strong>submission, not a lookup</strong>: it returns <code>202</code> immediately and the
+                        real outcome arrives days later. Priced separately as
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">nin.validation</code>.
                     </p>
+
+                    <div class="mt-4 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 dark:bg-amber-900/20">
+                        <p class="text-sm text-amber-900 dark:text-amber-200">
+                            <strong>This is not a NIN lookup.</strong> If you want the record — name, date of birth, photo,
+                            a slip to render — that is
+                            <a href="#nin" class="font-semibold underline">POST /nin/verify</a>, and it answers in seconds.
+                            Validation does not return a record at all; it returns a job you poll. Reaching for it as a KYC
+                            gate will hang your sign-up flow for a week.
+                        </p>
+                    </div>
 
                     <div class="mt-4 rounded-lg border-l-4 border-indigo-400 bg-indigo-50 p-4 dark:bg-indigo-900/20">
                         <p class="text-sm text-indigo-800 dark:text-indigo-300">
-                            <strong>Which one do I want?</strong> Use <code>validate</code> when you only need to know the
-                            NIN is genuine and matches the person — KYC gates, sign-up checks. Use <code>verify</code>
-                            when you need the full record to render or store, including a slip. Both run the same provider
-                            chain, so a NIN that validates will verify.
+                            <strong>How long?</strong> Typically <strong>3 days to a week</strong>. Poll once or twice a
+                            day — polling is free, but nothing changes minute to minute and there is no webhook. Build for
+                            an answer that arrives long after the customer has closed your page.
                         </p>
                     </div>
 
@@ -718,23 +764,77 @@ Accept: application/json</code></pre>
                         <pre class="overflow-x-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100"><code>{{ snippets.curlValidate }}</code></pre>
                     </div>
 
-                    <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">Success</h3>
+                    <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">Accepted — <code>202</code></h3>
                     <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                        <code>data</code> is the same record
-                        <a href="#nin" class="text-indigo-600 hover:underline dark:text-indigo-400">NIN verification</a>
-                        returns — same field names, same aliases, same cleaning rules. Abbreviated here; see that
-                        section for the full reference.
+                        <code>status</code> is <code>processing</code>, never <code>success</code>. The provider has taken
+                        the job, nothing more — no part of this response says the validation will succeed. Store the
+                        <code>id</code>; it is how you read the outcome back.
                     </p>
-                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ validationSuccess }}</code></pre>
+                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ validationAccepted }}</code></pre>
 
-                    <h3 class="mt-5 text-sm font-semibold text-gray-900 dark:text-white">Not validated</h3>
+                    <div class="mt-6 rounded-lg border-l-4 border-red-400 bg-red-50 p-4 dark:bg-red-900/20">
+                        <h3 class="text-sm font-semibold text-red-900 dark:text-red-200">Never retry a validation automatically</h3>
+                        <p class="mt-2 text-sm text-red-800 dark:text-red-300">
+                            Same rule as IPE: a retry files the same job twice and you are charged twice. If a call times
+                            out on your side, <strong>read the submission back</strong> with
+                            <code>GET /nin/validate</code> before doing anything else. This is also why we never fail over
+                            to a second provider here, the way we do for lookups.
+                        </p>
+                    </div>
+
+                    <h3 class="mt-6 text-sm font-semibold text-gray-900 dark:text-white">Unconfirmed — <code>202</code></h3>
                     <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                        A NIN the chain cannot confirm comes back <code>422</code> with
-                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">valid: false</code> — and refunded.
-                        A <code>504</code> means nobody answered in time, which is not the same as "this NIN is fake":
-                        retry that one, do not tell your customer they failed.
+                        Distinguished from the above by <code>status: "unconfirmed"</code>. The provider neither accepted
+                        nor rejected it. <strong>You are refunded</strong>, but it may still have been filed, so it stays
+                        on your record as <code>processing</code>. Treat as "unknown", never as "failed".
+                    </p>
+                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ validationUnconfirmed }}</code></pre>
+
+                    <h3 class="mt-6 text-sm font-semibold text-gray-900 dark:text-white">Rejected — <code>422</code></h3>
+                    <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                        The provider refused the submission outright — you are refunded and no job exists. A
+                        <code>502</code> means nobody answered at all, which is not the same thing: nothing was filed and
+                        nothing was charged, so that one is safe to send again.
                     </p>
                     <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ validationError }}</code></pre>
+
+                    <div class="mt-8 flex items-baseline gap-3">
+                        <h3 class="text-base font-bold text-gray-900 dark:text-white">Read a submission back</h3>
+                        <code class="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900 dark:text-green-200">GET /nin/validate/&#123;id&#125;</code>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        Free to call, and scoped to your own submissions. Takes either the <code>id</code> we returned or
+                        the <code>nin</code> you sent — with a NIN you get the most recent submission for it.
+                        <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">GET /nin/validate</code> lists yours,
+                        newest first (<code>?limit=</code>, default 50, max 200).
+                    </p>
+                    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        Reading one back <strong>asks the provider</strong> while the job is still open, so this is a live
+                        call, not a cache. Once it reaches <code>completed</code> or <code>failed</code> it is settled and
+                        we stop asking — you can keep polling safely, but the answer will not change again.
+                    </p>
+
+                    <div class="relative mt-3">
+                        <button @click="copy(snippets.curlValidateStatus, 'validateStatus')" class="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600">{{ copied === 'validateStatus' ? 'Copied' : 'Copy' }}</button>
+                        <pre class="overflow-x-auto rounded-lg bg-gray-900 p-4 text-xs text-gray-100"><code>{{ snippets.curlValidateStatus }}</code></pre>
+                    </div>
+                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-800 p-4 text-xs text-gray-100"><code>{{ validationStatus }}</code></pre>
+
+                    <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Status</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-200">Meaning</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
+                                <tr><td class="px-4 py-2"><code>processing</code></td><td class="px-4 py-2">With the provider. Keep polling — usually 3 days to a week</td></tr>
+                                <tr><td class="px-4 py-2"><code>completed</code></td><td class="px-4 py-2">Validated. <code>comment</code> carries the provider's wording</td></tr>
+                                <tr><td class="px-4 py-2"><code>failed</code></td><td class="px-4 py-2">Rejected upstream. <code>comment</code> says why; contact us about a refund</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
 
                 <!-- IPE -->
@@ -744,15 +844,22 @@ Accept: application/json</code></pre>
                         <code class="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">POST /nin/ipe</code>
                     </div>
                     <p class="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                        Files an IPE (Identity Proof of Enrolment) clearance for an enrolment tracking id. Unlike every
-                        other endpoint here this one is a <strong>submission, not a lookup</strong>: it creates work
-                        upstream that takes hours or days, so it returns <code>201</code> immediately and you read the
-                        outcome back later.
+                        Files an IPE (Identity Proof of Enrolment) clearance for an enrolment tracking id. Like
+                        <a href="#validation" class="text-indigo-600 hover:underline dark:text-indigo-400">NIN validation</a>
+                        this is a <strong>submission, not a lookup</strong>: it creates work upstream, so it returns
+                        <code>201</code> immediately and you read the outcome back later.
                     </p>
                     <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
                         The tracking id is the entire request. You do not send a NIN — producing one is what the
                         clearance is for.
                     </p>
+
+                    <div class="mt-4 rounded-lg border-l-4 border-indigo-400 bg-indigo-50 p-4 dark:bg-indigo-900/20">
+                        <p class="text-sm text-indigo-800 dark:text-indigo-300">
+                            <strong>How long?</strong> Typically <strong>30 minutes to 3 hours</strong> — much faster than
+                            validation, but still far too slow to hold a request open for. Poll every 15–30 minutes.
+                        </p>
+                    </div>
 
                     <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="min-w-full text-sm">
@@ -806,6 +913,11 @@ Accept: application/json</code></pre>
                         it. <code class="rounded bg-gray-100 px-1 dark:bg-gray-700">GET /nin/ipe</code> lists yours,
                         newest first (<code>?limit=</code>, default 50, max 200).
                     </p>
+                    <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                        Reading one back <strong>asks the provider</strong> while the clearance is still open, so this is a
+                        live call, not a cache. Once it reaches <code>completed</code> or <code>failed</code> it is settled
+                        and we stop asking — you can keep polling safely, but the answer will not change again.
+                    </p>
 
                     <div class="relative mt-3">
                         <button @click="copy(snippets.curlIpeStatus, 'ipeStatus')" class="absolute right-2 top-2 rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600">{{ copied === 'ipeStatus' ? 'Copied' : 'Copy' }}</button>
@@ -822,9 +934,9 @@ Accept: application/json</code></pre>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700 text-gray-700 dark:text-gray-300">
-                                <tr><td class="px-4 py-2"><code>processing</code></td><td class="px-4 py-2">With the provider. Keep polling — hours, sometimes days</td></tr>
-                                <tr><td class="px-4 py-2"><code>completed</code></td><td class="px-4 py-2">Cleared. <code>result</code> carries the provider's wording</td></tr>
-                                <tr><td class="px-4 py-2"><code>failed</code></td><td class="px-4 py-2">Rejected upstream. You were refunded at submission time</td></tr>
+                                <tr><td class="px-4 py-2"><code>processing</code></td><td class="px-4 py-2">With the provider. Keep polling — usually 30 minutes to 3 hours</td></tr>
+                                <tr><td class="px-4 py-2"><code>completed</code></td><td class="px-4 py-2">Cleared. <code>comment</code> carries the provider's wording</td></tr>
+                                <tr><td class="px-4 py-2"><code>failed</code></td><td class="px-4 py-2">Rejected upstream. <code>comment</code> says why; contact us about a refund</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1073,7 +1185,8 @@ Accept: application/json</code></pre>
                             <li>Store the <code>reference</code> from every response against your own order.</li>
                             <li>Alert on <code>402</code> — that is your wallet, and every call fails until you fund it.</li>
                             <li>Retry <code>502</code> and <code>504</code> only, and only on lookups. Never retry <code>422</code>.</li>
-                            <li>Never retry an IPE submission — read it back with <code>GET /nin/ipe</code> instead.</li>
+                            <li>Never retry an IPE or validation submission — read it back with <code>GET /nin/ipe</code> or <code>GET /nin/validate</code> instead.</li>
+                            <li>Do not use <code>POST /nin/validate</code> as a KYC check. It is a days-long job, not a lookup — <code>POST /nin/verify</code> is the one that answers in seconds.</li>
                         </ul>
                     </div>
                 </section>
