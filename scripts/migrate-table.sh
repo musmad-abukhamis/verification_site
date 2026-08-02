@@ -253,6 +253,16 @@ copy)
   ins=$((after - before))
 
   echo "rows: before=$before after=$after inserted=$ins (staged $staged)"
+
+  # If the target's id is backed by a sequence and we carried ids across, the
+  # sequence is still sitting where it was and the app's next insert will
+  # collide with an imported row. Harmless no-op for cuid keys (no sequence)
+  # and when ids were excluded (target assigned them, sequence already moved).
+  seq=$(tgt -Atc "select pg_get_serial_sequence('$QT','id')" 2>/dev/null || true)
+  if [ -n "$seq" ] && [ "$seq" != "" ]; then
+    newval=$(tgt -Atc "select setval('$seq', coalesce((select max(id) from $QT), 1), true)")
+    echo "sequence    : $seq resynced to $newval"
+  fi
   if [ "$ins" != "$staged" ]; then
     echo
     echo "WARNING: $((staged - ins)) staged row(s) did NOT land -- skipped by the"
