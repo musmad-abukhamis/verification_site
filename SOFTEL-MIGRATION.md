@@ -173,11 +173,53 @@ Then in FK order: `Pin`, `OTP`, `accountkyc` → `wallethistory`, `Transactions`
 `vendorselection`, `settings`) are independent — mind the serial-PK and no-PK
 rules in §2.
 
+### users — DONE 2026-08-02
+
+`staged 142 → 138 after map → inserted=138`, target went 4 → 142, and `verify`
+reported 0 rows staged-but-not-landed. The four mapped accounts were removed
+from the stage as intended.
+
+**It took three attempts to run against the right database.** Twice the copy was
+launched with `SRC_PW` exported instead of `SRC_URI`, which selects the legacy
+nimcweb/abcweb default; `check` then cheerfully reported 2263 source rows. The
+tell was the row count, not an error — nothing failed. Hence the
+`mt_migration_meta` guard added in `4bc179a`: the target now records which source
+it expects and the script aborts on a mismatch.
+
+### Child tables — preflight (measured 2026-08-02)
+
+**Zero orphan `userId`s** in every child table on the source
+(`Transactions`, `NINDetails`, `wallethistory`, `notification_users`,
+`accountkyc`, `ipe`, `Pin`, `OTP`, `bvnsdkform`, `bvnRetrieval`,
+`BvnModification`). With users imported and the map applied, every FK resolves.
+
+**`verification_versions` (8 rows) has no target counterpart** and cannot be
+copied — it is the only source table missing from this schema. Everything else
+exists on both sides.
+
+Expected inserts, derived from the map:
+
+| table | source | drop | remap | insert |
+| --- | --- | --- | --- | --- |
+| `Transactions` | 19,190 | 3,123 | 10,996 | 16,067 |
+| `NINDetails` | 14,480 | 3,264 | 5,040 | 11,216 |
+| `wallethistory` | 1,439 | 31 | 195 | 1,408 |
+| `ipe` | 257 | 87 | 5 | 170 |
+| `notification_users` | 212 | 5 | 10 | 197 |
+| `accountkyc` | 78 | 1 | 2 | 77 |
+| `Pin` | 10 | 0 | 0 | 10 |
+| `OTP` | 7 | 0 | 0 | 7 |
+
 ## 6. Open items
 
-- [ ] Run the users copy; confirm `inserted=138`.
+- [x] Run the users copy — done 2026-08-02, `inserted=138`, verified.
 - [ ] Decide the no-PK tables' strategy before importing `ipe` (257 rows),
       `validation` (37), `personalisation` (48).
+- [ ] `accountkyc` and `notification_users` carry rows for the three merged
+      accounts. If the target already holds a row for the same user, the merge
+      can produce a duplicate or trip a unique constraint — check both before
+      copying, not after.
+- [ ] `verification_versions` (8 rows) has nowhere to go. Confirm it is dead.
 - [ ] `Plan` / `vendorapi`: pick natural keys for `CONFLICT`.
 - [ ] Source phone `7080222272` (`abubilal`) is 10 digits, missing its leading
       zero. Other rows may share this; normalise before any phone-based lookup.
