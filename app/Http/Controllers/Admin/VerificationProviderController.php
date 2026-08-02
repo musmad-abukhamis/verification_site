@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\VerificationProviderRequest;
+use App\Models\VerificationAttempt;
 use App\Models\VerificationEndpoint;
 use App\Models\VerificationProvider;
 use App\Services\Verification\AuthStyle;
@@ -132,9 +133,28 @@ class VerificationProviderController extends Controller
             fn ($value) => $value !== null && $value !== '',
         );
 
-        $call = $caller->call($provider, $endpoint, $input, 'TEST-'.now()->format('YmdHis'));
+        $reference = 'TEST-'.now()->format('YmdHis');
+        $call = $caller->call($provider, $endpoint, $input, $reference);
 
         $outcome = $call['outcome'];
+
+        // Logged like any other call. This used to bypass the attempt log
+        // entirely, which meant the one screen built for proving an endpoint
+        // works left no trace to diagnose afterwards — `verify:calls` showed
+        // nothing and the failure looked like it had never been sent.
+        VerificationAttempt::create([
+            'service' => $validated['service'],
+            'provider_id' => $provider->getKey(),
+            'provider_name' => $provider->name,
+            'user_id' => $request->user()?->getKey(),
+            'reference' => $reference,
+            'request_payload' => $call['request'], // already credential-free
+            'response' => $this->trimForDisplay($outcome->raw),
+            'outcome' => $outcome->outcome,
+            'http_status' => $outcome->httpStatus,
+            'duration_ms' => $call['duration_ms'],
+            'message' => $outcome->message,
+        ]);
 
         return back()->with('testResult', [
             'provider' => $provider->name,
