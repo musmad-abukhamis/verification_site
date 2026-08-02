@@ -169,12 +169,24 @@ check)
     echo
     echo "== FK: userIds missing from TARGET users (must be 0)"
     src -Atc "select distinct \"userId\" from $QT" > /tmp/mt-users.txt
-    tgt -q -c "drop table if exists mt_userprobe" \
+    tgt -q -c "set client_min_messages=warning" \
+           -c "drop table if exists mt_userprobe" \
            -c "create unlogged table mt_userprobe (id text)" \
            -c "\copy mt_userprobe from '/tmp/mt-users.txt'"
-    echo "missing: $(tgt -Atc 'select count(*) from mt_userprobe p
-                               where not exists (select 1 from users u where u.id = p.id)')"
-    tgt -q -c "drop table if exists mt_userprobe"
+
+    # Ids the identity map accounts for are NOT orphans: copy rewrites or drops
+    # them before inserting. Counting them here reports a scary number for a
+    # migration that is working exactly as designed.
+    mapped=""
+    if [ "$(tgt -Atc "select to_regclass('public.mt_user_map') is not null")" = "t" ]; then
+      mapped="and not exists (select 1 from mt_user_map m where m.src_id = p.id)"
+      echo "handled by map: $(tgt -Atc 'select count(*) from mt_userprobe p
+                                        join mt_user_map m on m.src_id = p.id')"
+    fi
+    echo "missing: $(tgt -Atc "select count(*) from mt_userprobe p
+                               where not exists (select 1 from users u where u.id = p.id)
+                                 $mapped")"
+    tgt -q -c "set client_min_messages=warning" -c "drop table if exists mt_userprobe"
     rm -f /tmp/mt-users.txt
   fi
   ;;
@@ -194,10 +206,12 @@ copy)
   # deliberately not copying id. Build from the column list instead.
   if [ -n "${EXCLUDE_COLS:-}" ]; then
     tgt -v ON_ERROR_STOP=1 -q \
+      -c "set client_min_messages=warning" \
       -c "drop table if exists $STAGE" \
       -c "create unlogged table $STAGE as select $COLS from $QT with no data"
   else
     tgt -v ON_ERROR_STOP=1 -q \
+      -c "set client_min_messages=warning" \
       -c "drop table if exists $STAGE" \
       -c "create unlogged table $STAGE (like $QT)"
   fi
