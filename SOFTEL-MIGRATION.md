@@ -159,6 +159,7 @@ cd /var/www/myvtu && git pull
 # Substitute the real password -- do NOT keep the angle brackets, they are not
 # quoting, they become part of the password and psql fails "password
 # authentication failed for user vtuuser".
+export SRC_PW='THEPASSWORD'
 unset SRC_PW      # else a shell that loses SRC_URI silently reads abcweb (see below)
 export SRC_URI='postgresql://vtuuser:THEPASSWORD@72.62.22.206:5432/vtuportal'
 
