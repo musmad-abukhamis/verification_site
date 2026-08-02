@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\VerificationLogController;
 use App\Http\Controllers\Admin\VerificationProviderController;
 use App\Http\Controllers\Admin\VerificationRoutingController;
 use App\Http\Controllers\Admin\ServicePriceController;
+use App\Http\Controllers\Admin\NinIpeController;
 use App\Http\Controllers\Admin\NinValidationController;
 use App\Http\Controllers\Admin\BvnModificationController;
 use App\Http\Controllers\Admin\BvnPriceController;
@@ -146,9 +147,22 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('/service-prices/{service}', [ServicePriceController::class, 'update'])->name('service-prices.update');
     
     // NIN Validation Management
+    // Validation and IPE are asynchronous jobs, so both carry the same three
+    // settlement actions beyond browsing: re-poll the provider, overwrite the
+    // outcome by hand, refund.
     Route::get('/nin-validations', [NinValidationController::class, 'index'])->name('nin-validations.index');
     Route::get('/nin-validations/{validation}', [NinValidationController::class, 'show'])->name('nin-validations.show');
     Route::get('/nin-validations-stats', [NinValidationController::class, 'stats'])->name('nin-validations.stats');
+    Route::put('/nin-validations/{validation}', [NinValidationController::class, 'updateStatus'])->name('nin-validations.update');
+    Route::post('/nin-validations/{validation}/recheck', [NinValidationController::class, 'recheck'])->name('nin-validations.recheck');
+    Route::post('/nin-validations/{validation}/refund', [NinValidationController::class, 'refund'])->name('nin-validations.refund');
+
+    // NIN IPE Clearance Management
+    Route::get('/nin-ipe', [NinIpeController::class, 'index'])->name('nin-ipe.index');
+    Route::get('/nin-ipe/{clearance}', [NinIpeController::class, 'show'])->name('nin-ipe.show');
+    Route::put('/nin-ipe/{clearance}', [NinIpeController::class, 'updateStatus'])->name('nin-ipe.update');
+    Route::post('/nin-ipe/{clearance}/recheck', [NinIpeController::class, 'recheck'])->name('nin-ipe.recheck');
+    Route::post('/nin-ipe/{clearance}/refund', [NinIpeController::class, 'refund'])->name('nin-ipe.refund');
 
     // BVN Service Prices
     Route::get('/bvn-prices', [BvnPriceController::class, 'index'])->name('bvn-prices.index');

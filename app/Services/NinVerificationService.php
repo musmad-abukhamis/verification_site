@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ServicePrice;
 use App\Models\User;
 use App\Services\Verification\VerificationDispatcher;
+use App\Services\Verification\WorkStatusNormalizer;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -169,26 +170,44 @@ class NinVerificationService
     /**
      * Check IPE status
      */
+    /**
+     * IPE status for a tracking id, through the routed `nin.ipe.status` chain.
+     *
+     * This used to call ArewaSmart directly from config, which meant the one
+     * provider the admin cannot change was the one answering status questions.
+     * It reports the job state rather than the HTTP outcome — a reachable
+     * provider saying "still processing" is a successful call about unfinished
+     * work, and the two must not be conflated.
+     */
     public function checkIpeStatus(string $trackingId): array
     {
         try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->apiKey,
-                'Content-Type' => 'application/json',
-            ])->get($this->baseUrl.'/nin/ipe/arewa/status', [
-                'tracking_id' => $trackingId,
-            ]);
+            $outcome = app(VerificationDispatcher::class)->verify(
+                'nin.ipe.status',
+                ['tracking_id' => $trackingId],
+            );
 
-            if ($response->successful()) {
+            if ($outcome->isTimeout()) {
                 return [
-                    'success' => true,
-                    'data' => $response->json(),
+                    'success' => false,
+                    'message' => $outcome->message ?? 'Status check failed',
+                ];
+            }
+
+            $reading = app(WorkStatusNormalizer::class)->normalize($outcome->raw);
+
+            if (! $reading['recognised']) {
+                return [
+                    'success' => false,
+                    'message' => $outcome->message ?? 'The provider did not report a status.',
                 ];
             }
 
             return [
-                'success' => false,
-                'message' => $response->json('message') ?? 'Status check failed',
+                'success' => true,
+                'status' => $reading['status'],
+                'comment' => $reading['detail'],
+                'data' => $outcome->raw,
             ];
         } catch (\Exception $e) {
             Log::error('IPE Status Check Error: '.$e->getMessage());

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\NIN\NinWalletTrait;
 use App\Models\Ipe;
 use App\Models\User;
-use App\Services\Verification\VerificationDispatcher;
+use App\Services\Nin\AsyncJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,7 +27,9 @@ class IpeController extends Controller
 {
     use NinWalletTrait;
 
-    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
+    private const SERVICE = 'nin.ipe';
+
+    public function __construct(private readonly AsyncJobService $jobs) {}
 
     /**
      * Submit a tracking id for IPE clearance.
@@ -61,7 +63,7 @@ class IpeController extends Controller
         $this->debitWallet($user, $price, ['fundingtype' => 'nin_ipe']);
 
         try {
-            $outcome = $this->dispatcher->verify('nin.ipe', [
+            $outcome = $this->jobs->submit(self::SERVICE, [
                 'tracking_id' => $trackingId,
             ], ['user_id' => $user->id, 'reference' => $reference]);
         } catch (\Throwable $e) {
@@ -74,7 +76,7 @@ class IpeController extends Controller
         }
 
         if ($outcome->isSuccess()) {
-            $record = $this->record($user, $trackingId, 'processing', 'Pending', "[{$reference}] Submitted to ".($outcome->providerName ?? 'provider').' via API', $oldBalance);
+            $record = $this->record($user, $trackingId, 'processing', 'Pending', "[{$reference}] Submitted to ".($outcome->providerName ?? 'provider').' via API', $oldBalance, $price, $outcome->providerId, $outcome->reference);
 
             return response()->json([
                 'status' => 'success',
@@ -91,7 +93,7 @@ class IpeController extends Controller
         if ($outcome->isTimeout()) {
             // Kept on file as `processing`: the clearance may exist upstream, so
             // it has to stay visible for reconciliation.
-            $record = $this->record($user, $trackingId, 'processing', 'Unconfirmed', "[{$reference}] ".($outcome->message ?? 'No confirmation from provider'), $oldBalance);
+            $record = $this->record($user, $trackingId, 'processing', 'Unconfirmed', "[{$reference}] ".($outcome->message ?? 'No confirmation from provider'), $oldBalance, $price, $outcome->providerId, null, refunded: true);
 
             return response()->json([
                 'status' => 'unconfirmed',
@@ -102,7 +104,7 @@ class IpeController extends Controller
             ], 202);
         }
 
-        $record = $this->record($user, $trackingId, 'failed', 'Failed', "[{$reference}] ".($outcome->message ?? 'Submission failed'), $oldBalance);
+        $record = $this->record($user, $trackingId, 'failed', 'Failed', "[{$reference}] ".($outcome->message ?? 'Submission failed'), $oldBalance, $price, $outcome->providerId, null, refunded: true);
 
         return $this->error('submission_failed', $outcome->message ?? 'IPE submission failed.', 422, [
             'reference' => $reference,
@@ -128,7 +130,12 @@ class IpeController extends Controller
     }
 
     /**
-     * One submission, by the id we returned or by the tracking id sent.
+     * One submission, by the id we returned or by the tracking id sent,
+     * refreshed from the provider if it is still open.
+     *
+     * Polling has to actually ask the provider — an integrator has no Check
+     * button, and a record that only ever changes when a human opens the web
+     * screen would sit at `processing` forever.
      */
     public function show(Request $request, string $submission): JsonResponse
     {
@@ -144,14 +151,29 @@ class IpeController extends Controller
             return $this->error('not_found', 'No submission found for that id.', 404);
         }
 
+        if (! $record->isTerminal()) {
+            $this->jobs->refresh($record, self::SERVICE, ['tracking_id' => $record->trkid]);
+            $record->refresh();
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => $this->present($record),
         ]);
     }
 
-    private function record(User $user, string $trackingId, string $status, string $result, string $comment, float $oldBalance): Ipe
-    {
+    private function record(
+        User $user,
+        string $trackingId,
+        string $status,
+        string $result,
+        string $comment,
+        float $oldBalance,
+        float $price,
+        ?string $providerId = null,
+        ?string $providerRef = null,
+        bool $refunded = false,
+    ): Ipe {
         return Ipe::create([
             'trkid' => $trackingId,
             'status' => $status,
@@ -159,6 +181,13 @@ class IpeController extends Controller
             'comment' => $comment,
             'oldBal' => $oldBalance,
             'newBal' => (float) $user->balance,
+            'price' => $price,
+            'providerId' => $providerId,
+            'providerRef' => $providerRef,
+            // Stamped when the charge was already reversed here, so the admin
+            // refund button cannot pay a second time.
+            'refundedAt' => $refunded ? now() : null,
+            'refundAmount' => $refunded ? $price : null,
             'userId' => $user->id,
         ]);
     }

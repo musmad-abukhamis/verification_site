@@ -24,7 +24,13 @@ class ResellerApiTest extends TestCase
 
         // Verification has no hardcoded providers any more, so a routed chain
         // is a precondition for any lookup reaching a provider at all.
-        $this->routeProviderFor(['nin.verify', 'nin.phone', 'nin.demographic', 'nin.ipe', 'bvn.verify']);
+        // The async pair needs both halves routed: the submit service files the
+        // job and the status service is what polling calls days later.
+        $this->routeProviderFor([
+            'nin.verify', 'nin.phone', 'nin.demographic', 'bvn.verify',
+            'nin.ipe', 'nin.ipe.status',
+            'nin.validation', 'nin.validation.status',
+        ]);
     }
 
     private const TOKEN = 'sk_live_reseller_token';
@@ -438,7 +444,11 @@ class ResellerApiTest extends TestCase
 
     /**
      * Validation is billed as its own service -- an operator who prices a cheap
-     * yes/no check must not have it charged at the verification rate.
+     * submission must not have it charged at the verification rate.
+     *
+     * It is also a job, not a lookup: the reply is a 202 acknowledgement, and
+     * the outcome only exists days later. Anything that returns a verdict here
+     * is answering a question the provider has not been asked yet.
      */
     public function test_a_nin_validation_charges_the_validation_rate(): void
     {
@@ -446,30 +456,58 @@ class ResellerApiTest extends TestCase
         $this->price('nin.verify', 100);
         $this->price('nin.validation', 25);
 
-        Http::fake(['*' => Http::response(['nin' => '12345678901', 'firstname' => 'JOHN'])]);
+        Http::fake(['*' => Http::response(['success' => true, 'message' => 'Validation Submission Successfull'])]);
 
         $this->apiCall('POST', '/api/v1/nin/validate', ['nin' => '12345678901'])
-            ->assertOk()
-            ->assertJsonPath('status', 'success')
-            ->assertJsonPath('valid', true)
+            ->assertStatus(202)
+            ->assertJsonPath('status', 'processing')
+            ->assertJsonPath('data.status', 'processing')
             ->assertJsonPath('data.nin', '12345678901');
 
         $this->assertSame(975.0, (float) $user->fresh()->balance);
     }
 
-    public function test_a_failed_validation_is_refunded(): void
+    public function test_a_rejected_validation_submission_is_refunded(): void
     {
         $user = $this->reseller(1000);
         $this->price('nin.validation', 25);
 
-        Http::fake(['*' => Http::response(['status' => 'failed', 'message' => 'Record not found'], 404)]);
+        Http::fake(['*' => Http::response(['success' => false, 'message' => 'Record not found'], 422)]);
 
         $this->apiCall('POST', '/api/v1/nin/validate', ['nin' => '12345678901'])
             ->assertStatus(422)
-            ->assertJsonPath('valid', false)
+            ->assertJsonPath('code', 'submission_failed')
             ->assertJsonPath('refunded', true);
 
         $this->assertSame(1000.0, (float) $user->fresh()->balance);
+    }
+
+    public function test_polling_a_validation_asks_the_provider_for_the_result(): void
+    {
+        $user = $this->reseller(1000);
+        $this->price('nin.validation', 25);
+
+        // Submit and status are different upstream endpoints, so they are
+        // stubbed apart — the whole point is that polling asks a second question
+        // rather than replaying the acknowledgement.
+        Http::fake([
+            'provider.test/nin/validation/status' => Http::response([
+                'success' => true,
+                'nin' => '12345678901',
+                'status' => 'completed',
+                'comment' => 'Validation approved',
+            ]),
+            'provider.test/nin/validation' => Http::response(['success' => true, 'message' => 'Submitted']),
+        ]);
+
+        $id = $this->apiCall('POST', '/api/v1/nin/validate', ['nin' => '12345678901'])
+            ->assertStatus(202)
+            ->json('data.id');
+
+        $this->apiCall('GET', '/api/v1/nin/validate/'.$id)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.comment', 'Validation approved');
     }
 
     public function test_an_ipe_submission_charges_and_is_readable_back(): void
@@ -477,7 +515,12 @@ class ResellerApiTest extends TestCase
         $user = $this->reseller(1000);
         $this->price('nin.ipe', 200);
 
-        Http::fake(['*' => Http::response(['status' => 'success', 'message' => 'Submitted'])]);
+        Http::fake([
+            // Reading a submission back polls the provider, and the clearance is
+            // not done yet — a read must not be able to complete it.
+            'provider.test/nin/ipe/status' => Http::response(['success' => true, 'status' => 'processing']),
+            'provider.test/nin/ipe' => Http::response(['status' => 'success', 'message' => 'Submitted']),
+        ]);
 
         $response = $this->apiCall('POST', '/api/v1/nin/ipe', ['tracking_id' => 'ABC1234567890XY'])
             ->assertStatus(201)

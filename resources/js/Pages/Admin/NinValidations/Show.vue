@@ -1,9 +1,11 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import AsyncJobSettlement from '@/Components/Admin/AsyncJobSettlement.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
     validation: Object,
+    statuses: { type: Array, default: () => ['processing', 'completed', 'failed'] },
 });
 
 const getStatusClass = (status) => {
@@ -155,6 +157,16 @@ const getProviderLabel = (provider) => {
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Verification Result</h2>
                 <pre class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm text-gray-700 dark:text-gray-300">{{ JSON.stringify(validation.result, null, 2) }}</pre>
             </div>
+
+            <!-- A validation takes days to settle, so it may need finishing by
+                 hand: re-poll the provider, assert the outcome, refund. -->
+            <AsyncJobSettlement
+                :record="validation"
+                :statuses="statuses"
+                recheck-route="admin.nin-validations.recheck"
+                update-route="admin.nin-validations.update"
+                refund-route="admin.nin-validations.refund"
+            />
         </div>
     </AdminLayout>
 </template>

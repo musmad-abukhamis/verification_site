@@ -4,21 +4,34 @@ namespace App\Http\Controllers\NIN;
 
 use App\Http\Controllers\Controller;
 use App\Models\Validation;
-use App\Services\Nin\Providers\RoutedProvider;
+use App\Services\Nin\AsyncJobService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 /**
- * NIN Validation: submit a NIN, verify it through the routed provider chain,
- * and log the result. The provider comes from Admin > Verification.
+ * NIN Validation — an asynchronous job, not a lookup.
+ *
+ * The user submits a NIN, it is filed with the provider through the
+ * `nin.validation` routing chain, and the work takes roughly 3 days to a week.
+ * The submission itself only ever produces a `processing` record; the Check
+ * button on each row polls `nin.validation.status` for the real answer.
+ *
+ * This is a different service from NIN Verification, which is an instant lookup
+ * and lives in VerifyController. An earlier version of this file called the
+ * verification chain and marked every row `completed` on the spot, which meant
+ * users were charged the validation fee for a verification result and were never
+ * told what actually happened to their validation.
  */
 class ValidationController extends Controller
 {
     use NinWalletTrait;
 
-    public function __construct(private readonly RoutedProvider $routed) {}
+    /** The catalog service this page submits to. */
+    private const SERVICE = 'nin.validation';
+
+    public function __construct(private readonly AsyncJobService $jobs) {}
 
     private function walletPayload($user): array
     {
@@ -76,7 +89,7 @@ class ValidationController extends Controller
     }
 
     /**
-     * Validate a NIN through the routed provider chain.
+     * File a NIN validation with the provider.
      */
     public function store(Request $request)
     {
@@ -84,7 +97,11 @@ class ValidationController extends Controller
     }
 
     /**
-     * Check status of a pending NIN validation
+     * Ask the provider how a filed validation is going.
+     *
+     * Only the provider's answer moves the record. When it cannot be reached the
+     * row stays `processing` and the user is told the check failed, rather than
+     * being shown an invented completion.
      */
     public function checkStatus(Request $request, Validation $validation)
     {
@@ -92,15 +109,13 @@ class ValidationController extends Controller
             abort(403);
         }
 
-        if ($validation->status === 'processing') {
-            $validation->update([
-                'status' => 'completed',
-                'result' => 'NIN validated successfully',
-                'comment' => 'Validation completed',
-            ]);
+        $result = $this->jobs->refresh($validation, self::SERVICE, ['nin' => $validation->nin]);
+
+        if (! $result->reached) {
+            return back()->withErrors(['message' => $result->summary()]);
         }
 
-        return back()->with('success', 'Status updated successfully');
+        return back()->with('success', 'Validation status: '.$result->summary());
     }
 
     protected function processValidation(Request $request)
@@ -125,40 +140,59 @@ class ValidationController extends Controller
         $reference = 'NIN_'.now()->timestamp.random_int(1000, 9999);
 
         try {
-            $result = $this->routed->verifyByNin($validated['nin']);
+            $outcome = $this->jobs->submit(self::SERVICE, [
+                'nin' => $validated['nin'],
+                'description' => $reference,
+            ], ['user_id' => $user->id, 'reference' => $reference]);
 
-            if ($result->success) {
-                $body = $result->data ?? [];
-
+            if ($outcome->isSuccess()) {
+                // Accepted, not finished. A validation takes days, and the
+                // acceptance reply says nothing about the outcome — ArewaSmart
+                // even reports `"status": "successful"` here, meaning only that
+                // the request was created.
                 Validation::create([
                     'nin' => $validated['nin'],
-                    'status' => 'completed',
-                    'result' => json_encode($body),
-                    'comment' => 'NIN validation via '.($body['provider'] ?? 'routing'),
+                    'status' => 'processing',
+                    'result' => 'Pending',
+                    'comment' => 'Submitted to '.($outcome->providerName ?? 'provider').' — awaiting result',
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'price' => $price,
+                    'providerId' => $outcome->providerId,
+                    'providerRef' => $outcome->reference,
                     'userId' => $user->id,
                 ]);
 
-                return back()->with('success', "NIN validated successfully. Reference: {$reference}");
+                return back()->with(
+                    'success',
+                    "Validation submitted. Ref: {$reference}. Results take 3 days to a week — use Check to refresh.",
+                );
             }
 
-            // Refund on failure
+            // Like IPE, this files work upstream: on an ambiguous reply the
+            // dispatcher stops rather than submitting to a second provider. The
+            // charge is reversed either way, and an unconfirmed submission is
+            // kept visible as `processing` so it can be reconciled if it did
+            // land.
             $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
 
-            $errorMessage = $result->message ?? 'Validation failed';
+            $message = $outcome->message ?? 'Validation submission failed';
 
             Validation::create([
                 'nin' => $validated['nin'],
-                'status' => 'failed',
-                'result' => json_encode($result->raw ?? ['message' => $errorMessage]),
-                'comment' => $errorMessage,
+                'status' => $outcome->isTimeout() ? 'processing' : 'failed',
+                'result' => $outcome->isTimeout() ? 'Unconfirmed' : 'Failed',
+                'comment' => $message,
                 'oldBal' => $oldBalance,
                 'newBal' => (float) $user->balance,
+                'price' => $price,
+                'providerId' => $outcome->providerId,
+                'refundedAt' => now(),
+                'refundAmount' => $price,
                 'userId' => $user->id,
             ]);
 
-            return back()->withErrors(['message' => $errorMessage]);
+            return back()->withErrors(['message' => $message]);
         } catch (\Exception $e) {
             $this->creditWallet($user, $price, ['fundingtype' => 'refund', 'status' => 'refund']);
             Log::error('NIN Validation error: '.$e->getMessage());

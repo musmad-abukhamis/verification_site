@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AsyncNinJob;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Ipe extends Model
 {
+    use AsyncNinJob;
+
     protected $table = 'ipe';
 
     const CREATED_AT = 'createdAt';
@@ -23,6 +26,9 @@ class Ipe extends Model
         return [
             'oldBal' => 'float',
             'newBal' => 'float',
+            'price' => 'float',
+            'refundAmount' => 'float',
+            'refundedAt' => 'datetime',
         ];
     }
 

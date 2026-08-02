@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AsyncNinJob;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Validation extends Model
 {
+    use AsyncNinJob;
+
     protected $table = 'validation';
 
     const CREATED_AT = 'createdAt';
@@ -26,6 +29,9 @@ class Validation extends Model
         return [
             'oldBal' => 'float',
             'newBal' => 'float',
+            'price' => 'float',
+            'refundAmount' => 'float',
+            'refundedAt' => 'datetime',
         ];
     }
 

@@ -2,21 +2,64 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\ManagesAsyncNinJobs;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\Validation;
+use App\Services\Nin\AsyncJobService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
+/**
+ * Admin view of NIN validations — jobs that take 3 days to a week to come back.
+ *
+ * Beyond browsing, an admin can force the status check, set the status and
+ * result by hand when a provider settles a job out of band, and refund. See
+ * ManagesAsyncNinJobs.
+ */
 class NinValidationController extends Controller
 {
+    use ManagesAsyncNinJobs;
+
+    protected function jobService(): string
+    {
+        return 'nin.validation';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function jobInput(Model $record): array
+    {
+        return ['nin' => $record->nin];
+    }
+
+    /** Overwrite the validation's status and result by hand. */
+    public function updateStatus(Request $request, Validation $validation)
+    {
+        return $this->settleUpdate($request, $validation);
+    }
+
+    /** Poll the provider on the user's behalf. */
+    public function recheck(Validation $validation, AsyncJobService $jobs)
+    {
+        return $this->settleRecheck($validation, $jobs);
+    }
+
+    /** Return money for a validation that failed or stalled. */
+    public function refund(Request $request, Validation $validation)
+    {
+        return $this->settleRefund($request, $validation);
+    }
+
     /**
      * Display a listing of NIN validations
      */
     public function index(Request $request)
     {
         $query = Validation::query()
-            ->with('user')
+            ->with(['user', 'provider'])
             ->latest('createdAt');
 
         if ($status = $request->input('status')) {
@@ -51,11 +94,11 @@ class NinValidationController extends Controller
             'id_value' => $v->nin,
             'status' => $v->status,
             'provider' => $v->comment,
-            'verification_fee' => 0.0,
+            'verification_fee' => $v->chargedAmount(),
             'is_verified' => $v->status === 'completed',
             'validated_at' => $v->updatedAt?->format('Y-m-d H:i'),
             'created_at' => $v->createdAt?->format('Y-m-d H:i'),
-        ]);
+        ] + $this->jobAdminPayload($v));
 
         return Inertia::render('Admin/NinValidations/Index', [
             'validations' => $validations,
@@ -70,10 +113,11 @@ class NinValidationController extends Controller
      */
     public function show(Validation $validation)
     {
-        $validation->load('user');
+        $validation->load(['user', 'provider']);
 
         return Inertia::render('Admin/NinValidations/Show', [
-            'validation' => [
+            'statuses' => Validation::EDITABLE_STATUSES,
+            'validation' => $this->jobAdminPayload($validation) + [
                 'id' => $validation->id,
                 'user' => $validation->user ? [
                     'id' => $validation->user->id,
@@ -85,13 +129,17 @@ class NinValidationController extends Controller
                 'id_value' => $validation->nin,
                 'status' => $validation->status,
                 'provider' => $validation->comment,
-                'verification_fee' => 0.0,
+                'verification_fee' => $validation->chargedAmount(),
                 'is_verified' => $validation->status === 'completed',
                 'reference' => $validation->id,
                 'comment' => $validation->comment,
                 'old_balance' => (float) $validation->oldBal,
                 'new_balance' => (float) $validation->newBal,
                 'result' => $validation->getParsedResult(),
+                // A job that is still open stores a plain marker ("Pending"),
+                // not JSON, so the parsed form is null and the admin needs the
+                // raw value to see anything at all.
+                'raw_result' => $validation->result,
                 'validated_at' => $validation->updatedAt?->format('Y-m-d H:i:s'),
                 'created_at' => $validation->createdAt?->format('Y-m-d H:i:s'),
             ],

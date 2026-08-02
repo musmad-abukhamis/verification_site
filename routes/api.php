@@ -77,8 +77,14 @@ Route::middleware('api.token')->prefix('v1')->group(function () {
     Route::get('/nin/providers', [\App\Http\Controllers\Api\Reseller\NinController::class, 'providers'])->name('api.nin.providers');
     Route::post('/nin/verify', [\App\Http\Controllers\Api\Reseller\NinController::class, 'verify'])->name('api.nin.verify');
 
-    // Validation is its own service, priced apart from verification.
+    // Validation is its own service, priced apart from verification, and like
+    // IPE it is a job rather than a lookup: the POST files it, the GET polls the
+    // provider for the result days later.
     Route::post('/nin/validate', [\App\Http\Controllers\Api\Reseller\ValidationController::class, 'store'])->name('api.nin.validate');
+    Route::get('/nin/validate', [\App\Http\Controllers\Api\Reseller\ValidationController::class, 'index'])->name('api.nin.validate.list');
+    Route::get('/nin/validate/{submission}', [\App\Http\Controllers\Api\Reseller\ValidationController::class, 'show'])
+        ->where('submission', '[A-Za-z0-9_-]+')
+        ->name('api.nin.validate.show');
 
     // IPE clearance: a submission, so it gets a read-back endpoint. An
     // integrator whose call timed out reconciles here instead of resubmitting.

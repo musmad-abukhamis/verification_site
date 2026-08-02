@@ -103,12 +103,56 @@ class VerificationDispatcher
                 break;
             }
 
-            if (! $failoverEnabled) {
+            // Async job services opt out of failover entirely, even on a flat
+            // rejection: a second vendor would file a second job, not offer a
+            // second opinion.
+            if (! $failoverEnabled || ! ServiceCatalog::allowsFailover($service)) {
                 break;
             }
         }
 
         return ($last ?? VerificationOutcome::fail('Verification failed.'))->withAttempts($trace);
+    }
+
+    /**
+     * Run one service against one named provider, bypassing the chain.
+     *
+     * Status polling needs this. A job lives with the provider that accepted it:
+     * ArewaSmart cannot report on a clearance Robost is working, and asking it
+     * would at best 404 and at worst return someone else's record for the same
+     * tracking ID. So the record remembers its provider and the poll goes
+     * straight back there.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array{user_id?: string|null, reference?: string|null, log?: bool}  $context
+     */
+    public function verifyWithProvider(
+        VerificationProvider $provider,
+        string $service,
+        array $input,
+        array $context = [],
+    ): VerificationOutcome {
+        $endpoint = $provider->endpointFor($service);
+
+        if (! $endpoint || ! $provider->isUsable()) {
+            return VerificationOutcome::fail(
+                "{$provider->name} cannot be reached for this request right now. Please try again later.",
+                ['error' => 'provider_unavailable', 'provider' => $provider->name],
+                $provider->getKey(),
+                $provider->name,
+            );
+        }
+
+        $reference = $context['reference'] ?? null;
+        $call = $this->caller->call($provider, $endpoint, $input, $reference);
+        /** @var VerificationOutcome $outcome */
+        $outcome = $call['outcome'];
+
+        if ($context['log'] ?? true) {
+            $this->logAttempt($service, $provider, $outcome, $call, $context['user_id'] ?? null, $reference);
+        }
+
+        return $outcome;
     }
 
     /**

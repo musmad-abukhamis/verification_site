@@ -4,25 +4,31 @@ namespace App\Http\Controllers\NIN;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ipe;
-use App\Services\Verification\VerificationDispatcher;
+use App\Services\Nin\AsyncJobService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 /**
- * NIN IPE (Identity Proof of Enrollment).
+ * NIN IPE (Identity Proof of Enrollment) clearance — an asynchronous job.
  *
- * Submissions go through the `nin.ipe` routing chain in Admin > Verification.
- * Unlike the lookup services this one never fails over on an ambiguous reply —
- * the request may already have been filed upstream.
+ * The user submits a 15-character tracking ID, it is filed through the `nin.ipe`
+ * routing chain in Admin > Verification, and clearance takes roughly 30 minutes
+ * to 3 hours. The Check button on each row polls `nin.ipe.status` for the
+ * result; nothing else may close a record.
+ *
+ * This service never fails over — the request may already have been filed
+ * upstream, and a second provider would file it again rather than answer.
  */
 class IpeController extends Controller
 {
     use NinWalletTrait;
 
-    public function __construct(private readonly VerificationDispatcher $dispatcher) {}
+    /** The catalog service this page submits to. */
+    private const SERVICE = 'nin.ipe';
+
+    public function __construct(private readonly AsyncJobService $jobs) {}
 
     private function walletPayload($user): array
     {
@@ -105,7 +111,14 @@ class IpeController extends Controller
     }
 
     /**
-     * Check IPE status (ArewaSmart)
+     * Ask the provider how a filed clearance is going.
+     *
+     * Routed through the provider engine and pinned to whichever provider
+     * accepted the job, so it works for any admin-configured vendor rather than
+     * one hardcoded host. When the provider cannot be reached the record is left
+     * untouched and the user is told the check failed — the previous version
+     * marked the clearance `completed` in that case, which reported success to
+     * users whenever the upstream API was down.
      */
     public function checkStatus(Request $request, Ipe $clearance)
     {
@@ -113,43 +126,13 @@ class IpeController extends Controller
             abort(403);
         }
 
-        try {
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Authorization' => 'Bearer '.config('services.nin.api_key'),
-                    'Content-Type' => 'application/json',
-                ])
-                ->get(config('services.nin.base_url').'/api/v1/nin/ipe/arewa/status', [
-                    'tracking_id' => $clearance->trkid,
-                ]);
+        $result = $this->jobs->refresh($clearance, self::SERVICE, ['tracking_id' => $clearance->trkid]);
 
-            $body = $response->json();
-
-            if ($response->successful() && ($body['success'] ?? false)) {
-                $clearance->update([
-                    'status' => $body['status'] === 'completed' ? 'completed' : 'processing',
-                    'result' => $body['status'] ?? 'processing',
-                    'comment' => $body['comment'] ?? 'Status checked via ArewaSmart',
-                ]);
-
-                return back()->with('success', 'IPE status updated: '.($body['status'] ?? 'unknown'));
-            }
-
-            // Fallback: simulate status check
-            if ($clearance->status === 'processing') {
-                $clearance->update([
-                    'status' => 'completed',
-                    'result' => 'IPE Clearance completed',
-                    'comment' => 'Clearance completed',
-                ]);
-            }
-
-            return back()->with('success', 'Status updated successfully');
-        } catch (\Exception $e) {
-            Log::error('IPE status check error: '.$e->getMessage());
-
-            return back()->withErrors(['message' => 'Failed to check status: '.$e->getMessage()]);
+        if (! $result->reached) {
+            return back()->withErrors(['message' => $result->summary()]);
         }
+
+        return back()->with('success', 'IPE status: '.$result->summary());
     }
 
     /**
@@ -173,12 +156,15 @@ class IpeController extends Controller
         $reference = 'IPE_'.now()->timestamp.random_int(1000, 9999);
 
         try {
-            $outcome = $this->dispatcher->verify('nin.ipe', array_filter([
+            $outcome = $this->jobs->submit(self::SERVICE, array_filter([
                 'tracking_id' => $trackingId,
                 'nin' => $nin,
+                'description' => $description,
             ]), ['user_id' => $user->id, 'reference' => $reference]);
 
             if ($outcome->isSuccess()) {
+                // Accepted, not cleared. Clearance takes 30 minutes to 3 hours;
+                // only a status check may close this record.
                 Ipe::create([
                     'trkid' => $trackingId,
                     'status' => 'processing',
@@ -186,10 +172,16 @@ class IpeController extends Controller
                     'comment' => 'Submitted to '.($outcome->providerName ?? 'provider').' — '.$description,
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'price' => $price,
+                    'providerId' => $outcome->providerId,
+                    'providerRef' => $outcome->reference,
                     'userId' => $user->id,
                 ]);
 
-                return back()->with('success', "IPE submitted. Ref: {$reference}");
+                return back()->with(
+                    'success',
+                    "IPE submitted. Ref: {$reference}. Clearance takes 30 minutes to 3 hours — use Check to refresh.",
+                );
             }
 
             // IPE is a submission, not a lookup: on an ambiguous reply the
@@ -205,6 +197,12 @@ class IpeController extends Controller
                 'comment' => $outcome->message ?? 'Submission failed',
                 'oldBal' => $oldBalance,
                 'newBal' => (float) $user->balance,
+                'price' => $price,
+                'providerId' => $outcome->providerId,
+                // Already refunded above; recorded so the admin refund button
+                // cannot pay a second time on reconciliation.
+                'refundedAt' => now(),
+                'refundAmount' => $price,
                 'userId' => $user->id,
             ]);
 

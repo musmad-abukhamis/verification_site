@@ -221,6 +221,97 @@ class VerificationProviderSeeder extends Seeder
                         'field_map' => ['phone' => 'phone_number', 'field_code' => 'field_code'],
                         'success_rule' => ['path' => 'success', 'data_path' => 'data'],
                     ],
+
+                    // The async pair. Submit is POST and returns only an
+                    // acknowledgement; the result is collected later from the
+                    // GET on the same path. `field_code` is required by both
+                    // submissions and is not something the user picks, so it is
+                    // a static field — change it here, not in the form.
+                    [
+                        'service' => 'nin.ipe',
+                        'http_method' => 'POST',
+                        'path' => '/nin/ipe',
+                        'body_type' => 'json',
+                        'field_map' => ['tracking_id' => 'tracking_id', 'description' => 'description', 'nin' => false],
+                        'static_fields' => ['field_code' => '002'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.ipe.status',
+                        'http_method' => 'GET',
+                        'path' => '/nin/ipe',
+                        'field_map' => ['tracking_id' => 'tracking_id'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.validation',
+                        'http_method' => 'POST',
+                        'path' => '/nin/validation',
+                        'body_type' => 'json',
+                        'field_map' => ['nin' => 'nin', 'description' => 'description'],
+                        'static_fields' => ['field_code' => '015'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.validation.status',
+                        'http_method' => 'GET',
+                        'path' => '/nin/validation',
+                        'field_map' => ['nin' => 'nin'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                ],
+            ],
+
+            // Robost Tech — `api-key` header, and a separate path per operation
+            // rather than a method split. Note it issues a *different* key for
+            // clearance than for validation, which the single-credential
+            // provider row cannot hold: seed it twice if both are in use, once
+            // per key, and let routing pick which serves which service.
+            [
+                'name' => 'Robost Tech',
+                'slug' => 'robosttech',
+                'base_url' => 'https://robosttech.com/api',
+                'auth_type' => 'header_key',
+                'auth_config' => ['header_name' => 'api-key'],
+                'extra_headers' => ['Content-Type' => 'application/json'],
+                'timeout_seconds' => 45,
+                'priority' => 15,
+                'notes' => 'Async IPE + validation. Status replies carry a boolean verdict (`cleared`) '
+                    .'alongside the status word, and `reply` holds the cleared NIN or tracking value. '
+                    .'Clearance and validation use different API keys.',
+                'endpoints' => [
+                    [
+                        'service' => 'nin.ipe',
+                        'http_method' => 'POST',
+                        'path' => '/clearance',
+                        'body_type' => 'json',
+                        'field_map' => ['tracking_id' => 'tracking_id', 'nin' => false, 'description' => false],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.ipe.status',
+                        'http_method' => 'POST',
+                        'path' => '/clearance_status',
+                        'body_type' => 'json',
+                        'field_map' => ['tracking_id' => 'tracking_id'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.validation',
+                        'http_method' => 'POST',
+                        'path' => '/validation',
+                        'body_type' => 'json',
+                        'field_map' => ['nin' => 'nin', 'description' => false],
+                        'success_rule' => ['path' => 'success'],
+                    ],
+                    [
+                        'service' => 'nin.validation.status',
+                        'http_method' => 'POST',
+                        'path' => '/validation_status',
+                        'body_type' => 'json',
+                        'field_map' => ['nin' => 'nin'],
+                        'success_rule' => ['path' => 'success'],
+                    ],
                 ],
             ],
 

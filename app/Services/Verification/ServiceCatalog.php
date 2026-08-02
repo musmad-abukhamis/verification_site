@@ -16,6 +16,18 @@ namespace App\Services\Verification;
  * upstream — a timeout there may mean the request landed, so re-sending it to a
  * second provider would duplicate a real submission. Those stop and wait for
  * reconciliation, exactly like ProcessDataPurchase does for data delivery.
+ *
+ * `failover` is the stronger form of the same idea, and the async services set
+ * it. IPE clearance and NIN validation are jobs, not answers: the provider takes
+ * hours (IPE) or days (validation) to do the work, and afterwards only *that*
+ * provider can be asked how it went. Sending the same NIN to a second vendor
+ * because the first said no does not produce a second opinion — it produces a
+ * second bill and a second job. So these services stop at the first provider,
+ * whatever the global failover setting says.
+ *
+ * `status_service` links a submit service to the service that polls it. Polling
+ * is a separate catalog entry because it is a separate upstream endpoint with
+ * its own method and field map, and the admin routes it independently.
  */
 class ServiceCatalog
 {
@@ -27,6 +39,8 @@ class ServiceCatalog
      * - inputs      : canonical input fields, in form order
      * - required    : which of those must be present
      * - idempotent  : safe to fail over after an ambiguous/timed-out call
+     * - failover    : may the chain move past the first provider at all (default true)
+     * - status_service : for async jobs, the service that polls this one's result
      * - price       : matching ServicePrice::SERVICES key (null = priced by the caller)
      */
     public const SERVICES = [
@@ -55,13 +69,45 @@ class ServiceCatalog
             'price' => 'nin.demographic',
         ],
         'nin.ipe' => [
-            'label' => 'NIN IPE Clearance',
+            'label' => 'NIN IPE Clearance (submit)',
             'group' => 'nin',
-            'inputs' => ['nin', 'tracking_id'],
+            'inputs' => ['nin', 'tracking_id', 'field_code', 'description'],
             'required' => ['tracking_id'],
             // A submission, not a lookup — never re-send on an ambiguous reply.
             'idempotent' => false,
+            'failover' => false,
+            'status_service' => 'nin.ipe.status',
             'price' => 'nin.ipe',
+        ],
+        'nin.ipe.status' => [
+            'label' => 'NIN IPE Clearance (check status)',
+            'group' => 'nin',
+            'inputs' => ['tracking_id'],
+            'required' => ['tracking_id'],
+            // Polling is a read, but it is still pinned to the one provider
+            // holding the job, so failover would only ask a stranger.
+            'idempotent' => true,
+            'failover' => false,
+            'price' => null,
+        ],
+        'nin.validation' => [
+            'label' => 'NIN Validation (submit)',
+            'group' => 'nin',
+            'inputs' => ['nin', 'field_code', 'description'],
+            'required' => ['nin'],
+            'idempotent' => false,
+            'failover' => false,
+            'status_service' => 'nin.validation.status',
+            'price' => 'nin.validation',
+        ],
+        'nin.validation.status' => [
+            'label' => 'NIN Validation (check status)',
+            'group' => 'nin',
+            'inputs' => ['nin'],
+            'required' => ['nin'],
+            'idempotent' => true,
+            'failover' => false,
+            'price' => null,
         ],
         'bvn.verify' => [
             'label' => 'BVN Verification',
@@ -128,6 +174,35 @@ class ServiceCatalog
         return (bool) (self::SERVICES[$service]['idempotent'] ?? false);
     }
 
+    /**
+     * Whether the chain may try a second provider for this service at all.
+     *
+     * Distinct from idempotency: an idempotent service is safe to retry after an
+     * *ambiguous* reply, whereas this governs every reason to move on, including
+     * a flat "no". The async job services say no — see the class docblock.
+     */
+    public static function allowsFailover(string $service): bool
+    {
+        return (bool) (self::SERVICES[$service]['failover'] ?? true);
+    }
+
+    /**
+     * The service that polls this one's result, for async jobs.
+     */
+    public static function statusService(string $service): ?string
+    {
+        return self::SERVICES[$service]['status_service'] ?? null;
+    }
+
+    /**
+     * Whether this service submits work that completes later, rather than
+     * answering immediately.
+     */
+    public static function isAsync(string $service): bool
+    {
+        return self::statusService($service) !== null;
+    }
+
     /** @return array<int, string> */
     public static function inputs(string $service): array
     {
@@ -159,6 +234,8 @@ class ServiceCatalog
             'inputs' => self::SERVICES[$key]['inputs'],
             'required' => self::SERVICES[$key]['required'],
             'idempotent' => self::SERVICES[$key]['idempotent'],
+            'failover' => self::allowsFailover($key),
+            'async' => self::isAsync($key),
         ], self::keys()));
     }
 }
