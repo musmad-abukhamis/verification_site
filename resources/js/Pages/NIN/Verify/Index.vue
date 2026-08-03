@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, reactive, watch, onMounted } from 'vue';
+import FailedChargeNotice from '@/Components/FailedChargeNotice.vue';
 import StandardSlip from '@/Components/StandardSlip.vue';
 import StandardSlipV2 from '@/Components/StandardSlipV2.vue';
 import PremiumSlip from '@/Components/PremiumSlip.vue';
@@ -19,6 +20,8 @@ const props = defineProps({
     // Modular provider catalog (only active providers reach the UI).
     providers: { type: Array, default: () => [] },
     methodCatalog: { type: Array, default: () => [] },
+    // Null when the admin has failed-verification charging switched off.
+    failedChargeNotice: { type: Object, default: null },
 });
 
 const page = usePage();
@@ -460,8 +463,16 @@ const pagination = computed(() => ({
                                 <span class="text-sm text-gray-600 dark:text-gray-300">Verification Fee</span>
                                 <span class="text-lg font-bold text-lime-600 dark:text-lime-400">₦{{ currentPrice.toLocaleString() }}</span>
                             </div>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Charged on success only. Slip download is billed separately.</p>
+                            <!-- "Charged on success only" stops being true the
+                                 moment the admin switches the failed-verification
+                                 fee on, so the sentence follows the toggle. -->
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {{ failedChargeNotice ? 'Charged in full on success; refunded on failure, see below.' : 'Charged on success only.' }}
+                                Slip download is billed separately.
+                            </p>
                         </div>
+
+                        <FailedChargeNotice :notice="failedChargeNotice" />
 
                         <!-- Submit -->
                         <button

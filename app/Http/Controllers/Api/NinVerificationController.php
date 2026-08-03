@@ -72,6 +72,7 @@ class NinVerificationController extends Controller
                     'comment' => 'Demo verification successful',
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'service' => 'nin.demographic',
                     'userId' => $user->id,
                 ]);
 
@@ -128,6 +129,7 @@ class NinVerificationController extends Controller
                     'comment' => 'Phone verification successful',
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'service' => 'nin.phone',
                     'userId' => $user->id,
                 ]);
 
@@ -204,6 +206,7 @@ class NinVerificationController extends Controller
                     'comment' => 'Verification successful',
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'service' => 'nin.verify',
                     'userId' => $user->id,
                 ]);
 

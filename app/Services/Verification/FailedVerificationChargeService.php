@@ -102,6 +102,37 @@ class FailedVerificationChargeService
     }
 
     /**
+     * What the verification pages need to warn the user with, or null when
+     * nothing would be charged.
+     *
+     * Null rather than `['enabled' => false]` on purpose: the toggle being off
+     * and the amount being zero are the same thing to a user, and a notice is
+     * only honest if it can name a figure.
+     *
+     * @return array{identity_type: string, amount: float}|null
+     */
+    public function notice(?string $identityType): ?array
+    {
+        if (! $this->isEnabled($identityType)) {
+            return null;
+        }
+
+        $amount = $this->amountFor($identityType);
+
+        return $amount > 0 ? ['identity_type' => $identityType, 'amount' => $amount] : null;
+    }
+
+    /**
+     * The same notice, addressed by service key (`nin.verify`, `bvn.search`…).
+     *
+     * @return array{identity_type: string, amount: float}|null
+     */
+    public function noticeForService(string $service): ?array
+    {
+        return $this->notice(self::identityTypeFor($service));
+    }
+
+    /**
      * Charge (or explain why not) for a dispatcher outcome.
      *
      * @param  array<string, mixed>  $context  identity_value, record_id, message

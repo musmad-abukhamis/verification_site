@@ -59,7 +59,19 @@ const menuItems = computed(() => [
             { name: 'BVN Records', route: 'bvn-records.index', pattern: 'bvn-records.*' },
         ],
     },
-    { name: 'Verification History', route: 'verification.history', pattern: 'verification.history', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    {
+        // Grouped by what the record is, not by the page that produced it. The
+        // old single "Verification History" entry lumped NIN lookups, NIN
+        // validations and BVN work into one undifferentiated list; each of
+        // these opens on its own tabbed screen.
+        name: 'History',
+        icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        children: [
+            { name: 'NIN History', route: 'history.nin', pattern: 'history.nin' },
+            { name: 'BVN History', route: 'history.bvn', pattern: 'history.bvn' },
+            { name: 'Wallet History', route: 'history.wallet', pattern: 'history.wallet' },
+        ],
+    },
     {
         name: 'Reports',
         icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',

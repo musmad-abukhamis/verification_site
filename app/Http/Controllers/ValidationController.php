@@ -28,6 +28,7 @@ class ValidationController extends Controller
 
         $query = Validation::query()
             ->where('userId', $user->id)
+            ->validations()
             ->with('user');
 
         if ($search = $request->input('search')) {
@@ -96,6 +97,7 @@ class ValidationController extends Controller
             'comment' => "Validation request {$reference}",
             'oldBal' => $oldBalance,
             'newBal' => (float) $user->balance,
+            'service' => Validation::VALIDATION_SERVICE,
             'userId' => $user->id,
         ]);
 

@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import BalanceStrip from '@/Components/BalanceStrip.vue';
 import Alert from '@/Components/Alert.vue';
+import FailedChargeNotice from '@/Components/FailedChargeNotice.vue';
 import StatusPill from '@/Components/StatusPill.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -17,6 +18,8 @@ const props = defineProps({
     wallet: Object,
     slipTypes: Array,
     history: Object,
+    // Null when the admin has failed-verification charging switched off.
+    failedChargeNotice: { type: Object, default: null },
 });
 
 const page = usePage();
@@ -133,6 +136,8 @@ const printSlip = () => window.print();
                             </option>
                         </select>
                     </div>
+
+                    <FailedChargeNotice :notice="failedChargeNotice" />
 
                     <button type="submit" :disabled="form.processing || slipTypes.length === 0" class="btn btn-primary btn-lg w-full">
                         <svg v-if="form.processing" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">

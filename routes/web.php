@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataPricingController;
 use App\Http\Controllers\DataPurchaseController;
 use App\Http\Controllers\DataTransactionController;
+use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\VerificationController;
@@ -144,6 +145,13 @@ Route::middleware('auth')->group(function () {
     // API Access — where a reseller collects the token they integrate with.
     Route::get('/api-access', [ApiAccessController::class, 'index'])->name('api-access.index');
     Route::post('/api-access/token', [ApiAccessController::class, 'regenerate'])->name('api-access.regenerate');
+
+    // Transaction history, grouped by what the record is rather than by which
+    // page produced it. Each screen is tabbed; the tab is a query parameter so
+    // a view is linkable and only the active tab is queried.
+    Route::get('/history/nin', [HistoryController::class, 'nin'])->name('history.nin');
+    Route::get('/history/bvn', [HistoryController::class, 'bvn'])->name('history.bvn');
+    Route::get('/history/wallet', [HistoryController::class, 'wallet'])->name('history.wallet');
 
     // Report Routes (ported from nimcweb "Transactions"/"Reports" sidebar groups)
     Route::get('/reports/data-transactions', [ReportController::class, 'dataTransactions'])->name('reports.data-transactions');

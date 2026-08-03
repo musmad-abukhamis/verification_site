@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import FailedChargeNotice from '@/Components/FailedChargeNotice.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -18,6 +19,8 @@ const props = defineProps({
             demographic: { active: true, label: 'By Demographics' },
         }),
     },
+    // Null when the admin has failed-verification charging switched off.
+    failedChargeNotice: { type: Object, default: null },
 });
 
 const page = usePage();
@@ -239,6 +242,8 @@ const closeResult = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <FailedChargeNotice :notice="failedChargeNotice" />
 
                             <div class="flex items-center justify-between">
                                 <p v-if="price > wallet.total_balance" class="text-sm text-red-600">

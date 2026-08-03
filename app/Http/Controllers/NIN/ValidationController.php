@@ -61,7 +61,9 @@ class ValidationController extends Controller
     {
         $user = Auth::user();
 
-        $query = Validation::where('userId', $user->id);
+        // Filed validations only — NIN lookups share this table but are a
+        // different service and are listed on the Verification page.
+        $query = Validation::where('userId', $user->id)->validations();
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -160,6 +162,7 @@ class ValidationController extends Controller
                     'price' => $price,
                     'providerId' => $outcome->providerId,
                     'providerRef' => $outcome->reference,
+                    'service' => self::SERVICE,
                     'userId' => $user->id,
                 ]);
 
@@ -189,6 +192,7 @@ class ValidationController extends Controller
                 'providerId' => $outcome->providerId,
                 'refundedAt' => now(),
                 'refundAmount' => $price,
+                'service' => self::SERVICE,
                 'userId' => $user->id,
             ]);
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Verification\FailedVerificationChargeService;
 use App\Services\VerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,8 +12,10 @@ class VerificationController extends Controller
 {
     protected VerificationService $verificationService;
 
-    public function __construct(VerificationService $verificationService)
-    {
+    public function __construct(
+        VerificationService $verificationService,
+        protected FailedVerificationChargeService $failedCharges,
+    ) {
         $this->verificationService = $verificationService;
     }
 
@@ -42,6 +45,7 @@ class VerificationController extends Controller
                 'phone' => ['active' => true, 'label' => 'By Phone Number'],
                 'demographic' => ['active' => true, 'label' => 'By Demographics'],
             ]),
+            'failedChargeNotice' => $this->failedCharges->notice('nin'),
         ]);
     }
 
@@ -55,6 +59,7 @@ class VerificationController extends Controller
         return Inertia::render('Verification/Bvn', [
             'wallet' => $this->walletPayload(Auth::user()),
             'price' => $bvnPrice,
+            'failedChargeNotice' => $this->failedCharges->notice('bvn'),
         ]);
     }
 

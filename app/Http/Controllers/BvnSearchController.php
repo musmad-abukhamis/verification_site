@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FailedVerificationCharge;
 use App\Models\NinDetail;
 use App\Services\Bvn\BvnSearchService;
+use App\Services\Verification\FailedVerificationChargeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -19,8 +20,10 @@ use Inertia\Inertia;
  */
 class BvnSearchController extends Controller
 {
-    public function __construct(private BvnSearchService $search)
-    {
+    public function __construct(
+        private BvnSearchService $search,
+        private FailedVerificationChargeService $failedCharges,
+    ) {
     }
 
     private function walletPayload($user): array
@@ -67,6 +70,9 @@ class BvnSearchController extends Controller
             'wallet' => $this->walletPayload($user),
             'slipTypes' => $this->search->activeSlipTypes($user),
             'history' => $history,
+            // Null unless the admin has both switched failed-verification
+            // charging on and set an amount; the page hides the warning then.
+            'failedChargeNotice' => $this->failedCharges->notice('bvn'),
         ]);
     }
 

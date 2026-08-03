@@ -131,6 +131,7 @@ class ValidationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $submissions = Validation::where('userId', $request->user()->id)
+            ->validations()
             ->orderByDesc('createdAt')
             ->limit(min((int) $request->input('limit', 50), 200))
             ->get();
@@ -150,7 +151,7 @@ class ValidationController extends Controller
      */
     public function show(Request $request, string $submission): JsonResponse
     {
-        $query = Validation::where('userId', $request->user()->id);
+        $query = Validation::where('userId', $request->user()->id)->validations();
 
         $record = ctype_digit($submission)
             ? $query->find($submission)
@@ -199,6 +200,7 @@ class ValidationController extends Controller
             // refund button cannot pay a second time.
             'refundedAt' => $refunded ? now() : null,
             'refundAmount' => $refunded ? $price : null,
+            'service' => self::SERVICE,
             'userId' => $user->id,
         ]);
     }

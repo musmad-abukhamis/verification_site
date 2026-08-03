@@ -140,6 +140,7 @@ abstract class AbstractProviderController extends Controller
             'comment' => "{$provider->label()} verify ({$method}) [{$this->idValueFor($method, $request)}]",
             'oldBal' => $oldBalance,
             'newBal' => (float) $user->balance,
+            'service' => $this->serviceFor($method),
             'userId' => $userId,
         ]);
     }
@@ -161,6 +162,7 @@ abstract class AbstractProviderController extends Controller
             'comment' => "[{$result->errorCode}] ".($result->message ?? 'Verification failed').$note,
             'oldBal' => $oldBalance,
             'newBal' => (float) $user->balance,
+            'service' => $this->serviceFor($method),
             'userId' => $userId,
         ]);
     }

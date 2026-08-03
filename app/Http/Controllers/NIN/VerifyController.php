@@ -39,8 +39,11 @@ class VerifyController extends Controller
     {
         $user = Auth::user();
 
-        // Get verification history (validation records)
+        // Lookups only. Filed NIN validations share this table and belong to a
+        // different service entirely — they have their own page and their own
+        // history tab.
         $verifications = Validation::where('userId', $user->id)
+            ->verifications()
             ->orderByDesc('createdAt')
             ->paginate(10);
 
@@ -75,6 +78,9 @@ class VerifyController extends Controller
             // Modular provider catalog for the dynamic verification UI.
             'providers' => $providers->forFrontend(),
             'methodCatalog' => NinProviderManager::methodCatalog(),
+            // Null unless the admin has both switched failed-verification
+            // charging on and set an amount; the page hides the warning then.
+            'failedChargeNotice' => $this->failedCharges->notice('nin'),
         ]);
     }
 
@@ -149,6 +155,7 @@ class VerifyController extends Controller
                     'comment' => "NIN verify ({$data['idType']}) [{$data['idValue']}] via ".($body['provider'] ?? 'routing'),
                     'oldBal' => $oldBalance,
                     'newBal' => (float) $user->balance,
+                    'service' => $service,
                     'userId' => $user->id,
                 ]);
 
@@ -199,6 +206,7 @@ class VerifyController extends Controller
                 'comment' => "[{$service}] {$errorMessage}",
                 'oldBal' => $oldBalance,
                 'newBal' => (float) $user->balance,
+                'service' => $service,
                 'userId' => $user->id,
             ]);
 
