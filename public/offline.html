@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Offline — ABC Services</title>
+
+    <meta name="theme-color" content="#F9FAFB" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0C111D" media="(prefers-color-scheme: dark)">
+
+    <!--
+        Served by the service worker when a navigation can't reach the network,
+        so it has to stand alone: no build assets, no webfonts, no scripts from
+        anywhere else. Only the icon, which the SW precaches alongside this file.
+        Colours are the Ledger tokens, hardcoded for the same reason.
+    -->
+    <style>
+        :root {
+            --canvas: #F9FAFB;
+            --card: #ffffff;
+            --edge: #EAECF0;
+            --ink: #101828;
+            --body: #475467;
+            --muted: #667085;
+            --brand: #155EEF;
+            --brand-hover: #004EEB;
+            --shadow: 0 1px 3px rgb(16 24 40 / .08), 0 12px 32px -12px rgb(16 24 40 / .16);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --canvas: #0C111D;
+                --card: #101828;
+                --edge: #1D2939;
+                --ink: #ffffff;
+                --body: #D0D5DD;
+                --muted: #98A2B3;
+                --brand: #155EEF;
+                --brand-hover: #2970FF;
+                --shadow: 0 1px 3px rgb(0 0 0 / .4), 0 12px 32px -12px rgb(0 0 0 / .6);
+            }
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: var(--canvas);
+            color: var(--body);
+            font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.55;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 26rem;
+            padding: 32px 28px;
+            border: 1px solid var(--edge);
+            border-radius: 14px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .mark {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            border: 1px solid var(--edge);
+            border-radius: 16px;
+            background: #fff;
+            object-fit: contain;
+            padding: 4px;
+        }
+
+        .eyebrow {
+            margin: 0 0 8px;
+            font-size: .6875rem;
+            font-weight: 600;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+            font-size: 1.375rem;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        p {
+            margin: 0;
+            font-size: .9375rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            margin-top: 24px;
+            padding: 11px 16px;
+            border: 0;
+            border-radius: 8px;
+            background: var(--brand);
+            color: #fff;
+            font: inherit;
+            font-size: .875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color .15s ease;
+        }
+
+        .btn:hover { background: var(--brand-hover); }
+        .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+        .note {
+            margin-top: 16px;
+            font-size: .8125rem;
+            color: var(--muted);
+        }
+
+        /* Live connection state, flipped by the online/offline events below. */
+        .note[data-online="true"] { color: #039855; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <img class="mark" src="/icons/icon-192.png" alt="ABC Services" width="64" height="64">
+
+        <p class="eyebrow">No connection</p>
+        <h1>You&rsquo;re offline</h1>
+        <p>
+            ABC Services needs a connection to run verifications, top up data
+            and read your wallet. Nothing has been lost &mdash; reconnect and
+            pick up where you left off.
+        </p>
+
+        <button class="btn" type="button" onclick="location.reload()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path d="M21 3v6h-6"/>
+            </svg>
+            Try again
+        </button>
+
+        <p class="note" id="status">Waiting for a network&hellip;</p>
+    </main>
+
+    <script>
+        var status = document.getElementById('status');
+
+        function render() {
+            var online = navigator.onLine;
+            status.dataset.online = String(online);
+            status.textContent = online
+                ? 'Back online — tap “Try again”.'
+                : 'Waiting for a network…';
+        }
+
+        window.addEventListener('online', render);
+        window.addEventListener('offline', render);
+        render();
+    </script>
+</body>
+</html>

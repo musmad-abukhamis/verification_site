@@ -9,6 +9,31 @@
         <meta name="theme-color" content="#F9FAFB" media="(prefers-color-scheme: light)">
         <meta name="theme-color" content="#0C111D" media="(prefers-color-scheme: dark)">
 
+        {{-- PWA. The manifest carries the icons, name and colours; these tags
+             cover iOS, which reads none of it. Note there is deliberately no
+             `viewport-fit=cover` above: the safe-area padding in the install
+             toast degrades to zero without it, whereas turning it on would
+             push every existing page under the notch. --}}
+        <link rel="manifest" href="/manifest.webmanifest">
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+        <meta name="application-name" content="ABC Services">
+        <meta name="apple-mobile-web-app-title" content="ABC Services">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+        {{-- `beforeinstallprompt` regularly fires before the Vue app has
+             mounted, and it is only offered once per page load. Stash it here
+             so PwaInstallToast can still find it whenever it wakes up. --}}
+        <script>
+            window.__pwaInstallEvent = null;
+            window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                window.__pwaInstallEvent = event;
+                window.dispatchEvent(new Event('pwa:installable'));
+            });
+        </script>
+
         {{-- Space Grotesk: display. Public Sans: UI. IBM Plex Mono: IDs, refs, money.
              Sora + Inter: the user dashboard only, which runs its own type pairing. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">

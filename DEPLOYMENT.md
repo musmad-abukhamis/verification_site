@@ -389,6 +389,22 @@ server {
     location = /favicon.ico { access_log off; log_not_found off; }
     location = /robots.txt  { access_log off; log_not_found off; }
 
+    # --- PWA ---------------------------------------------------------------
+    # The worker must never be served stale, or a deploy can't replace it and
+    # the old one keeps handing out the previous build's shell. Its scope is
+    # the whole site, so it has to sit at the root — don't move it.
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Service-Worker-Allowed "/";
+    }
+
+    # nginx before 1.21.x has no mime type for .webmanifest and falls back to
+    # application/octet-stream. Browsers tolerate that, devtools and Lighthouse
+    # complain about it.
+    location = /manifest.webmanifest {
+        types { } default_type application/manifest+json;
+    }
+
     error_page 404 /index.php;
 
     location ~ \.php$ {

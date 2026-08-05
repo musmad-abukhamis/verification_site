@@ -5,6 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createSSRApp, Fragment, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import NavigationOverlay from './Components/NavigationOverlay.vue';
+import PwaInstallToast from './Components/PwaInstallToast.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -19,11 +20,11 @@ createServer((page) =>
                 import.meta.glob('./Pages/**/*.vue'),
             ),
         setup({ App, props, plugin }) {
-            /* Renders to nothing on the server — the overlay is behind a
-               `v-if` that only a router event flips — but it has to be in the
+            /* Both render to nothing on the server — each is behind a `v-if`
+               that only a client-side event flips — but they have to be in the
                tree so the client hydrates the same shape. See app.js. */
             return createSSRApp({
-                render: () => h(Fragment, [h(App, props), h(NavigationOverlay)]),
+                render: () => h(Fragment, [h(App, props), h(NavigationOverlay), h(PwaInstallToast)]),
             })
                 .use(plugin)
                 .use(ZiggyVue, {
