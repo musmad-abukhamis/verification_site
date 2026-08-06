@@ -95,6 +95,38 @@ Route::middleware('api.token')->prefix('v1')->group(function () {
         ->name('api.nin.ipe.show');
 
     Route::post('/bvn/verify', [\App\Http\Controllers\Api\Reseller\BvnController::class, 'verify'])->name('api.bvn.verify');
+
+    // Enrolment records we already hold. Free, and not scoped to the caller:
+    // a record belongs to the enrolment, not to whoever searched for it.
+    Route::get('/bvn/records', [\App\Http\Controllers\Api\Reseller\BvnRecordController::class, 'index'])->name('api.bvn.records');
+
+    /*
+    |------------------------------------------------------------------
+    | Staff-fulfilled BVN services
+    |------------------------------------------------------------------
+    | Modification, retrieval and agent onboarding are requests our
+    | admins work by hand, not provider calls. Each is charged on
+    | submission and gets a read-back endpoint, since the outcome
+    | lands days later and there is no webhook to announce it.
+    */
+    Route::post('/bvn/modification', [\App\Http\Controllers\Api\Reseller\BvnModificationController::class, 'store'])->name('api.bvn.modification.store');
+    Route::get('/bvn/modification', [\App\Http\Controllers\Api\Reseller\BvnModificationController::class, 'index'])->name('api.bvn.modification.list');
+    Route::get('/bvn/modification/{submission}', [\App\Http\Controllers\Api\Reseller\BvnModificationController::class, 'show'])
+        ->where('submission', '[A-Za-z0-9_-]+')
+        ->name('api.bvn.modification.show');
+
+    Route::post('/bvn/retrieval', [\App\Http\Controllers\Api\Reseller\BvnRetrievalController::class, 'store'])->name('api.bvn.retrieval.store');
+    Route::get('/bvn/retrieval', [\App\Http\Controllers\Api\Reseller\BvnRetrievalController::class, 'index'])->name('api.bvn.retrieval.list');
+    Route::get('/bvn/retrieval/{submission}', [\App\Http\Controllers\Api\Reseller\BvnRetrievalController::class, 'show'])
+        ->where('submission', '[A-Za-z0-9_-]+')
+        ->name('api.bvn.retrieval.show');
+
+    Route::post('/bvn/onboarding', [\App\Http\Controllers\Api\Reseller\BvnOnboardingController::class, 'store'])->name('api.bvn.onboarding.store');
+    Route::get('/bvn/onboarding', [\App\Http\Controllers\Api\Reseller\BvnOnboardingController::class, 'index'])->name('api.bvn.onboarding.list');
+    // Email is a valid identifier here, so the segment allows @ and dots.
+    Route::get('/bvn/onboarding/{submission}', [\App\Http\Controllers\Api\Reseller\BvnOnboardingController::class, 'show'])
+        ->where('submission', '[A-Za-z0-9_.@+-]+')
+        ->name('api.bvn.onboarding.show');
 });
 
 // PayVessel static virtual-account funding webhook.
