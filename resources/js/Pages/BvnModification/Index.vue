@@ -13,6 +13,11 @@ const props = defineProps({
 
 const activeTab = ref('old');
 
+// Guidelines gate: the fee is non-refundable when a request breaches the
+// bank/field rules, so the guidelines are read before the form exists.
+const termsAccepted = ref(false);
+const agreeChecked = ref(false);
+
 const form = useForm({
     serviceType: '',
     bvn: '',
@@ -98,7 +103,87 @@ const submit = () => {
                 <Alert v-if="form.errors.serviceType" tone="danger">{{ form.errors.serviceType }}</Alert>
             </div>
 
-            <form @submit.prevent="submit" class="space-y-6">
+            <section v-if="!termsAccepted" class="card card-pad">
+                <h2 class="font-display text-base font-semibold text-ink-950 dark:text-white">
+                    Guidelines for BVN modification requests
+                </h2>
+                <p class="mt-1 text-sm text-ink-500 dark:text-ink-400">
+                    Read these in full — requests that breach them are not refunded.
+                </p>
+
+                <div class="scroll-slim mt-4 max-h-96 space-y-5 overflow-y-auto rounded-lg border rule p-4 text-sm text-ink-600 dark:text-ink-300">
+                    <div class="space-y-2">
+                        <p class="text-ink-900 dark:text-ink-100">
+                            BVN Modification requests are accepted only for customers of the following banks:
+                        </p>
+                        <ul class="list-disc space-y-1 pl-5">
+                            <li>Agency banking / caf&eacute;</li>
+                            <li>Heritage Bank</li>
+                            <li>Bank of Industry (BOI)</li>
+                            <li>Bank of Agriculture (BOA)</li>
+                            <li>Any Microfinance Bank</li>
+                        </ul>
+                    </div>
+
+                    <div class="space-y-2">
+                        <p class="font-display font-semibold text-ink-900 dark:text-ink-100">Submission guidelines</p>
+                        <ol class="list-decimal space-y-2 pl-5">
+                            <li>Do not submit a BVN Modification request unless the BVN belongs to one of the banks listed above.</li>
+                            <li>
+                                Do not submit a BVN Modification request if the same information has previously been
+                                modified on that BVN. For example:
+                                <ul class="mt-1 list-disc space-y-1 pl-5">
+                                    <li>If the Date of Birth (DOB) has been modified before, it cannot be modified again.</li>
+                                    <li>If the Name has been modified before, it cannot be modified again.</li>
+                                </ul>
+                                <p class="mt-1">
+                                    However, you may submit a request to modify a different field that has never been
+                                    changed previously.
+                                </p>
+                            </li>
+                            <li>
+                                Always verify that the customer&rsquo;s NIN is successfully validated and that the
+                                requested change is on the NIN database before submission.
+                            </li>
+                            <li>
+                                Do not submit a BVN Modification request for Complete Name Change (Total Name Change),
+                                as such requests are not supported.
+                            </li>
+                            <li>Maximum age frame modification is 5 years.</li>
+                        </ol>
+                    </div>
+
+                    <div class="space-y-2">
+                        <p class="font-display font-semibold text-danger-700 dark:text-danger-400">No refund policy</p>
+                        <p>
+                            If, during processing, we discover that your request violates any of the above guidelines or
+                            requirements, no refund will be issued.
+                        </p>
+                        <p>
+                            We kindly advise all agents to verify each request carefully before submission to avoid
+                            unnecessary delays or financial loss. Thank you for your cooperation.
+                        </p>
+                    </div>
+
+                    <p class="eyebrow">ABC-Services Management</p>
+                </div>
+
+                <label class="mt-4 flex cursor-pointer items-start gap-2 text-sm text-ink-700 dark:text-ink-200">
+                    <input type="checkbox" v-model="agreeChecked" class="mt-0.5 shrink-0" />
+                    I have read and accept the guidelines and the no-refund policy
+                </label>
+
+                <button
+                    type="button"
+                    @click="termsAccepted = true"
+                    :disabled="!agreeChecked"
+                    class="btn btn-primary mt-4"
+                >
+                    Accept &amp; continue
+                </button>
+            </section>
+
+            <form v-else @submit.prevent="submit" class="space-y-6">
                 <!-- Service type. One control, not two: the priced list *is* the
                      selector, so the price is never a step removed from the choice. -->
                 <fieldset class="card card-pad">

@@ -2,7 +2,7 @@
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const form = useForm({
     name: '',
@@ -16,10 +16,37 @@ const form = useForm({
 const showPassword = ref(false);
 const showConfirm = ref(false);
 
+// Nigerian mobile numbers are exactly 11 digits (e.g. 08012345678). The field
+// is held digits-only so the count the user sees is the count being checked --
+// spaces or a +234 prefix would otherwise make "11 digits" read as a lie.
+const PHONE_LENGTH = 11;
+const phoneTouched = ref(false);
+
+const onPhoneInput = (e) => {
+    form.phone = e.target.value.replace(/\D/g, '').slice(0, PHONE_LENGTH);
+    // Vue won't re-render when the stripped value is unchanged (typing a letter),
+    // so push the cleaned value back onto the element directly.
+    e.target.value = form.phone;
+};
+
+const phoneValid = computed(() => form.phone.length === PHONE_LENGTH);
+
+const phoneError = computed(() => {
+    if (!phoneTouched.value || phoneValid.value) return null;
+    if (form.phone.length === 0) return 'Phone number is required.';
+    return `Phone number must be exactly ${PHONE_LENGTH} digits — you've entered ${form.phone.length}.`;
+});
+
 const fieldClass =
     'w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-11 pr-3 text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500';
 
 const submit = () => {
+    phoneTouched.value = true;
+    if (!phoneValid.value) {
+        document.getElementById('phone')?.focus();
+        return;
+    }
+
     form.post(route('register'), {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
@@ -80,9 +107,26 @@ const submit = () => {
                         <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                         </span>
-                        <input id="phone" type="tel" v-model="form.phone" required autocomplete="tel" placeholder="08012345678" :class="fieldClass" />
+                        <input
+                            id="phone"
+                            type="tel"
+                            :value="form.phone"
+                            @input="onPhoneInput"
+                            @blur="phoneTouched = true"
+                            required
+                            inputmode="numeric"
+                            autocomplete="tel"
+                            :maxlength="PHONE_LENGTH"
+                            :aria-invalid="phoneError ? 'true' : 'false'"
+                            aria-describedby="phone-hint"
+                            placeholder="08012345678"
+                            :class="[fieldClass, phoneError ? '!border-danger-500 focus:!border-danger-500 focus:!ring-danger-500/30' : '']"
+                        />
                     </div>
-                    <InputError class="mt-1.5" :message="form.errors.phone" />
+                    <InputError class="mt-1.5" :message="phoneError || form.errors.phone" />
+                    <p v-if="!phoneError" id="phone-hint" class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        {{ form.phone.length }}/{{ PHONE_LENGTH }} digits
+                    </p>
                 </div>
             </div>
 
