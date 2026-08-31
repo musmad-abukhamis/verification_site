@@ -5,7 +5,7 @@ on **PostgreSQL**) on a fresh **Ubuntu 22.04 / 24.04** VPS, served by **Nginx + 
 with HTTPS, a queue worker, the scheduler, and optional Inertia SSR.
 
 > Replace every placeholder: `your-domain.com`, `deploy` (the OS user), the database
-> name/user/password, and all thirdâ€‘party API keys.
+> name/user/password, and all third‑party API keys.
 
 ---
 
@@ -16,10 +16,10 @@ with HTTPS, a queue worker, the scheduler, and optional Inertia SSR.
 | PHP              | **8.2+** (this guide installs 8.3) with FPM |
 | PHP extensions   | `pgsql` (pdo_pgsql), `mbstring`, `xml`, `curl`, `zip`, `bcmath`, `gd`, `intl`, `opcache` |
 | Composer         | v2 |
-| Node.js          | **20 LTS** (Vite 6 needs Node 18+) â€” only for building front-end assets |
+| Node.js          | **20 LTS** (Vite 6 needs Node 18+) — only for building front-end assets |
 | Database         | **PostgreSQL 14+** (`DB_CONNECTION=pgsql`) |
 | Web server       | Nginx (reverse proxy to PHP-FPM) |
-| Process manager  | Supervisor â€” queue worker (**required**: data purchases are fulfilled by queued jobs) + optional SSR |
+| Process manager  | Supervisor — queue worker (**required**: data purchases are fulfilled by queued jobs) + optional SSR |
 | Queue / Cache / Session | **database**-backed by default (no Redis required) |
 | Outbound HTTPS   | App calls NIN / BVN / VTU / Paystack / Billstack APIs |
 | Inbound webhook  | `POST /api/webhooks/billstack` must be publicly reachable over HTTPS |
@@ -64,6 +64,22 @@ From here on, log in as **`deploy`** unless told otherwise.
 
 ## 3. Install PHP 8.3 + extensions
 
+> **On an existing box, find the real version before editing anything.** This
+> section writes `8.3` throughout, but a VPS built from another image (or an
+> `ondrej/php` upgrade) can land elsewhere, and then every path below is wrong.
+> The tell is `/etc/php/8.3/fpm/php.ini: No such file or directory`. One real
+> rebuild came up **8.4-only**, so all the 8.3 ini and pool edits were inert
+> while the upload kept failing. Establish it first and let the shell fill it in:
+>
+> ```bash
+> ls /etc/php/                                                    # versions present
+> systemctl list-units --type=service --no-pager | grep -i php    # which FPM runs
+> export PHPV=8.3                                                 # what those two agree on
+> ```
+>
+> Then read `$PHPV` for `8.3` in every command and path that follows, including
+> the `fastcgi_pass` socket in the Nginx block (step 13).
+
 ```bash
 sudo add-apt-repository -y ppa:ondrej/php
 sudo apt update
@@ -93,25 +109,26 @@ expose_php = Off
 Restart: `sudo systemctl restart php8.3-fpm`
 
 > **The upload limits are load-bearing.** Enrolment record exports
-> (Admin â†’ Enrollment Records) run 50â€“100MB. If `upload_max_filesize` is left at
+> (Admin → Enrollment Records) run 50–100MB. If `upload_max_filesize` is left at
 > PHP's 2M default the upload fails with "The file failed to upload", because
 > PHP rejects the file before Laravel ever sees it. `post_max_size` must stay
-> *above* `upload_max_filesize` â€” when a POST exceeds it PHP discards the entire
+> *above* `upload_max_filesize` — when a POST exceeds it PHP discards the entire
 > request body, so the app cannot report the real reason.
 >
 > `max_execution_time` does **not** need raising for these imports: the upload
 > only stages the file, and the parsing happens in a queued job (which is a CLI
 > process and therefore not bound by it). That does mean **the queue worker must
-> be running** or uploads sit at "Queued" forever â€” see the Supervisor section.
+> be running** or uploads sit at "Queued" forever — see the Supervisor section.
 
 **Verify against FPM, not the CLI.** `php -i` reads `/etc/php/8.3/cli/php.ini`,
-which the site never uses â€” a giveaway is `memory_limit => -1`, the CLI default.
+which the site never uses — a giveaway is `memory_limit => -1`, the CLI default.
 Editing the FPM ini and then checking with `php -i` shows the old values forever
 and sends you round in circles. Check the SAPI that actually serves the site:
 
 ```bash
 # Which ini does FPM load, and what does it end up with?
-php-fpm8.3 -i | grep -E 'Loaded Configuration|upload_max_filesize|post_max_size|memory_limit'
+# The binary lives in /usr/sbin, which is not always on a non-root PATH.
+/usr/sbin/php-fpm$PHPV -i | grep -E 'Loaded Configuration|upload_max_filesize|post_max_size|memory_limit'
 
 # Which PHP version is nginx actually talking to? Whatever version this prints
 # is the ONLY one worth editing -- if it says php8.4-fpm.sock then every change
@@ -122,13 +139,13 @@ php-fpm8.3 -i | grep -E 'Loaded Configuration|upload_max_filesize|post_max_size|
 # config rather than a missed one.
 grep -RnE 'fastcgi_pass|client_max_body_size|root ' /etc/nginx/sites-enabled/
 
-# Anything in conf.d can override the main ini â€” later files win.
-grep -rn 'upload_max_filesize\|post_max_size' /etc/php/8.3/fpm/
+# Anything in conf.d can override the main ini — later files win.
+grep -rn 'upload_max_filesize\|post_max_size' /etc/php/$PHPV/fpm/
 ```
 
 Most robust is to set them in the pool config rather than the main ini, where
-they are explicit and cannot be silently overridden â€” edit
-`/etc/php/8.3/fpm/pool.d/www.conf`:
+they are explicit and cannot be silently overridden — edit
+`/etc/php/$PHPV/fpm/pool.d/www.conf`:
 
 ```ini
 php_admin_value[upload_max_filesize] = 200M
@@ -136,8 +153,28 @@ php_admin_value[post_max_size] = 205M
 php_admin_value[memory_limit] = 512M
 ```
 
-Then `sudo systemctl restart php8.3-fpm` (restart, not reload â€” reload does not
-re-read `php_admin_value`).
+There is only one pool (`[www]`), so appending these at the end of the file
+lands them inside it.
+
+Then `sudo systemctl restart php$PHPV-fpm` (restart, not reload — reload does
+not re-read `php_admin_value`).
+
+**Nginx caps the body independently, and its default is 1MB.** PHP's limits are
+only half the fix: if `client_max_body_size` is missing from the server block,
+nginx `413`s a 50–100MB export after the browser has finished sending it, so the
+progress bar reaches 100% and *then* fails, with nothing in `laravel.log`
+because the request never reached PHP. Step 13's block sets it, but on a server
+whose vhost predates this guide, a drop-in covers every site at once:
+
+```bash
+sudo tee /etc/nginx/conf.d/large-uploads.conf >/dev/null <<'EOF'
+client_max_body_size 205M;   # must be >= post_max_size
+client_body_timeout  600s;
+send_timeout         600s;
+fastcgi_read_timeout 600s;
+EOF
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ---
 
@@ -220,8 +257,8 @@ npm run build
 ```
 
 `npm run build` runs `vite build && vite build --ssr`, producing:
-- `public/build/` â€” client assets + `manifest.json`
-- `bootstrap/ssr/` â€” the SSR bundle (only used if you enable SSR in step 14)
+- `public/build/` — client assets + `manifest.json`
+- `bootstrap/ssr/` — the SSR bundle (only used if you enable SSR in step 14)
 
 ---
 
@@ -323,7 +360,7 @@ php artisan storage:link
 
 > If you only want specific seeders, run e.g.
 > `php artisan db:seed --class=DataPlanSeeder --force`. Re-running seeders may duplicate
-> rows â€” seed once on first deploy.
+> rows — seed once on first deploy.
 
 ---
 
@@ -448,18 +485,18 @@ SESSION_SECURE_COOKIE=true
 then `php artisan config:cache && sudo systemctl reload nginx`.
 
 > **Behind a proxy/load balancer?** Laravel 12 trusts proxies via
-> `bootstrap/app.php` â†’ `$middleware->trustProxies(at: '*')`. Add that if your TLS is
+> `bootstrap/app.php` → `$middleware->trustProxies(at: '*')`. Add that if your TLS is
 > terminated upstream so generated URLs and the `https` scheme are correct.
 
 ---
 
-## 15. Queue worker (Supervisor) â€” **required for data purchases**
+## 15. Queue worker (Supervisor) — **required for data purchases**
 
 The app uses the **database** queue, and the buy-data (VTU) module depends on it:
 `DataPurchaseService` debits the user's wallet and dispatches a `ProcessDataPurchase`
-job â€” **only that job calls the vendor API**. With no worker running, customers are
+job — **only that job calls the vendor API**. With no worker running, customers are
 charged and their orders sit at `pending` forever; nothing ever reaches the vendor.
-This is not optional background polish â€” treat a dead worker as a full outage of
+This is not optional background polish — treat a dead worker as a full outage of
 data vending.
 
 > For **local development**, `composer run dev` already starts a worker
@@ -524,13 +561,13 @@ sudo supervisorctl status
 
 ---
 
-## 16. Scheduler (cron) â€” **required for data-purchase reconciliation**
+## 16. Scheduler (cron) — **required for data-purchase reconciliation**
 
 Run Laravel's scheduler every minute. The buy-data module relies on it:
 `ReconcilePendingTransactions` re-queries the vendor for any purchase left in
 `processing` (e.g. after a timeout or ambiguous response) and either confirms it
-as `success` or refunds the wallet. Without the scheduler, those transactions â€”
-and the customer's money â€” stay stuck until someone intervenes manually.
+as `success` or refunds the wallet. Without the scheduler, those transactions —
+and the customer's money — stay stuck until someone intervenes manually.
 
 ```bash
 crontab -e -u deploy
@@ -547,7 +584,7 @@ Add:
 ## 17. (Optional) Inertia SSR
 
 The build produces an SSR bundle. SSR improves first-paint/SEO for public pages
-(e.g. the landing page). It is **optional** â€” without the SSR process running,
+(e.g. the landing page). It is **optional** — without the SSR process running,
 Inertia renders on the client and the site works normally.
 
 To enable SSR, run the SSR server under Supervisor.
@@ -568,7 +605,7 @@ stopwaitsecs=10
 sudo supervisorctl reread && sudo supervisorctl update
 ```
 
-> The SSR server listens on `127.0.0.1:13714` and is called internally by Laravel â€”
+> The SSR server listens on `127.0.0.1:13714` and is called internally by Laravel —
 > it does **not** need a firewall rule. Rebuild (`npm run build`) and restart this
 > program (`sudo supervisorctl restart verification-ssr`) on every deploy.
 > If you do **not** want SSR, simply don't create this program.
@@ -585,7 +622,7 @@ https://your-domain.com/api/webhooks/billstack
 ```
 
 Notes:
-- The endpoint verifies the `x-wiaxy-signature` header â€” make sure
+- The endpoint verifies the `x-wiaxy-signature` header — make sure
   `BILLSTACK_API_TOKEN` in `.env` matches the account that sends the webhook.
 - It must be reachable over **public HTTPS** (no IP allowlist blocking the provider).
 - If you also use Paystack, configure its webhook/redirect URLs in the Paystack
@@ -622,6 +659,32 @@ Then in a browser:
 - Landing page loads with your `APP_NAME` branding.
 - `/register` and `/login` work (create a test account).
 - Dashboard loads; try a small wallet funding to confirm the webhook credits it.
+- Admin -> Enrollment Records accepts a real (50-100MB) export. This exercises
+  the upload limits from step 3 and is the one thing a fresh server most
+  reliably gets wrong; verify it with the commands below rather than by eye.
+
+**Checking an enrolment import.** The staged file lands in
+`storage/app/private/enrollment-imports` -- note `private`: on Laravel 11+ that
+is the `local` disk's root (`config/filesystems.php`), and looking for it under
+plain `storage/app/` reports "No such file or directory" on an import that in
+fact succeeded. The directory is also a poor progress signal at any time, since
+`ImportEnrollmentRecords` deletes the staged file in its `finally` block -- once
+an import finishes, an empty directory is the expected state. The
+`enrollment_imports` row is the source of truth:
+
+```bash
+sudo -u www-data php artisan tinker --execute="
+foreach (App\Models\EnrollmentImport::latest()->limit(5)->get() as \$i) {
+    echo \$i->original_name, ' | ', \$i->status,
+         ' | read=', \$i->rows_read, ' ins=', \$i->inserted, ' upd=', \$i->updated,
+         ' | ', \$i->error, PHP_EOL;
+}"
+```
+
+`processing` with `rows_read` climbing is a healthy import; `pending` that never
+moves means the `imports` worker is down (step 15). A `failed` row names the
+reason and the row count it reached -- rows commit in chunks of 1000 and the
+upsert matches on `ticket_id`, so re-uploading resumes rather than duplicating.
 
 ---
 
@@ -683,16 +746,18 @@ chmod +x deploy.sh
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
-| **500 on every page** | Check `storage/logs/laravel.log`. Usually permissions on `storage`/`bootstrap/cache`, or a missing `APP_KEY` â†’ `php artisan key:generate`. |
+| **500 on every page** | Check `storage/logs/laravel.log`. Usually permissions on `storage`/`bootstrap/cache`, or a missing `APP_KEY` → `php artisan key:generate`. |
 | **419 Page Expired** on login/forms | Session cookie/domain mismatch. Set `SESSION_DOMAIN` to your domain, `APP_URL` to the `https://` URL, `SESSION_SECURE_COOKIE=true`, then `php artisan config:cache`. |
 | **"Vite manifest not found"** | Assets weren't built on the server. Run `npm ci && npm run build`; ensure `public/build/manifest.json` exists. |
-| **Blank page / 502** | PHP-FPM socket path wrong in Nginx (`/var/run/php/php8.3-fpm.sock`) or PHP-FPM not running: `sudo systemctl status php8.3-fpm`. |
-| **DB connection refused** | `php8.3-pgsql` missing, wrong `DB_*` creds, or Postgres not running. Test with the `psql "postgresql://â€¦"` string from step 6. |
+| **Blank page / 502** | PHP-FPM socket path wrong in Nginx (`/var/run/php/php8.3-fpm.sock`) or PHP-FPM not running: `sudo systemctl status php8.3-fpm`. Check the socket matches the version actually installed (`ls /etc/php/`) -- a rebuild on a newer PHP leaves the vhost pointing at a socket that no longer exists. |
+| **DB connection refused** | `php8.3-pgsql` missing, wrong `DB_*` creds, or Postgres not running. Test with the `psql "postgresql://…"` string from step 6. |
 | **Config changes ignored** | A cached config is stale: `php artisan optimize:clear` then re-cache. |
 | **Queued jobs never run** | Supervisor worker down: `sudo supervisorctl status`; after deploys run `php artisan queue:restart`. |
-| **Data purchases stuck at `pending`** (wallet debited, nothing sent) | The queue worker isn't running â€” see step 15. Check `SELECT COUNT(*) FROM jobs;` for a backlog. Once the worker starts, queued purchases are sent to the vendor **live**, so flush stale test jobs first if they shouldn't go through. |
-| **Data purchases stuck at `processing`** | The scheduler isn't running, so `ReconcilePendingTransactions` never requeries/refunds â€” see step 16. |
-| **Webhook returns 404** | Wrong URL â€” it's `/api/webhooks/billstack`. 419/422/405 means it's reachable (good); 404 means routing/Nginx issue. |
+| **Enrolment upload fails at 100%** (progress bar completes, then errors) | A body-size limit, not the app -- the request never reaches PHP, so `laravel.log` is silent. In order: Nginx `client_max_body_size` (default **1MB**), then `post_max_size`/`upload_max_filesize` (defaults 8M/2M). Both in step 3. Confirm the PHP version first (`ls /etc/php/`) -- editing the wrong version's ini changes nothing. If it's behind Cloudflare, the proxy caps bodies at 100MB on Free/Pro regardless of your config. |
+| **Enrolment upload "succeeded" but `storage/app/enrollment-imports` is missing** | Wrong path, not a failure. Laravel 11+ roots the `local` disk at `storage/app/**private**`, and the job deletes the staged file when it finishes. Check the `enrollment_imports` row instead -- see step 19. |
+| **Data purchases stuck at `pending`** (wallet debited, nothing sent) | The queue worker isn't running — see step 15. Check `SELECT COUNT(*) FROM jobs;` for a backlog. Once the worker starts, queued purchases are sent to the vendor **live**, so flush stale test jobs first if they shouldn't go through. |
+| **Data purchases stuck at `processing`** | The scheduler isn't running, so `ReconcilePendingTransactions` never requeries/refunds — see step 16. |
+| **Webhook returns 404** | Wrong URL — it's `/api/webhooks/billstack`. 419/422/405 means it's reachable (good); 404 means routing/Nginx issue. |
 | **SSR errors / hydration warnings** | Stop relying on SSR: don't run the `verification-ssr` program (the app falls back to client rendering). If using SSR, rebuild and restart it after each deploy. |
 
 ---

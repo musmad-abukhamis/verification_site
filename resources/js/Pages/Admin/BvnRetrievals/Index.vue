@@ -13,8 +13,27 @@ const props = defineProps({
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || 'all');
 const editing = ref(null);
+const refunding = ref(null);
 
 const editForm = useForm({ status: 'pending', bvn: '', comment: '' });
+const refundForm = useForm({ amount: 0, reason: '' });
+
+const naira = (v) => '₦' + Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const openRefund = (r) => {
+    refunding.value = r;
+    refundForm.clearErrors();
+    // Defaults to the full fee: a partial refund is the exception, not the norm.
+    refundForm.amount = r.charged_amount ?? 0;
+    refundForm.reason = '';
+};
+
+const submitRefund = () => {
+    refundForm.post(route('admin.bvn-retrievals.refund', refunding.value.id), {
+        preserveScroll: true,
+        onSuccess: () => { refunding.value = null; },
+    });
+};
 
 const openEdit = (r) => {
     editing.value = r;
@@ -134,6 +153,8 @@ const statCards = [
                                 <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ r.created_at }}</td>
                                 <td class="px-6 py-4 text-sm space-x-3 whitespace-nowrap">
                                     <button @click="openEdit(r)" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-medium">Update</button>
+                                    <button v-if="r.is_refundable" @click="openRefund(r)" class="text-amber-600 hover:text-amber-800 dark:text-amber-400 font-medium">Refund</button>
+                                    <span v-else-if="r.refunded_at" class="text-xs text-gray-500 dark:text-gray-400" :title="'Refunded on ' + r.refunded_at">Refunded {{ naira(r.refund_amount) }}</span>
                                     <button @click="destroy(r)" class="text-red-600 hover:text-red-800 dark:text-red-400 font-medium">Delete</button>
                                 </td>
                             </tr>
@@ -188,6 +209,47 @@ const statCards = [
                         <button type="button" @click="editing = null" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300">Cancel</button>
                         <button type="submit" :disabled="editForm.processing" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50">
                             {{ editForm.processing ? 'Updating...' : 'Update Request' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Refund modal -->
+        <div v-if="refunding" class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="refunding = null">
+            <div class="fixed inset-0 bg-black/50"></div>
+            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6 border-l-4 border-amber-400">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">Refund Retrieval Fee</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Credits the wallet immediately. A request can only be refunded once.</p>
+
+                <div class="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3 mb-4 grid grid-cols-2 gap-3 text-sm">
+                    <div><span class="text-gray-500 dark:text-gray-400">User</span><p class="text-gray-900 dark:text-white">{{ refunding.user?.username || refunding.user?.name || 'Unknown' }}</p></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">BMS ID</span><p class="font-mono text-gray-900 dark:text-white">{{ refunding.ticketId2 || '-' }}</p></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">Charged</span><p class="text-gray-900 dark:text-white">{{ naira(refunding.charged_amount) }}</p></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">Status</span><p class="capitalize text-gray-900 dark:text-white">{{ refunding.status || 'pending' }}</p></div>
+                </div>
+
+                <div v-if="refundForm.errors.message" class="mb-3 p-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded text-sm">{{ refundForm.errors.message }}</div>
+
+                <form @submit.prevent="submitRefund" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (₦) *</label>
+                        <input v-model="refundForm.amount" type="number" step="0.01" min="0.01" :max="refunding.charged_amount"
+                            class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Full fee by default. Lower it for a partial delivery; it cannot exceed what the user paid.</p>
+                        <p v-if="refundForm.errors.amount" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ refundForm.errors.amount }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason</label>
+                        <input v-model="refundForm.reason" type="text" placeholder="e.g. BVN could not be retrieved for this BMS ID"
+                            class="w-full rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Saved to the request's comment, which the user can see.</p>
+                        <p v-if="refundForm.errors.reason" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ refundForm.errors.reason }}</p>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="refunding = null" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300">Cancel</button>
+                        <button type="submit" :disabled="refundForm.processing" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                            {{ refundForm.processing ? 'Refunding...' : 'Refund User' }}
                         </button>
                     </div>
                 </form>

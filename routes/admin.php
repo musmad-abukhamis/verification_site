@@ -185,6 +185,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // BVN Retrieval Management
     Route::get('/bvn-retrievals', [BvnRetrievalController::class, 'index'])->name('bvn-retrievals.index');
     Route::patch('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'update'])->name('bvn-retrievals.update');
+    Route::post('/bvn-retrievals/{retrieval}/refund', [BvnRetrievalController::class, 'refund'])->name('bvn-retrievals.refund');
     Route::delete('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'destroy'])->name('bvn-retrievals.destroy');
 
     // BVN Search Logs (read-only)

@@ -128,7 +128,9 @@ trait ManagesAsyncNinJobs
             $record->update([
                 'refundedAt' => now(),
                 'refundAmount' => $amount,
-                'comment' => $validated['reason']
+                // `nullable` omits the key entirely when the field is absent,
+                // so this cannot read $validated['reason'] directly.
+                'comment' => ($validated['reason'] ?? null)
                     ? 'Refunded: '.$validated['reason']
                     : $record->comment,
             ]);
