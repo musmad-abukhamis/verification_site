@@ -145,7 +145,9 @@ const generatePDF = async () => {
 
     // ===== FRONT SIDE =====
     try {
-        const bgImageBytes = await fetch('/images/standardslipfront.jpg').then(res => res.arrayBuffer());
+        const frontResponse = await fetch('/images/standardslipfront.jpg');
+        if (!frontResponse.ok) throw new Error(`HTTP ${frontResponse.status}`);
+        const bgImageBytes = await frontResponse.arrayBuffer();
         const bgImage = await pdfDoc.embedJpg(bgImageBytes);
         const bgImageScaled = bgImage.scaleToFit(idCardWidth, idCardHeight);
         
@@ -166,15 +168,16 @@ const generatePDF = async () => {
     // ===== BACK SIDE =====
     const backCenterY = centerY - idCardHeight - 20;
     try {
-        const bgImageBytes2 = await fetch('/images/ninSlipback.jpg').then(res => res.arrayBuffer());
+        const backResponse = await fetch('/images/ninSlipbackv2.jpg');
+        if (!backResponse.ok) throw new Error(`HTTP ${backResponse.status}`);
+        const bgImageBytes2 = await backResponse.arrayBuffer();
         const bgImage2 = await pdfDoc.embedJpg(bgImageBytes2);
-        const bgImageScaled2 = bgImage2.scaleToFit(idCardWidth, idCardHeight);
-        
+
         page.drawImage(bgImage2, {
-            x: centerX - 1,
+            x: centerX,
             y: backCenterY,
-            width: bgImageScaled2.width +10,
-            height: bgImageScaled2.height,
+            width: idCardWidth,
+            height: idCardHeight,
         });
     } catch (e) {
         console.warn('Could not load back background:', e);

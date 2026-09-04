@@ -46,6 +46,7 @@ class ServicePrice extends Model
         'nin.validation' => ['label' => 'NIN Validation', 'group' => 'verification'],
         'slip.regular' => ['label' => 'Regular Slip', 'group' => 'slip'],
         'slip.standard' => ['label' => 'Standard Slip', 'group' => 'slip'],
+        'slip.standard_v2' => ['label' => 'Standard Slip V2', 'group' => 'slip'],
         'slip.premium' => ['label' => 'Premium Slip', 'group' => 'slip'],
         'slip.nvs' => ['label' => 'NVS Slip', 'group' => 'slip'],
         'slip.advanced' => ['label' => 'Advanced Slip', 'group' => 'slip'],

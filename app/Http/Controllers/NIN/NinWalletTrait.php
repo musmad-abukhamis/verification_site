@@ -29,6 +29,7 @@ trait NinWalletTrait
     {
         return 'slip.'.match (strtolower($slipType)) {
             'regular', 'reg', 'regslip' => 'regular',
+            'v2', 'standard_v2' => 'standard_v2',
             'premium' => 'premium',
             'nvs' => 'nvs',
             'advanced', 'adv' => 'advanced',

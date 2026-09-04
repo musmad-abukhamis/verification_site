@@ -25,6 +25,7 @@ class ServicePriceSeeder extends Seeder
         'nin.validation' => 50,
         'slip.regular' => 50,
         'slip.standard' => 100,
+        'slip.standard_v2' => 100,
         'slip.premium' => 150,
         'slip.nvs' => 200,
         'slip.advanced' => 250,

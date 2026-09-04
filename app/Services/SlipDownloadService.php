@@ -56,6 +56,7 @@ class SlipDownloadService
             DB::beginTransaction();
 
             $oldBalance = (float) $user->balance;
+            $meta = $this->slipMeta($slipTypeCode);
 
             // Deduct from wallet
             $user->debit($price, false, ['fundingtype' => 'nin_slip']);
@@ -67,7 +68,7 @@ class SlipDownloadService
                 [
                     'validation_id' => $validationId,
                     'slip_type' => $slipTypeCode,
-                    'slip_name' => ucfirst($slipTypeCode).' Slip',
+                    'slip_name' => $meta['name'],
                     'nin' => $validation->nin,
                     'old_balance' => $oldBalance,
                     'new_balance' => (float) $user->balance,
@@ -82,7 +83,7 @@ class SlipDownloadService
                 'data' => [
                     'validation_id' => $validationId,
                     'slip_type' => $slipTypeCode,
-                    'component_name' => ucfirst($slipTypeCode).'Slip',
+                    'component_name' => $meta['component_name'],
                     'price' => $price,
                     'transaction_id' => $transaction->id,
                     'verification_data' => $validation->getParsedResult(),
@@ -122,6 +123,7 @@ class SlipDownloadService
     {
         return 'slip.'.match (strtolower($slipType)) {
             'regular', 'reg', 'regslip' => 'regular',
+            'v2', 'standard_v2' => 'standard_v2',
             'premium' => 'premium',
             'nvs' => 'nvs',
             'advanced', 'adv' => 'advanced',
@@ -138,24 +140,52 @@ class SlipDownloadService
     }
 
     /**
+     * Every slip type, in display order.
+     *
+     * The `code` is what the frontend sends back and what picks the Vue
+     * component; it is not the service key -- slipService() maps between them.
+     */
+    public const TYPES = [
+        ['code' => 'regular', 'name' => 'Regular Slip', 'component_name' => 'RegularSlip'],
+        ['code' => 'standard', 'name' => 'Standard Slip', 'component_name' => 'StandardSlip'],
+        ['code' => 'v2', 'name' => 'Standard Slip V2', 'component_name' => 'StandardSlipV2'],
+        ['code' => 'premium', 'name' => 'Premium Slip', 'component_name' => 'PremiumSlip'],
+        ['code' => 'nvs', 'name' => 'NVS Slip', 'component_name' => 'NvsSlip'],
+        ['code' => 'advanced', 'name' => 'Advanced Slip', 'component_name' => 'AdvancedSlip'],
+    ];
+
+    /**
+     * The display name and component of a slip code.
+     *
+     * Falls back to a titled code for anything unlisted, so an unknown type
+     * still reads sensibly in the transaction history.
+     */
+    protected function slipMeta(string $slipTypeCode): array
+    {
+        foreach (self::TYPES as $type) {
+            if ($type['code'] === strtolower($slipTypeCode)) {
+                return $type;
+            }
+        }
+
+        return [
+            'code' => $slipTypeCode,
+            'name' => ucfirst($slipTypeCode).' Slip',
+            'component_name' => ucfirst($slipTypeCode).'Slip',
+        ];
+    }
+
+    /**
      * Slip types the user can buy, at the price they would pay.
      */
     public function getActiveSlipTypes(?User $user = null): array
     {
-        $types = [
-            ['code' => 'regular', 'name' => 'Regular Slip', 'component_name' => 'RegularSlip'],
-            ['code' => 'standard', 'name' => 'Standard Slip', 'component_name' => 'StandardSlip'],
-            ['code' => 'premium', 'name' => 'Premium Slip', 'component_name' => 'PremiumSlip'],
-            ['code' => 'nvs', 'name' => 'NVS Slip', 'component_name' => 'NvsSlip'],
-            ['code' => 'advanced', 'name' => 'Advanced Slip', 'component_name' => 'AdvancedSlip'],
-        ];
-
         $user ??= Auth::user();
 
         return array_values(array_filter(array_map(function (array $type) use ($user) {
             $price = $this->getSlipPrice($type['code'], $user);
 
             return $price !== null ? [...$type, 'price' => $price] : null;
-        }, $types)));
+        }, self::TYPES)));
     }
 }
