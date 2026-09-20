@@ -5,11 +5,10 @@ use App\Http\Controllers\Admin\DataPlanController;
 use App\Http\Controllers\Admin\DataRoutingController;
 use App\Http\Controllers\Admin\DataTransactionController;
 use App\Http\Controllers\Admin\DataWalletController;
+use App\Http\Controllers\Admin\HistoryController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\VendorController;
-use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\VerificationLogController;
 use App\Http\Controllers\Admin\VerificationProviderController;
 use App\Http\Controllers\Admin\VerificationRoutingController;
 use App\Http\Controllers\Admin\ServicePriceController;
@@ -19,7 +18,6 @@ use App\Http\Controllers\Admin\BvnModificationController;
 use App\Http\Controllers\Admin\BvnPriceController;
 use App\Http\Controllers\Admin\BvnSdkFormController;
 use App\Http\Controllers\Admin\BvnRetrievalController;
-use App\Http\Controllers\Admin\BvnSearchController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\UnattributedPaymentController;
 use App\Http\Controllers\Admin\WalletController;
@@ -45,11 +43,30 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/users/{user}/password', [UserController::class, 'changePassword'])->name('users.password');
     Route::post('/users/{user}/reset-2fa', [UserController::class, 'resetTwoFactor'])->name('users.reset-2fa');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+    // Transaction history, grouped by what the record is rather than by which
+    // screen produced it -- the admin twin of the user-side /history/* pages.
+    // Each screen is tabbed; the tab is a query parameter so a view is linkable
+    // and only the active tab is queried. Read-only: acting on a record still
+    // happens on that service's own management screen.
+    Route::get('/history/nin', [HistoryController::class, 'nin'])->name('history.nin');
+    Route::get('/history/bvn', [HistoryController::class, 'bvn'])->name('history.bvn');
+    Route::get('/history/wallet', [HistoryController::class, 'wallet'])->name('history.wallet');
+
+    // The five screens the history pages replace. Kept as named redirects so
+    // bookmarks -- and anything still calling route('admin....') -- land on the
+    // tab that now holds those rows.
+    Route::redirect('/transactions', '/admin/history/wallet?tab=debits')->name('transactions.index');
+    Route::redirect('/verification-logs', '/admin/history/nin?tab=verify')->name('verification-logs.index');
+    Route::redirect('/wallet/transactions', '/admin/history/wallet')->name('wallet.transactions');
+    Route::redirect('/bvn-searches', '/admin/history/bvn?tab=verify')->name('bvn-searches.index');
+    // The old NIN/BVN Transactions report listed both halves of NINDetails
+    // behind an idtype dropdown; the BVN half is now History > BVN > Verifications.
+    Route::redirect('/reports/nin-bvn-transactions', '/admin/history/nin?tab=slip')->name('reports.verify-transactions');
     
-    // Wallet Management (central funding + history)
+    // Wallet Management (central funding)
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
     Route::post('/wallet/fund', [WalletController::class, 'fund'])->name('wallet.fund');
-    Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
     Route::post('/wallet/funding-settings', [WalletController::class, 'updateFundingSettings'])->name('wallet.funding-settings.update');
 
     // Payments that arrived without a matching user (reconciliation queue)
@@ -57,13 +74,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/wallet/unattributed/{unattributedPayment}/resolve', [UnattributedPaymentController::class, 'resolve'])->name('wallet.unattributed.resolve');
     Route::post('/wallet/unattributed/{unattributedPayment}/ignore', [UnattributedPaymentController::class, 'ignore'])->name('wallet.unattributed.ignore');
     Route::post('/wallet/unattributed/{unattributedPayment}/reopen', [UnattributedPaymentController::class, 'reopen'])->name('wallet.unattributed.reopen');
-
-    // Transaction Management
-    Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
-    Route::get('/transactions/{transaction}', [TransactionController::class, 'show'])->name('transactions.show');
-    
-    // Verification Logs
-    Route::get('/verification-logs', [VerificationLogController::class, 'index'])->name('verification-logs.index');
 
     // ---- Verification provider engine (config-driven providers + failover) ----
 
@@ -87,8 +97,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Per-hop audit of every provider call, failed-over hops included.
     Route::get('/verification-attempts', [VerificationRoutingController::class, 'attempts'])->name('verification-attempts.index');
 
-    // Reports (ported from nimcweb admin "Reports"/"Transactions" groups)
-    Route::get('/reports/nin-bvn-transactions', [ReportController::class, 'verifyTransactions'])->name('reports.verify-transactions');
+    // Reports (ported from nimcweb admin "Reports" group). The list report that
+    // lived here is now History > NIN / BVN; what remains is analytics.
     Route::get('/reports/data-stats', [ReportController::class, 'dataStats'])->name('reports.data-stats');
     Route::get('/reports/verify-stats', [ReportController::class, 'verifyStats'])->name('reports.verify-stats');
 
@@ -187,9 +197,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'update'])->name('bvn-retrievals.update');
     Route::post('/bvn-retrievals/{retrieval}/refund', [BvnRetrievalController::class, 'refund'])->name('bvn-retrievals.refund');
     Route::delete('/bvn-retrievals/{retrieval}', [BvnRetrievalController::class, 'destroy'])->name('bvn-retrievals.destroy');
-
-    // BVN Search Logs (read-only)
-    Route::get('/bvn-searches', [BvnSearchController::class, 'index'])->name('bvn-searches.index');
 
     // Agent ID card generator (client-side PDF, no DB)
     Route::get('/agent-id', [AgentIdController::class, 'index'])->name('agent-id.index');

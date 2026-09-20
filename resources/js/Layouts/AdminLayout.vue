@@ -22,13 +22,25 @@ const toggleMenu = (menuName) => {
 const menuItems = [
     { name: 'Dashboard', route: 'admin.dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     { name: 'Users', route: 'admin.users.index', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-    { name: 'Transactions', route: 'admin.transactions.index', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+    {
+        // Grouped by what the record is, not by the screen that produced it.
+        // This replaces the old top-level Transactions and Verification Logs
+        // entries, Wallet > Transactions, BVN > Searches and Reports > NIN/BVN
+        // Transactions -- five lists in four groups, each with its own filter
+        // bar, one of which could not tell a NIN lookup from a NIN validation.
+        name: 'History',
+        icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        children: [
+            { name: 'NIN History', route: 'admin.history.nin' },
+            { name: 'BVN History', route: 'admin.history.bvn' },
+            { name: 'Wallet History', route: 'admin.history.wallet' },
+        ]
+    },
     {
         name: 'Wallet',
         icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
         children: [
             { name: 'Account Funding', route: 'admin.wallet.index' },
-            { name: 'Transactions', route: 'admin.wallet.transactions' },
             { name: 'Unattributed Payments', route: 'admin.wallet.unattributed.index' },
         ]
     },
@@ -48,7 +60,6 @@ const menuItems = [
             { name: 'Modifications', route: 'admin.bvn-modifications.index' },
             { name: 'SDK Onboarding', route: 'admin.bvn-sdk-forms.index' },
             { name: 'Retrievals', route: 'admin.bvn-retrievals.index' },
-            { name: 'Searches', route: 'admin.bvn-searches.index' },
             { name: 'Enrollment Records', route: 'admin.enrollment-records.index' },
             { name: 'Service Prices', route: 'admin.bvn-prices.index' },
         ]
@@ -74,7 +85,6 @@ const menuItems = [
             { name: 'Wallet Adjustments', route: 'admin.data-wallet.index' },
         ]
     },
-    { name: 'Verification Logs', route: 'admin.verification-logs.index', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
     { name: 'Notifications', route: 'admin.notifications.index', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
     { name: 'Agent ID Card', route: 'admin.agent-id.index', icon: 'M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z' },
     { name: 'ID Card Requests', route: 'admin.idcard.index', icon: 'M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z' },
@@ -82,7 +92,6 @@ const menuItems = [
         name: 'Reports',
         icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
         children: [
-            { name: 'NIN/BVN Transactions', route: 'admin.reports.verify-transactions' },
             { name: 'Data Sub Stats', route: 'admin.reports.data-stats' },
             { name: 'Verification Stats', route: 'admin.reports.verify-stats' },
         ]

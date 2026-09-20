@@ -12,64 +12,19 @@ use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 
 /**
- * Admin-side report pages ported from nimcweb's admin "Transactions"/"Reports"
- * sidebar groups:
- *   - NIN/BVN Transactions (/admin/verifytrans)   → full NINDetails list (all users)
- *   - Data Sub Stats        (/admin/user-data-stats) → data-purchase analytics
- *   - Verification Stats     (/admin/verify-stats)    → NINDetails groupBy analytics
+ * Admin-side report pages ported from nimcweb's admin "Reports" sidebar group:
+ *   - Data Sub Stats     (/admin/user-data-stats) → data-purchase analytics
+ *   - Verification Stats (/admin/verify-stats)    → NINDetails groupBy analytics
  *
- * Admin Data Transactions already exists (admin.transactions.index +
- * admin.data-management.transactions), so it is not rebuilt here.
+ * What used to sit alongside these — a NIN/BVN Transactions *list* — was not a
+ * report but a history browse, and it now lives on the history screens
+ * ({@see \App\Http\Controllers\Admin\HistoryController}) split by record type
+ * instead of behind an idtype dropdown. What is left here is analytics.
  *
  * Both stats dashboards support an optional ?userId filter (all | specific user).
  */
 class ReportController extends Controller
 {
-    /* ======================================================================
-     | NIN/BVN Transactions (list, all users)
-     | ====================================================================== */
-    public function verifyTransactions(Request $request)
-    {
-        $query = NinDetail::query()->with('user')->orderByDesc('createdAt');
-
-        if ($search = $request->input('search')) {
-            $query->where(function (Builder $q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                    ->orWhere('idvalue', 'like', "%{$search}%")
-                    ->orWhere('surname', 'like', "%{$search}%")
-                    ->orWhere('othernames', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%");
-            });
-        }
-
-        if (($idtype = $request->input('idtype')) && $idtype !== 'all') {
-            $query->where('idtype', $idtype);
-        }
-
-        $transactions = $query->paginate(20)->through(fn (NinDetail $n) => [
-            'id' => $n->id,
-            'user' => $n->user?->name ?? $n->user?->username ?? 'Unknown',
-            'idtype' => $n->idtype,
-            'idvalue' => $n->idvalue,
-            'sliptype' => $n->sliptype,
-            'channel' => $n->channel,
-            'name' => trim(($n->surname ?? '').' '.($n->othernames ?? '')) ?: '—',
-            'price' => (float) ($n->price ?? 0),
-            'status' => $n->status,
-            'created_at' => $n->createdAt?->format('M d, Y H:i'),
-        ])->withQueryString();
-
-        return Inertia::render('Admin/Reports/VerifyTransactions', [
-            'transactions' => $transactions,
-            'filters' => $request->only(['search', 'idtype']),
-            'idtypes' => NinDetail::query()->distinct()->orderBy('idtype')->pluck('idtype')->filter()->values(),
-            'stats' => [
-                'total_count' => NinDetail::count(),
-                'total_revenue' => (float) NinDetail::where('status', 'success')->sum('price'),
-            ],
-        ]);
-    }
-
     /* ======================================================================
      | Data Sub Stats (analytics, all users or a specific user)
      | ====================================================================== */

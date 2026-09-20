@@ -5,16 +5,17 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\FundingSetting;
 use App\Models\User;
-use App\Models\WalletHistory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 /**
- * Admin Wallet section.
+ * Admin Wallet section -- the central "Account Funding" form (a port of nimcweb
+ * admin/walletmgt). Funding writes through the User wallet helpers: balance on
+ * the user, plus a `wallethistory` ledger row.
  *
- * Port of nimcweb admin/walletmgt (central "Account Funding" form) and
- * admin/wallettransactions (wallet history list). Funding writes through the
- * User wallet helpers (balance on the user + a `wallethistory` ledger row).
+ * Browsing that ledger lives on the history screens
+ * ({@see \App\Http\Controllers\Admin\HistoryController::wallet}), which split it
+ * into funding, debits and refunds rather than one list behind a type dropdown.
  */
 class WalletController extends Controller
 {
@@ -108,68 +109,5 @@ class WalletController extends Controller
         $user->debit($amount, false, ['fundingtype' => 'manual-funding']);
 
         return back()->with('success', '₦'.number_format($amount, 2).' debited from '.$user->username.'.');
-    }
-
-    /**
-     * Wallet transaction (history) list with summary stats + filters.
-     */
-    public function transactions(Request $request)
-    {
-        $base = WalletHistory::query();
-
-        $query = (clone $base)->with('user');
-
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                    ->orWhere('type', 'like', "%{$search}%")
-                    ->orWhere('fundingtype', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($uq) use ($search) {
-                        $uq->where('username', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        if (($status = $request->input('status')) && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        if (($type = $request->input('type')) && $type !== 'all') {
-            $query->where('type', $type);
-        }
-
-        $transactions = $query
-            ->orderByDesc('createdAt')
-            ->paginate(15)
-            ->through(fn (WalletHistory $w) => [
-                'id' => $w->id,
-                'type' => $w->type,
-                'fundingtype' => $w->fundingtype,
-                'status' => $w->status,
-                'amount' => (float) $w->amount,
-                'old_balance' => (float) $w->oldbal,
-                'new_balance' => (float) $w->newbal,
-                'created_at' => $w->createdAt?->format('Y-m-d H:i'),
-                'user' => $w->user ? [
-                    'id' => $w->user->id,
-                    'username' => $w->user->username,
-                    'name' => $w->user->name,
-                    'email' => $w->user->email,
-                ] : null,
-            ])
-            ->withQueryString();
-
-        return Inertia::render('Admin/Wallet/Transactions', [
-            'transactions' => $transactions,
-            'filters' => $request->only(['search', 'status', 'type']),
-            'stats' => [
-                'total_credit' => (float) (clone $base)->where('type', 'credit')->sum('amount'),
-                'total_debit' => (float) (clone $base)->where('type', 'debit')->sum('amount'),
-                'total_count' => (clone $base)->count(),
-            ],
-        ]);
     }
 }

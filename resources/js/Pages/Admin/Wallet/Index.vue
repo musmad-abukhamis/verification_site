@@ -76,8 +76,8 @@ const fmt = (n) => '₦' + Number(n || 0).toLocaleString();
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Account Funding</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">Credit or debit any user's wallet.</p>
                 </div>
-                <Link :href="route('admin.wallet.transactions')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg whitespace-nowrap">
-                    Wallet Transactions
+                <Link :href="route('admin.history.wallet')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg whitespace-nowrap">
+                    Wallet History
                 </Link>
             </div>
 
