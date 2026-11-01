@@ -49,6 +49,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    Route::get('/own-a-site', fn () => Inertia::render('AffiliateSite/Index', [
+        'fee' => 100000,
+        'whatsappGroupUrl' => config('services.affiliate_site.whatsapp_group_url'),
+    ]))->name('affiliate-site.index');
+
     // Buy Data (normalized vendor-routing module with queued fulfilment)
     Route::get('/buy-data', [DataPurchaseController::class, 'index'])->name('buy-data');
     Route::post('/buy-data', [DataPurchaseController::class, 'store'])->name('buy-data.store');

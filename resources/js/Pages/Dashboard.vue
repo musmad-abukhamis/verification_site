@@ -85,6 +85,7 @@ const ICON = {
     retrieve: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
     idcard: 'M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z',
     records: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4',
+    website: 'M3 8l9-5 9 5-9 5-9-5zm0 4l9 5 9-5m-18 5l9 5 9-5',
 
     /* Chrome */
     bolt: 'M13 10V3L4 14h7v7l9-11h-7z',
@@ -159,6 +160,7 @@ const SERVICES = [
     { title: 'BVN retrieval', subtitle: 'Recover a BVN from a BMS ticket.', family: 'bvn', icon: ICON.retrieve, route: 'bvn-retrieval.index' },
     { title: 'ID card', subtitle: 'Order a printed agent ID card.', family: 'bvn', icon: ICON.idcard, route: 'idcard.index' },
     { title: 'Enrollment records', subtitle: 'Search uploaded enrollment data.', family: 'bvn', icon: ICON.records, route: 'bvn-records.index' },
+    { title: 'Do you want to own a site like ours?', subtitle: 'Start your own site with our services.', family: 'account', icon: ICON.website, route: 'affiliate-site.index' },
 ];
 
 const services = SERVICES.map((service) => ({
