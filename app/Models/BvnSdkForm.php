@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPrismaId;
+use App\Models\Concerns\RefundableByAdmin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BvnSdkForm extends Model
 {
     use HasPrismaId;
+    use RefundableByAdmin;
 
     protected $table = 'bvnsdkform';
 

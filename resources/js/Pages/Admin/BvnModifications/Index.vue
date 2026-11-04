@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import RefundModal from '@/Components/Admin/RefundModal.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -14,6 +15,9 @@ const props = defineProps({
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || 'all');
 const serviceType = ref(props.filters?.serviceType || 'all');
+const refunding = ref(null);
+
+const naira = (v) => '₦' + Number(v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const applyFilters = () => {
     router.get(route('admin.bvn-modifications.index'), {
@@ -131,8 +135,10 @@ const statCards = [
                                     <span :class="['px-2 py-1 text-xs rounded-full font-medium capitalize', statusClass(r.status)]">{{ r.status }}</span>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ r.created_at }}</td>
-                                <td class="px-6 py-4">
-                                    <Link :href="route('admin.bvn-modifications.show', r.id)" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 text-sm font-medium">Manage</Link>
+                                <td class="px-6 py-4 text-sm space-x-3 whitespace-nowrap">
+                                    <Link :href="route('admin.bvn-modifications.show', r.id)" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-medium">Manage</Link>
+                                    <button v-if="r.is_refundable" @click="refunding = r" class="text-amber-600 hover:text-amber-800 dark:text-amber-400 font-medium">Refund</button>
+                                    <span v-else-if="r.refunded_at" class="text-xs text-gray-500 dark:text-gray-400" :title="'Refunded on ' + r.refunded_at">Refunded {{ naira(r.refund_amount) }}</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -149,5 +155,19 @@ const statCards = [
                 </div>
             </div>
         </div>
+
+        <RefundModal
+            :record="refunding"
+            route-name="admin.bvn-modifications.refund"
+            title="Refund Modification Fee"
+            reason-placeholder="e.g. Modification could not be carried out"
+            :details="refunding ? [
+                { label: 'User', value: refunding.user?.username || refunding.user?.name || 'Unknown' },
+                { label: 'BVN', value: refunding.bvn, mono: true },
+                { label: 'Service', value: refunding.service_label },
+                { label: 'Status', value: refunding.status || 'pending', capitalize: true },
+            ] : []"
+            @close="refunding = null"
+        />
     </AdminLayout>
 </template>

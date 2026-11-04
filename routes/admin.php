@@ -184,12 +184,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/bvn-modifications', [BvnModificationController::class, 'index'])->name('bvn-modifications.index');
     Route::get('/bvn-modifications/{modification}', [BvnModificationController::class, 'show'])->name('bvn-modifications.show');
     Route::patch('/bvn-modifications/{modification}/status', [BvnModificationController::class, 'updateStatus'])->name('bvn-modifications.status');
+    Route::post('/bvn-modifications/{modification}/refund', [BvnModificationController::class, 'refund'])->name('bvn-modifications.refund');
     Route::delete('/bvn-modifications/{modification}', [BvnModificationController::class, 'destroy'])->name('bvn-modifications.destroy');
 
     // BVN SDK Onboarding Management
     Route::get('/bvn-sdk-forms', [BvnSdkFormController::class, 'index'])->name('bvn-sdk-forms.index');
     Route::get('/bvn-sdk-forms/{form}', [BvnSdkFormController::class, 'show'])->name('bvn-sdk-forms.show');
     Route::patch('/bvn-sdk-forms/{form}/status', [BvnSdkFormController::class, 'updateStatus'])->name('bvn-sdk-forms.status');
+    Route::post('/bvn-sdk-forms/{form}/refund', [BvnSdkFormController::class, 'refund'])->name('bvn-sdk-forms.refund');
     Route::delete('/bvn-sdk-forms/{form}', [BvnSdkFormController::class, 'destroy'])->name('bvn-sdk-forms.destroy');
 
     // BVN Retrieval Management

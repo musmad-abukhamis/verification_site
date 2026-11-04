@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\RefundsStaffFulfilledRequests;
 use App\Http\Controllers\Concerns\BvnModificationPricing;
 use App\Http\Controllers\Controller;
 use App\Models\BvnModification;
@@ -18,6 +19,7 @@ use Inertia\Inertia;
 class BvnModificationController extends Controller
 {
     use BvnModificationPricing;
+    use RefundsStaffFulfilledRequests;
 
     private const STATUSES = ['pending', 'modified', 'rejected', 'picked'];
 
@@ -60,7 +62,7 @@ class BvnModificationController extends Controller
         $requests = $query
             ->orderBy('createdAt', 'desc')
             ->paginate(15)
-            ->through(fn (BvnModification $r) => [
+            ->through(fn (BvnModification $r) => $this->refundPayload($r) + [
                 'id' => $r->id,
                 'bvn' => $r->bvn,
                 'nin' => $r->nin,
@@ -105,7 +107,7 @@ class BvnModificationController extends Controller
         $modification->load('user');
 
         return Inertia::render('Admin/BvnModifications/Show', [
-            'request' => $this->detailPayload($modification),
+            'request' => $this->refundPayload($modification) + $this->detailPayload($modification),
             'statuses' => self::STATUSES,
         ]);
     }
@@ -130,6 +132,14 @@ class BvnModificationController extends Controller
         ]);
 
         return back()->with('success', 'Request status updated successfully.');
+    }
+
+    /**
+     * Return the modification fee (in full or part) to the user's wallet, once.
+     */
+    public function refund(Request $request, BvnModification $modification)
+    {
+        return $this->refundRequest($request, $modification, 'BVN modification');
     }
 
     /**

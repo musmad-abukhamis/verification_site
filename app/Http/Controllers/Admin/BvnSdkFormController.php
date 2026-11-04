@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\RefundsStaffFulfilledRequests;
 use App\Http\Controllers\Controller;
 use App\Models\BvnSdkForm;
 use Illuminate\Http\Request;
@@ -16,11 +17,13 @@ use Inertia\Inertia;
  */
 class BvnSdkFormController extends Controller
 {
+    use RefundsStaffFulfilledRequests;
+
     private const STATUSES = ['pending', 'picked', 'onboarded', 'rejected'];
 
     private function present(BvnSdkForm $f): array
     {
-        return [
+        return $this->refundPayload($f) + [
             'id' => $f->id,
             'agentLocation' => $f->agentLocation,
             'agentBvn' => $f->agentBvn,
@@ -119,6 +122,14 @@ class BvnSdkFormController extends Controller
         ]);
 
         return back()->with('success', 'Registration status updated successfully.');
+    }
+
+    /**
+     * Return the onboarding fee (in full or part) to the user's wallet, once.
+     */
+    public function refund(Request $request, BvnSdkForm $form)
+    {
+        return $this->refundRequest($request, $form, 'BVN SDK onboarding');
     }
 
     public function destroy(BvnSdkForm $form)
