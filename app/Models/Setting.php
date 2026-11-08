@@ -12,6 +12,9 @@ class Setting extends Model
 {
     use HasPrismaId;
 
+    /** Shown until the settings row exists; matches the column default. */
+    public const DEFAULT_AFFILIATE_SITE_FEE = 100000;
+
     protected $table = 'settings';
 
     protected $guarded = [];

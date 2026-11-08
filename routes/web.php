@@ -25,6 +25,7 @@ use App\Http\Controllers\ApiAccessController;
 use App\Http\Controllers\HelpController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
+use App\Models\Setting;
 use Inertia\Inertia;
 
 Route::get('/', function () {
@@ -49,10 +50,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('/own-a-site', fn () => Inertia::render('AffiliateSite/Index', [
-        'fee' => 100000,
-        'whatsappGroupUrl' => config('services.affiliate_site.whatsapp_group_url'),
-    ]))->name('affiliate-site.index');
+    Route::get('/own-a-site', function () {
+        $settings = Setting::query()->orderBy('id')->first();
+
+        return Inertia::render('AffiliateSite/Index', [
+            'fee' => (int) ($settings?->affiliate_site_fee ?? Setting::DEFAULT_AFFILIATE_SITE_FEE),
+            'whatsappGroupUrl' => $settings?->affiliate_whatsapp_group_url,
+        ]);
+    })->name('affiliate-site.index');
 
     // Buy Data (normalized vendor-routing module with queued fulfilment)
     Route::get('/buy-data', [DataPurchaseController::class, 'index'])->name('buy-data');

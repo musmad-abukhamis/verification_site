@@ -27,7 +27,7 @@ class SiteSettingController extends Controller
     private const FIELDS = [
         'site_name', 'site_url', 'site_email', 'site_email2',
         'site_phone', 'site_phone2', 'whatsapp_url', 'whatsapp_url2',
-        'office_address', 'office_address2',
+        'office_address', 'office_address2', 'affiliate_whatsapp_group_url',
     ];
 
     public function index()
@@ -50,6 +50,9 @@ class SiteSettingController extends Controller
             'whatsapp_url2' => 'nullable|url|max:255',
             'office_address' => 'nullable|string',
             'office_address2' => 'nullable|string',
+            'affiliate_site_fee' => 'required|integer|min:1|max:1000000000',
+            // Rendered as a link on a user page, so only web schemes are allowed.
+            'affiliate_whatsapp_group_url' => 'nullable|url:http,https|max:255',
         ]);
 
         $settings = $this->current() ?? new Setting;
@@ -70,6 +73,8 @@ class SiteSettingController extends Controller
         foreach (self::FIELDS as $field) {
             $data[$field] = $settings?->{$field};
         }
+
+        $data['affiliate_site_fee'] = (int) ($settings?->affiliate_site_fee ?? Setting::DEFAULT_AFFILIATE_SITE_FEE);
 
         return $data;
     }

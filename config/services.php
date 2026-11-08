@@ -36,10 +36,6 @@ return [
         'endpoint' => env('BREVO_ENDPOINT', 'https://api.brevo.com/v3/smtp/email'),
     ],
 
-    'affiliate_site' => [
-        'whatsapp_group_url' => env('AFFILIATE_WHATSAPP_GROUP_URL'),
-    ],
-
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

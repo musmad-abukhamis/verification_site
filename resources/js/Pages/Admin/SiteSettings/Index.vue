@@ -17,6 +17,8 @@ const form = useForm({
     whatsapp_url2: props.settings?.whatsapp_url2 || '',
     office_address: props.settings?.office_address || '',
     office_address2: props.settings?.office_address2 || '',
+    affiliate_site_fee: props.settings?.affiliate_site_fee,
+    affiliate_whatsapp_group_url: props.settings?.affiliate_whatsapp_group_url || '',
 });
 
 const submit = () => {
@@ -114,6 +116,25 @@ const inputClass = 'w-full rounded-lg border-gray-300 dark:border-gray-600 dark:
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Secondary Office Address</label>
                             <textarea v-model="form.office_address2" rows="4" placeholder="456 Business Ave, Floor 5, City, State" :class="inputClass"></textarea>
                             <p v-if="form.errors.office_address2" class="mt-1 text-xs text-red-600">{{ form.errors.office_address2 }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Own a Site Like Ours -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Own a Site Like Ours</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">The fee and WhatsApp group shown to users on the "Own a site like ours" page.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">One-time Fee (₦)</label>
+                            <input v-model="form.affiliate_site_fee" type="number" min="1" step="1" required :class="inputClass" />
+                            <p v-if="form.errors.affiliate_site_fee" class="mt-1 text-xs text-red-600">{{ form.errors.affiliate_site_fee }}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp Group Link</label>
+                            <input v-model="form.affiliate_whatsapp_group_url" type="url" placeholder="https://chat.whatsapp.com/..." :class="inputClass" />
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave blank to show users that the link is not available yet.</p>
+                            <p v-if="form.errors.affiliate_whatsapp_group_url" class="mt-1 text-xs text-red-600">{{ form.errors.affiliate_whatsapp_group_url }}</p>
                         </div>
                     </div>
                 </div>
